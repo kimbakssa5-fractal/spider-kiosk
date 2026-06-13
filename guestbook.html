@@ -113,7 +113,8 @@
   #photoWrap { position: relative; }
   #photoWrap canvas { position: absolute; top: 0; left: 0; height: 100%; }
   #photoWrap canvas:first-child { position: relative; }
-  #doodleCanvas { cursor: crosshair; touch-action: none; }
+  /* 낙서 레이어는 투명해야 아래 사진이 그대로 보임 (공통 규칙의 검정 배경 덮어쓰기) */
+  #doodleCanvas { cursor: crosshair; touch-action: none; background: transparent; }
 
   .penbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; font-size: 14px; }
   .swatch {

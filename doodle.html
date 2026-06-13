@@ -80,6 +80,8 @@
 
   label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
   input[type="range"] { width: 70px; accent-color: #8ab4f8; }
+  /* 굵기 조절 슬라이더는 미세 조정이 잦으므로 훨씬 길게 */
+  #mainW, #subW { width: 280px; height: 26px; }
   input[type="color"] {
     width: 26px; height: 22px;
     border: 1px solid #555; border-radius: 4px;
@@ -140,6 +142,7 @@
     .group { flex: 0 0 auto; }
     .group:last-child { margin-left: 0; }
     input[type="range"] { width: 56px; }
+    #mainW, #subW { width: 200px; }
     #cursor { display: none !important; }
   }
 </style>
