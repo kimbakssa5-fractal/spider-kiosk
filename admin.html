@@ -123,6 +123,37 @@
   }
   #modalDate { color: #aab; font-size: 14px; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  /* ── 연동 설정 모달 ── */
+  #setModal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    z-index: 60;
+  }
+  #setModal.open { display: flex; }
+  #setModal .panel {
+    background: #1e1e27;
+    border: 1px solid #2a2a36;
+    border-radius: 14px;
+    padding: 24px;
+    width: min(640px, 94vw);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  #setModal h2 { font-size: 18px; }
+  #setModal .hint { font-size: 12px; color: #889; line-height: 1.7; }
+  #setStatus { font-size: 13px; min-height: 18px; }
+  #cfgText {
+    width: 100%; height: 170px;
+    background: #14141b; color: #cde;
+    border: 1px solid #3a3a4a; border-radius: 8px;
+    padding: 10px;
+    font-family: Consolas, monospace; font-size: 12px;
+    resize: vertical;
+    outline: none;
+  }
 </style>
 </head>
 <body>
@@ -143,6 +174,7 @@
   <span id="count"></span>
   <span id="syncStatus"></span>
   <span class="spacer"></span>
+  <button id="btnSettings">⚙ 연동 설정</button>
   <button id="btnSync">☁ 동기화</button>
   <button id="btnDownloadAll">💾 전체 다운로드</button>
   <button class="danger" id="btnDeleteAll">🗑 전체 삭제</button>
@@ -160,6 +192,37 @@
     <button class="primary" id="btnDl">💾 다운로드</button>
     <button class="danger" id="btnDel">🗑 삭제</button>
     <button id="btnClose">✕ 닫기</button>
+  </div>
+</div>
+
+<!-- Firebase 연동 설정 -->
+<div id="setModal">
+  <div class="panel">
+    <h2>☁ Firebase 연동 설정</h2>
+    <div id="setStatus"></div>
+    <textarea id="cfgText" spellcheck="false" placeholder='Firebase 콘솔에서 복사한 firebaseConfig를 그대로 붙여넣으세요. 예:
+
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "xxx.firebaseapp.com",
+  projectId: "xxx",
+  storageBucket: "xxx.appspot.com",
+  messagingSenderId: "123...",
+  appId: "1:123...:web:abc..."
+};'></textarea>
+    <div class="hint">
+      ① <a href="https://console.firebase.google.com" target="_blank" style="color:#8ab4f8">console.firebase.google.com</a>에서 프로젝트 만들기 →
+      ② 프로젝트 개요에서 웹 앱 추가(&lt;/&gt;) 후 표시되는 firebaseConfig 복사 →
+      ③ 빌드 &gt; Firestore Database &gt; 데이터베이스 만들기(테스트 모드) →
+      ④ 위 칸에 붙여넣고 저장.<br>
+      설정은 이 브라우저(localStorage)에 저장되므로 키오스크 기기마다 한 번씩 해주면 됩니다.
+      연동하지 않아도 기록은 이 기기 안에 모두 저장됩니다.
+    </div>
+    <div class="row">
+      <button class="primary" id="btnCfgSave">저장 + 연결 테스트</button>
+      <button class="danger" id="btnCfgClear">연동 해제</button>
+      <button id="btnCfgClose">✕ 닫기</button>
+    </div>
   </div>
 </div>
 
@@ -281,7 +344,7 @@
   async function doSync(auto) {
     const st = $('syncStatus');
     if (!GuestbookStore.hasFirebaseConfig()) {
-      st.textContent = 'Firebase 미설정 — 이 기기에만 저장 중 (firebase-config.js 참고)';
+      st.textContent = 'Firebase 미설정 — 이 기기에만 저장 중 ("⚙ 연동 설정"에서 설정 가능)';
       return;
     }
     st.textContent = '동기화 중...';
@@ -294,6 +357,63 @@
     }
   }
   $('btnSync').addEventListener('click', () => doSync(false));
+
+  // ── Firebase 연동 설정 UI ─────────────────────────────
+  function refreshSetStatus(msg, isError) {
+    const st = $('setStatus');
+    if (msg) {
+      st.textContent = msg;
+      st.style.color = isError ? '#e88' : '#8f8';
+      return;
+    }
+    const src = GuestbookStore.configSource();
+    st.style.color = '#9aa';
+    if (src === 'file') st.textContent = '현재 상태: firebase-config.js 파일 설정 사용 중 (파일 설정이 UI 설정보다 우선합니다)';
+    else if (src === 'ui') st.textContent = '현재 상태: ✅ 연동됨 (이 페이지에서 저장한 설정 사용 중)';
+    else st.textContent = '현재 상태: 미연동 — 기록은 이 기기에만 저장됩니다';
+  }
+  // Firebase 콘솔에서 복사한 JS 조각/JSON 모두 허용
+  function parseConfig(text) {
+    const s = text.indexOf('{'), e = text.lastIndexOf('}');
+    if (s < 0 || e <= s) throw new Error('붙여넣은 내용에서 { ... } 객체를 찾을 수 없습니다');
+    let obj;
+    try { obj = new Function('return (' + text.slice(s, e + 1) + ')')(); }
+    catch (err) { throw new Error('형식을 해석할 수 없습니다: ' + err.message); }
+    if (!obj || !obj.apiKey || !obj.projectId) throw new Error('apiKey 또는 projectId가 없습니다. firebaseConfig 전체를 붙여넣었는지 확인하세요');
+    return obj;
+  }
+  $('btnSettings').addEventListener('click', () => {
+    refreshSetStatus();
+    $('setModal').classList.add('open');
+  });
+  $('btnCfgClose').addEventListener('click', () => $('setModal').classList.remove('open'));
+  $('setModal').addEventListener('click', e => { if (e.target === $('setModal')) $('setModal').classList.remove('open'); });
+  $('btnCfgSave').addEventListener('click', async () => {
+    let obj;
+    try { obj = parseConfig($('cfgText').value); }
+    catch (err) { refreshSetStatus('⚠ ' + err.message, true); return; }
+    refreshSetStatus('저장됨 — 연결 테스트 중...');
+    await GuestbookStore.saveConfig(obj);
+    const r = await GuestbookStore.syncAll();
+    if (r.ok) {
+      refreshSetStatus(`✅ 연결 성공! (업로드 ${r.up} · 다운로드 ${r.down}) — 이제 이 기기의 기록이 자동 동기화됩니다`);
+      render();
+      doSync(true);
+    } else {
+      refreshSetStatus('⚠ 저장은 됐지만 연결 실패: ' + r.reason, true);
+    }
+  });
+  $('btnCfgClear').addEventListener('click', async () => {
+    if (GuestbookStore.configSource() === 'file') {
+      refreshSetStatus('⚠ firebase-config.js 파일에 설정이 있어 UI에서 해제할 수 없습니다. 파일에서 null로 바꿔주세요', true);
+      return;
+    }
+    if (!confirm('Firebase 연동을 해제할까요?\n(원격에 올라간 기록은 그대로 남고, 이후 새 기록은 이 기기에만 저장됩니다)')) return;
+    await GuestbookStore.clearConfig();
+    $('cfgText').value = '';
+    refreshSetStatus();
+    doSync(true);
+  });
 
   // ── 전체 다운로드 / 전체 삭제 ─────────────────────────
   $('btnDownloadAll').addEventListener('click', async () => {

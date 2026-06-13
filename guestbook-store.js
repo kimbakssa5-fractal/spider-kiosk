@@ -47,13 +47,41 @@
     try { localStorage.setItem(TOMB_KEY, JSON.stringify(arr.slice(-500))); } catch (e) {}
   }
 
+  // ── Firebase 설정 ──────────────────────────────────────────
+  // 우선순위: firebase-config.js 의 window.FIREBASE_CONFIG(파일)
+  //          → 관리 페이지(admin.html) UI에서 저장한 localStorage 값
+  const CFG_KEY = 'gb_firebase_config';
+  function getConfig() {
+    if (window.FIREBASE_CONFIG) return window.FIREBASE_CONFIG;
+    try { return JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); } catch (e) { return null; }
+  }
+  function configSource() {
+    if (window.FIREBASE_CONFIG) return 'file';
+    return getConfig() ? 'ui' : null;
+  }
+  async function resetApp() {
+    fdb = null;
+    if (typeof firebase !== 'undefined' && firebase.apps.length) {
+      try { await firebase.app().delete(); } catch (e) {}
+    }
+  }
+  async function saveConfig(obj) {
+    try { localStorage.setItem(CFG_KEY, JSON.stringify(obj)); } catch (e) {}
+    await resetApp();
+  }
+  async function clearConfig() {
+    try { localStorage.removeItem(CFG_KEY); } catch (e) {}
+    await resetApp();
+  }
+
   // ── Firebase ───────────────────────────────────────────────
   let fdb = null;
   function fb() {
     if (fdb) return fdb;
-    if (!window.FIREBASE_CONFIG || typeof firebase === 'undefined') return null;
+    const cfg = getConfig();
+    if (!cfg || typeof firebase === 'undefined') return null;
     try {
-      if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+      if (!firebase.apps.length) firebase.initializeApp(cfg);
       fdb = firebase.firestore();
     } catch (e) {
       console.warn('Firebase 초기화 실패:', e);
@@ -141,7 +169,7 @@
   async function syncAll() {
     const d = fb();
     if (!d) {
-      return { ok: false, reason: window.FIREBASE_CONFIG ? 'Firebase SDK 로드 실패(인터넷 확인)' : 'Firebase 미설정 (firebase-config.js)' };
+      return { ok: false, reason: getConfig() ? 'Firebase SDK 로드 실패(인터넷 확인)' : 'Firebase 미설정 (관리 페이지의 연동 설정 또는 firebase-config.js)' };
     }
     try {
       let up = 0, down = 0;
@@ -196,7 +224,8 @@
 
   window.GuestbookStore = {
     newId, add, update, get, list, remove, syncAll, migrateLegacy,
-    hasFirebaseConfig: () => !!window.FIREBASE_CONFIG,
+    saveConfig, clearConfig, configSource,
+    hasFirebaseConfig: () => !!getConfig(),
     isSyncReady: () => !!fb()
   };
 })();
