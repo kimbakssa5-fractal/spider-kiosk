@@ -276,6 +276,18 @@
         audio: false
       });
       video.srcObject = stream;
+      // iOS Safari는 srcObject만 설정하면 재생되지 않아 검정 화면이 됨 → 명시적으로 play() 호출
+      video.setAttribute('playsinline', '');
+      video.muted = true;
+      try { await video.play(); } catch (e) {}
+      // videoWidth가 준비될 때까지 대기 (준비 전 캡처하면 검정으로 그려짐)
+      if (!video.videoWidth) {
+        await new Promise(res => {
+          const done = () => { video.removeEventListener('loadedmetadata', done); res(); };
+          video.addEventListener('loadedmetadata', done);
+          setTimeout(done, 3000);
+        });
+      }
     } catch (err) {
       const e = $('camError');
       e.style.display = 'block';
