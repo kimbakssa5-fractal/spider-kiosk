@@ -14,6 +14,7 @@
 <!-- Firebase (firebase-config.js 설정 시에만 동작, 오프라인이어도 무방) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="guestbook-store.js"></script>
 <style>
@@ -121,10 +122,14 @@
 
   .penbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; font-size: 14px; }
   .swatch {
+    flex: 0 0 auto;          /* 좁은 화면(아이폰)에서 빈 div가 0폭으로 찌그러지는 것 방지 */
     width: 34px; height: 34px;
+    min-width: 34px;
     border-radius: 50%;
     border: 3px solid transparent;
     cursor: pointer;
+    -webkit-appearance: none;
+    background-clip: padding-box;
   }
   .swatch.sel { border-color: #5b8def; }
   input[type="range"] { width: 110px; accent-color: #8ab4f8; }
@@ -212,6 +217,7 @@
   <div id="sendMsg">업로드 중...</div>
   <div id="urlText"></div>
   <div class="row">
+    <button class="ctrl" id="btnRetry" style="display:none">🔄 다시 시도</button>
     <button class="ctrl" id="btnLocalSave">💾 PC에 저장</button>
     <button class="ctrl primary" id="btnDone">✓ 처음으로</button>
   </div>
@@ -576,6 +582,30 @@
     return out;
   }
 
+  // tmpfiles.org 업로드 → { url, expiry } (60분 만료)
+  async function uploadTmpfiles(blob, filename) {
+    const fd = new FormData();
+    fd.append('file', blob, filename);
+    const res = await fetch(UPLOAD_API, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (json.status !== 'success') throw new Error(json.message || '업로드 실패');
+    return { url: json.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/'), expiry: '60분' };
+  }
+
+  // 공유용 업로드: tmpfiles 우선, 실패 시 Firebase Storage(설정된 경우)로 폴백
+  async function uploadForShare(blob, filename) {
+    const errors = [];
+    try { return await uploadTmpfiles(blob, filename); }
+    catch (e) { errors.push('tmpfiles: ' + e.message); }
+    // 폴백: Firebase Storage (storageBucket 설정 + Storage 규칙 허용 시 동작, 만료 없음)
+    try {
+      const url = await GuestbookStore.uploadImage(blob, filename);
+      if (url) return { url, expiry: null };
+    } catch (e) { errors.push('storage: ' + e.message); }
+    throw new Error(errors.join(' / ') || '업로드 실패');
+  }
+
   async function send() {
     const out = composite();
     lastComposite = out;
@@ -590,41 +620,38 @@
     show('scrSend');
     $('spinner').style.display = 'block';
     $('qrBox').style.display = 'none';
+    $('btnRetry').style.display = 'none';
     $('sendMsg').innerHTML = '업로드 중...';
     $('urlText').textContent = '';
+    clearTimeout(resetTimer);   // 업로드 중에는 자동 복귀 타이머를 멈춰 둠
+
+    const pad = n => String(n).padStart(2, '0');
+    const t = new Date();
+    const filename = `guestbook_${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}.jpg`;
 
     try {
       const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.92));
-      const fd = new FormData();
-      const pad = n => String(n).padStart(2, '0');
-      const t = new Date();
-      fd.append('file', blob, `guestbook_${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}.jpg`);
-
-      const res = await fetch(UPLOAD_API, { method: 'POST', body: fd });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const json = await res.json();
-      if (json.status !== 'success') throw new Error(json.message || '업로드 실패');
-
-      // 보기 페이지 → 직접 다운로드 링크로 변환
-      const dlUrl = json.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+      const { url, expiry } = await uploadForShare(blob, filename);
 
       // QR 생성
       const qr = qrcode(0, 'M');
-      qr.addData(dlUrl);
+      qr.addData(url);
       qr.make();
       $('qrImg').src = qr.createDataURL(8, 8);
       $('spinner').style.display = 'none';
       $('qrBox').style.display = 'block';
-      $('sendMsg').innerHTML = '📱 핸드폰 카메라로 QR을 스캔하세요<br><small>링크는 60분 동안 유효합니다 · 스캔 후 사진을 길게 눌러 저장</small>';
-      $('urlText').textContent = dlUrl;
+      const expiryNote = expiry ? `링크는 ${expiry} 동안 유효합니다 · ` : '';
+      $('sendMsg').innerHTML = '📱 핸드폰 카메라로 QR을 스캔하세요<br><small>' + expiryNote + '스캔 후 사진을 길게 눌러 저장</small>';
+      $('urlText').textContent = url;
+      // 성공 시 90초 후 자동으로 처음 화면으로
+      resetTimer = setTimeout(goHome, 90000);
     } catch (err) {
       $('spinner').style.display = 'none';
-      $('sendMsg').innerHTML = '⚠ 업로드에 실패했습니다 (' + err.message + ')<br><small>인터넷 연결을 확인하거나, 아래 "PC에 저장"을 이용하세요</small>';
+      $('btnRetry').style.display = '';
+      $('sendMsg').innerHTML = '⚠ 업로드에 실패했습니다<br><small>' + err.message +
+        '<br>인터넷 연결을 확인하고 "다시 시도", 또는 "PC에 저장"을 이용하세요</small>';
+      // 실패 화면은 자동 복귀하지 않음(사용자가 다시 시도/저장할 수 있도록) — 사진은 이미 기록에 저장됨
     }
-
-    // 90초 후 자동으로 처음 화면으로
-    clearTimeout(resetTimer);
-    resetTimer = setTimeout(goHome, 90000);
   }
 
   function localSave() {
@@ -650,6 +677,7 @@
   $('btnShoot').addEventListener('click', shoot);
   $('btnRetake').addEventListener('click', startCamera);
   $('btnSend').addEventListener('click', send);
+  $('btnRetry').addEventListener('click', send);
   $('btnLocalSave').addEventListener('click', localSave);
   $('btnDone').addEventListener('click', goHome);
 

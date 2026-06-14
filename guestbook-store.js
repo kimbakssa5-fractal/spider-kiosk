@@ -61,6 +61,7 @@
   }
   async function resetApp() {
     fdb = null;
+    fstorage = null;
     if (typeof firebase !== 'undefined' && firebase.apps.length) {
       try { await firebase.app().delete(); } catch (e) {}
     }
@@ -75,7 +76,7 @@
   }
 
   // ── Firebase ───────────────────────────────────────────────
-  let fdb = null;
+  let fdb = null, fstorage = null;
   function fb() {
     if (fdb) return fdb;
     const cfg = getConfig();
@@ -87,6 +88,35 @@
       console.warn('Firebase 초기화 실패:', e);
     }
     return fdb;
+  }
+
+  // Firebase Storage (선택) — storageBucket이 설정돼 있고 SDK가 로드된 경우에만 동작
+  function storage() {
+    if (fstorage) return fstorage;
+    const cfg = getConfig();
+    if (!cfg || !cfg.storageBucket) return null;
+    if (typeof firebase === 'undefined' || typeof firebase.storage !== 'function') return null;
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(cfg);
+      fstorage = firebase.storage();
+    } catch (e) {
+      console.warn('Firebase Storage 초기화 실패:', e);
+    }
+    return fstorage;
+  }
+
+  // 이미지(blob)를 Storage에 올리고 공개 다운로드 URL 반환. 미설정/실패 시 null.
+  async function uploadImage(blob, filename) {
+    const st = storage();
+    if (!st) return null;
+    try {
+      const ref = st.ref().child('guestbook_share/' + filename);
+      const snap = await ref.put(blob, { contentType: 'image/jpeg' });
+      return await snap.ref.getDownloadURL();
+    } catch (e) {
+      console.warn('Storage 업로드 실패:', e);
+      return null;
+    }
   }
 
   // ── 공개 API ───────────────────────────────────────────────
@@ -224,8 +254,9 @@
 
   window.GuestbookStore = {
     newId, add, update, get, list, remove, syncAll, migrateLegacy,
-    saveConfig, clearConfig, configSource,
+    saveConfig, clearConfig, configSource, uploadImage,
     hasFirebaseConfig: () => !!getConfig(),
-    isSyncReady: () => !!fb()
+    isSyncReady: () => !!fb(),
+    isStorageReady: () => !!storage()
   };
 })();
