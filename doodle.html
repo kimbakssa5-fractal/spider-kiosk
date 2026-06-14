@@ -173,6 +173,7 @@
   <div class="group">
     <label>선 굵기 <input type="range" id="mainW" min="0.1" max="3" step="0.1" value="0.5"><span class="val" id="mainWVal">0.5</span></label>
     <label>보조선 굵기 <input type="range" id="subW" min="0.05" max="2" step="0.05" value="0.3"><span class="val" id="subWVal">0.3</span></label>
+    <label>지우개 굵기 <input type="range" id="eraseW" min="5" max="150" step="1" value="40"><span class="val" id="eraseWVal">40</span></label>
     <label>선 색상 <input type="color" id="mainC" value="#000000"></label>
     <label>보조선 색상 <input type="color" id="subC" value="#000000"></label>
     <label>도화지 색상 <input type="color" id="paperC" value="#ffffff"></label>
@@ -392,6 +393,8 @@
     canvas.width = W;
     canvas.height = H;
     cfg.eraseW = Math.max(24, Math.round(Math.max(W, H) * 0.02));
+    $('eraseW').value = cfg.eraseW;
+    $('eraseWVal').textContent = cfg.eraseW;
     cfg.erase = false;
     $('btnEraser').classList.remove('on');
     undoStack.length = 0;
@@ -479,6 +482,10 @@
   const $ = id => document.getElementById(id);
   $('mainW').addEventListener('input', e => { cfg.mainW = +e.target.value; $('mainWVal').textContent = e.target.value; });
   $('subW').addEventListener('input',  e => { cfg.subW = +e.target.value;  $('subWVal').textContent = e.target.value; });
+  $('eraseW').addEventListener('input', e => { cfg.eraseW = +e.target.value; $('eraseWVal').textContent = e.target.value; });
+  // 슬라이더 초기값을 해상도 비례 기본값과 동기화
+  $('eraseW').value = cfg.eraseW;
+  $('eraseWVal').textContent = cfg.eraseW;
   $('mainC').addEventListener('input', e => { cfg.mainC = e.target.value; });
   $('subC').addEventListener('input',  e => { cfg.subC = e.target.value; });
   $('paperC').addEventListener('input', e => {
