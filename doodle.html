@@ -83,7 +83,8 @@
   button.on { background: #5b8def; border-color: #5b8def; color: #fff; }
 
   label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-  input[type="range"] { width: 70px; accent-color: #8ab4f8; }
+  /* touch-action:none → 가로 스크롤 툴바 안에서도 슬라이더 드래그가 스크롤에 먹히지 않음 */
+  input[type="range"] { width: 70px; accent-color: #8ab4f8; touch-action: none; }
   /* 굵기 조절 슬라이더는 미세 조정이 잦으므로 훨씬 길게 */
   #mainW, #subW { width: 280px; height: 26px; }
   input[type="color"] {
@@ -134,23 +135,38 @@
 
   input[type="file"] { display: none; }
 
-  /* 좁은 화면(핸드폰): 툴바를 여러 줄로 줄바꿈 — 모든 도구(색상 선택기 포함)가
-     가로 스크롤 없이 한눈에 보이게. 캔버스는 fit()이 툴바 높이만큼 자동 축소 */
+  /* 모바일 안내: 툴바를 옆으로 밀 수 있음을 알려주는 문구(가로 스크롤 방식) */
+  #menuHint {
+    display: none;
+    position: fixed;
+    top: 6px; right: 8px;
+    z-index: 101;
+    background: rgba(91,141,239,0.92);
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 11px;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+
+  /* 좁은 화면(핸드폰): 툴바를 한 줄 가로 스크롤로 — 옆으로 밀어 모든 도구 접근.
+     슬라이더는 touch-action:none 덕분에 스크롤과 충돌 없이 조절됨 */
   @media (max-width: 760px) {
     #toolbar {
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 6px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
-    .group {
-      flex: 0 0 auto;
-      border-right: none;
-      padding: 0 4px;
-    }
+    #toolbar::-webkit-scrollbar { display: none; }
+    .group { flex: 0 0 auto; }
     .group:last-child { margin-left: 0; }
-    input[type="range"] { width: 90px; }
-    #mainW, #subW { width: 150px; }
+    input[type="range"] { width: 140px; }
+    #mainW, #subW, #eraseW { width: 180px; }
     #cursor { display: none !important; }
+    #menuHint { display: block; }
+    #toolbar.hidden ~ #menuHint { display: none; }
   }
 </style>
 </head>
@@ -184,6 +200,7 @@
   </div>
 </div>
 <div id="showTab">▼ 메뉴</div>
+<div id="menuHint">◂ 옆으로 밀면 메뉴가 보여요 ▸</div>
 
 <div id="cursor"></div>
 <div id="hint">드래그하면 거미줄 낙서가 그려집니다</div>
