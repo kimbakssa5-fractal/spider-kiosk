@@ -386,20 +386,24 @@
       }
       return audio;
     }
+    let custom = false;   // 사용자가 음악 파일을 불러왔는지
     return {
       // 사용자가 불러온 음악 파일로 교체 후 바로 재생
       setSrc: (url) => {
-        src = url;
+        src = url; custom = true;
         if (audio) { audio.pause(); audio = null; }
         want = true;
         el().play().catch(() => {});
         return want;
       },
+      // 반환값: true=재생 중, false=사용자가 끔, 'nosrc'=재생할 음원 없음(파일 선택 유도)
       toggle: () => {
-        want = !want;
-        const a = el();
-        if (want) { a.play().catch(() => {}); } else { a.pause(); }
-        return want;
+        if (want) { el().pause(); want = false; return false; }
+        if (!custom) return 'nosrc';            // 기본 bgm.mp3 없음 + 파일 미선택
+        want = true;
+        const p = el().play();
+        if (p && p.catch) p.catch(() => {});
+        return true;
       },
       isOn: () => want
     };
@@ -983,11 +987,35 @@
     return out;
   }
 
+  // 무료 이미지 호스트는 자주 멈추므로(응답 없음) 각 시도에 타임아웃을 둔다.
+  // 타임아웃 시 요청을 끊고(abort) 다음 폴백으로 넘어가 "업로드 중..."이 멈추지 않게 함.
+  const UPLOAD_TIMEOUT_MS = 20000;
+  async function fetchWithTimeout(url, opts, ms) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms || UPLOAD_TIMEOUT_MS);
+    try {
+      return await fetch(url, Object.assign({}, opts, { signal: ctrl.signal }));
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('시간 초과(' + Math.round((ms || UPLOAD_TIMEOUT_MS) / 1000) + '초)');
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  // 타임아웃이 없는 Promise(예: Firebase Storage put)에 시간 제한을 건다.
+  function withTimeout(promise, ms, label) {
+    return new Promise((res, rej) => {
+      const timer = setTimeout(() => rej(new Error((label || '작업') + ' 시간 초과')), ms || UPLOAD_TIMEOUT_MS);
+      promise.then(v => { clearTimeout(timer); res(v); },
+                   e => { clearTimeout(timer); rej(e); });
+    });
+  }
+
   // tmpfiles.org 업로드 → { url, expiry } (60분 만료)
   async function uploadTmpfiles(blob, filename) {
     const fd = new FormData();
     fd.append('file', blob, filename);
-    const res = await fetch(UPLOAD_API, { method: 'POST', body: fd });
+    const res = await fetchWithTimeout(UPLOAD_API, { method: 'POST', body: fd });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     if (json.status !== 'success') throw new Error(json.message || '업로드 실패');
@@ -1001,7 +1029,7 @@
     const fd = new FormData();
     fd.append('reqtype', 'fileupload');
     fd.append('fileToUpload', blob, filename);
-    const res = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: fd });
+    const res = await fetchWithTimeout('https://catbox.moe/user/api.php', { method: 'POST', body: fd });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const url = (await res.text()).trim();
     if (!/^https?:\/\/\S+$/.test(url)) throw new Error(url || '업로드 실패');
@@ -1017,7 +1045,7 @@
     // 1) Firebase Storage (storageBucket 설정 + 규칙 허용 시에만)
     try {
       if (GuestbookStore.isStorageReady && GuestbookStore.isStorageReady()) {
-        const url = await GuestbookStore.uploadImage(blob, filename);
+        const url = await withTimeout(GuestbookStore.uploadImage(blob, filename), 30000, 'Storage 업로드');
         if (url) return { url, expiry: null };
       }
     } catch (e) { errors.push('storage: ' + e.message); }
@@ -1114,14 +1142,17 @@
   $('btnSfx').classList.toggle('on', Sfx.isOn());
   $('btnSfx').textContent = Sfx.isOn() ? '🔊 효과음' : '🔇 효과음';
   $('btnSfx').addEventListener('click', () => {
+    Sfx.prime();                       // 사용자 제스처에서 오디오 활성화
     const on = Sfx.toggle();
     $('btnSfx').classList.toggle('on', on);
     $('btnSfx').textContent = on ? '🔊 효과음' : '🔇 효과음';
-    if (on) Sfx.beep(660, 0.12);
+    if (on) Sfx.shutter();             // 켜면 실제 셔터음을 들려줘 바로 반응 확인
   });
   $('btnBgm').addEventListener('click', () => {
-    const on = Bgm.toggle();
-    $('btnBgm').classList.toggle('on', on);
+    Sfx.prime();
+    const r = Bgm.toggle();
+    if (r === 'nosrc') { $('bgmFile').click(); return; }  // 음원 없음 → 파일 선택창
+    $('btnBgm').classList.toggle('on', r === true);
   });
 
   // 배경음악 / 효과음 파일 직접 불러오기 (세션 동안 사용 — 새로고침 시 재선택)
