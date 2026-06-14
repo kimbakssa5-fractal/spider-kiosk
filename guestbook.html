@@ -129,6 +129,8 @@
   /* 낙서 레이어는 투명해야 아래 사진이 그대로 보임.
      '#photoWrap canvas' 규칙(specificity 1,0,1)을 이기려면 '#photoWrap #doodleCanvas'(2,0,0)로 올려야 함 */
   #photoWrap #doodleCanvas { cursor: crosshair; touch-action: none; background: transparent; }
+  #photoWrap #overlayCanvas { touch-action: none; background: transparent; pointer-events: none; }
+  .ctrl.sticker { font-size: 22px; padding: 6px 10px; line-height: 1; }
 
   .penbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; font-size: 14px; max-width: 94vw; }
   .swatch {
@@ -201,6 +203,26 @@
   <div id="photoWrap">
     <canvas id="photoCanvas"></canvas>
     <canvas id="doodleCanvas"></canvas>
+    <canvas id="overlayCanvas"></canvas>
+  </div>
+  <div class="penbar" id="modebar">
+    <button class="ctrl on" id="btnModeDraw">✏️ 그리기</button>
+    <button class="ctrl" id="btnModePlace">🧷 스티커·글자</button>
+  </div>
+  <div class="penbar" id="decobar" style="display:none">
+    <button class="ctrl sticker" data-e="🕷️">🕷️</button>
+    <button class="ctrl sticker" data-e="🕸️">🕸️</button>
+    <button class="ctrl sticker" data-e="🎃">🎃</button>
+    <button class="ctrl sticker" data-e="👻">👻</button>
+    <button class="ctrl sticker" data-e="🦇">🦇</button>
+    <button class="ctrl sticker" data-e="💀">💀</button>
+    <button class="ctrl sticker" data-e="🌙">🌙</button>
+    <button class="ctrl sticker" data-e="⭐">⭐</button>
+    <input type="text" id="textInput" placeholder="글자 입력" maxlength="30"
+           style="font-size:15px; padding:8px 10px; border-radius:8px; border:1px solid #4a4a5a; background:#2e2e3a; color:#eee; width:130px;">
+    <button class="ctrl" id="btnAddText">＋ 글자</button>
+    <label>크기 <input type="range" id="itemSize" min="24" max="280" step="2" value="96"></label>
+    <button class="ctrl" id="btnDelItem">🗑 선택 삭제</button>
   </div>
   <div class="penbar">
     <span>거미줄 펜:</span>
@@ -399,6 +421,10 @@
     pen.erase = false;
     $('btnEraser').classList.remove('on');
     updateUndoButtons();
+    // 스티커·글자 초기화 + 그리기 모드로
+    items = [];
+    selected = -1;
+    setPlaceMode(false);
     stopCamera();
     show('scrDecorate');
 
@@ -591,6 +617,129 @@
   });
 
   // ─────────────────────────────────────────────────────────
+  // 스티커 · 텍스트 오버레이 (사진 위에 배치/이동)
+  // ─────────────────────────────────────────────────────────
+  const overlayCanvas = $('overlayCanvas');
+  const octx = overlayCanvas.getContext('2d');
+  overlayCanvas.width = PHOTO_W;
+  overlayCanvas.height = PHOTO_H;
+  let items = [];        // { kind:'emoji'|'text', text, x, y, size, color }
+  let selected = -1;
+  let placeMode = false;
+
+  const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  const TEXT_FONT  = '"Malgun Gothic","Apple SD Gothic Neo",sans-serif';
+
+  function itemFont(it) {
+    return `${it.size}px ${it.kind === 'text' ? TEXT_FONT : EMOJI_FONT}`;
+  }
+  function itemWidth(it) {
+    octx.save(); octx.font = itemFont(it);
+    const w = octx.measureText(it.text).width;
+    octx.restore();
+    return w;
+  }
+  function renderOverlay(forFinal) {
+    octx.clearRect(0, 0, PHOTO_W, PHOTO_H);
+    octx.textAlign = 'center';
+    octx.textBaseline = 'middle';
+    items.forEach((it, i) => {
+      octx.save();
+      octx.font = itemFont(it);
+      if (it.kind === 'text') {
+        octx.fillStyle = it.color;
+        octx.shadowColor = 'rgba(0,0,0,0.6)';
+        octx.shadowBlur = Math.max(2, it.size * 0.06);
+      }
+      octx.fillText(it.text, it.x, it.y);
+      octx.restore();
+      if (!forFinal && i === selected) {
+        const w = itemWidth(it), h = it.size;
+        octx.save();
+        octx.strokeStyle = '#5b8def';
+        octx.lineWidth = 3;
+        octx.setLineDash([10, 7]);
+        octx.strokeRect(it.x - w / 2 - 10, it.y - h / 2 - 10, w + 20, h + 20);
+        octx.restore();
+      }
+    });
+  }
+  function hitItem(x, y) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i], w = itemWidth(it), h = it.size;
+      if (x >= it.x - w / 2 - 10 && x <= it.x + w / 2 + 10 &&
+          y >= it.y - h / 2 - 10 && y <= it.y + h / 2 + 10) return i;
+    }
+    return -1;
+  }
+  function setPlaceMode(on) {
+    placeMode = on;
+    overlayCanvas.style.pointerEvents = on ? 'auto' : 'none';
+    $('decobar').style.display = on ? 'flex' : 'none';
+    $('btnModePlace').classList.toggle('on', on);
+    $('btnModeDraw').classList.toggle('on', !on);
+    if (!on) selected = -1;
+    renderOverlay();
+  }
+  function addItem(kind, text) {
+    setPlaceMode(true);
+    const size = +$('itemSize').value || 96;
+    items.push({ kind, text, x: PHOTO_W / 2, y: PHOTO_H / 2, size, color: pen.color });
+    selected = items.length - 1;
+    renderOverlay();
+  }
+
+  // 드래그
+  let oDragging = false, oDX = 0, oDY = 0;
+  function opos(e) {
+    const r = overlayCanvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: (t.clientX - r.left) * PHOTO_W / r.width, y: (t.clientY - r.top) * PHOTO_H / r.height };
+  }
+  function oDown(e) {
+    const p = opos(e);
+    const i = hitItem(p.x, p.y);
+    selected = i;
+    if (i >= 0) {
+      oDragging = true;
+      oDX = p.x - items[i].x; oDY = p.y - items[i].y;
+      $('itemSize').value = items[i].size;
+    }
+    renderOverlay();
+  }
+  function oMove(e) {
+    if (!oDragging || selected < 0) return;
+    const p = opos(e);
+    items[selected].x = p.x - oDX;
+    items[selected].y = p.y - oDY;
+    renderOverlay();
+  }
+  overlayCanvas.addEventListener('mousedown', oDown);
+  overlayCanvas.addEventListener('mousemove', oMove);
+  window.addEventListener('mouseup', () => { oDragging = false; });
+  overlayCanvas.addEventListener('touchstart', e => { e.preventDefault(); oDown(e); }, { passive: false });
+  overlayCanvas.addEventListener('touchmove',  e => { e.preventDefault(); oMove(e); }, { passive: false });
+  overlayCanvas.addEventListener('touchend',   e => { e.preventDefault(); oDragging = false; }, { passive: false });
+
+  $('btnModeDraw').addEventListener('click', () => setPlaceMode(false));
+  $('btnModePlace').addEventListener('click', () => setPlaceMode(true));
+  document.querySelectorAll('.sticker').forEach(b => {
+    b.addEventListener('click', () => addItem('emoji', b.dataset.e));
+  });
+  $('btnAddText').addEventListener('click', () => {
+    const v = $('textInput').value.trim();
+    if (!v) return;
+    addItem('text', v);
+    $('textInput').value = '';
+  });
+  $('itemSize').addEventListener('input', e => {
+    if (selected >= 0) { items[selected].size = +e.target.value; renderOverlay(); }
+  });
+  $('btnDelItem').addEventListener('click', () => {
+    if (selected >= 0) { items.splice(selected, 1); selected = -1; renderOverlay(); }
+  });
+
+  // ─────────────────────────────────────────────────────────
   // 합성 → 업로드 → QR
   // ─────────────────────────────────────────────────────────
   let lastComposite = null;
@@ -602,6 +751,9 @@
     const c = out.getContext('2d');
     c.drawImage(photoCanvas, 0, 0);
     c.drawImage(doodleCanvas, 0, 0);
+    renderOverlay(true);              // 선택 테두리 없이 스티커·글자 렌더
+    c.drawImage(overlayCanvas, 0, 0);
+    renderOverlay();                  // 화면용(선택 테두리 포함)으로 복원
     return out;
   }
 
