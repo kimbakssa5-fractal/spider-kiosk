@@ -343,7 +343,8 @@
   'use strict';
 
   const UPLOAD_API = 'https://tmpfiles.org/api/v1/upload';
-  const PHOTO_W = 1280, PHOTO_H = 720;
+  // 사진 해상도 — 기기 방향에 따라 가로(1280×720)/세로(720×1280)로 startCamera에서 설정
+  let PHOTO_W = 1280, PHOTO_H = 720;
 
   // 사진(QR 링크) 보관 기간 옵션 — 시작 화면에서 선택, localStorage에 저장
   //  litter: litterbox.catbox.moe(브라우저 CORS 허용, 최대 72h) / tmp: tmpfiles.org(60분)
@@ -504,9 +505,37 @@
   const video = $('video');
   let facing = 'user';   // 'user'(전면) | 'environment'(후면)
 
+  // 기기 방향에 맞춰 사진 비율을 정한다: 세로 폰=세로 사진(꽉 채움), 가로 키오스크=가로 16:9
+  // 캔버스 4종의 버퍼 해상도와 화면 표시 크기를 함께 갱신.
+  function applyDisplaySize(portrait) {
+    const cvs = [photoCanvas, doodleCanvas, overlayCanvas, frameCanvas];
+    if (portrait) {
+      video.style.aspectRatio = '9 / 16';
+      video.style.width = 'auto';
+      video.style.height = 'min(78vh, calc(96vw * 16 / 9))';
+      cvs.forEach((cv, i) => {
+        cv.style.aspectRatio = '9 / 16';
+        cv.style.width = 'auto';
+        cv.style.height = (i === 0) ? 'min(66vh, calc(82vw * 16 / 9))' : '100%';
+      });
+    } else {
+      // 인라인 스타일 제거 → 기존 가로(16:9) CSS 규칙으로 복귀
+      [video, ...cvs].forEach(el => { el.style.aspectRatio = ''; el.style.width = ''; el.style.height = ''; });
+    }
+  }
+  function setOrientation() {
+    const portrait = window.innerHeight > window.innerWidth;
+    PHOTO_W = portrait ? 720 : 1280;
+    PHOTO_H = portrait ? 1280 : 720;
+    [photoCanvas, doodleCanvas, overlayCanvas, frameCanvas]
+      .forEach(cv => { cv.width = PHOTO_W; cv.height = PHOTO_H; });  // 버퍼 리사이즈(내용 초기화됨)
+    applyDisplaySize(portrait);
+  }
+
   async function startCamera() {
     show('scrCamera');
     $('camError').style.display = 'none';
+    setOrientation();   // 카메라 시작 시 현재 기기 방향으로 사진 비율 고정
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: PHOTO_W }, height: { ideal: PHOTO_H }, facingMode: facing },
