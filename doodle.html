@@ -45,8 +45,10 @@
     top: 0; left: 0; right: 0;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;           /* 항상 한 줄 — 넘치면 가로 스크롤로 폴백 */
+    overflow-x: auto;
     padding: 6px 10px;
     background: rgba(34, 34, 34, 0.92);
     backdrop-filter: blur(6px);
@@ -55,6 +57,7 @@
     z-index: 100;
     transition: transform 0.25s ease;
   }
+  #toolbar::-webkit-scrollbar { display: none; }
   #toolbar.hidden { transform: translateY(-100%); }
 
   /* ── 옵션 패널: [옵션] 버튼으로 펼치는 보조 기능 ── */
@@ -92,6 +95,9 @@
   .group:last-child { border-right: none; margin-left: auto; }
 
   button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: #3d3d3d;
     border: 1px solid #555;
     color: #eee;
@@ -102,6 +108,7 @@
     cursor: pointer;
     white-space: nowrap;
   }
+  button .ic { font-size: 13px; line-height: 1; }
   button:hover { background: #4d4d4d; }
   button:active { background: #5a5a5a; }
   button:disabled { opacity: 0.35; cursor: default; }
@@ -160,41 +167,49 @@
 
   input[type="file"] { display: none; }
 
-  /* 좁은 화면(핸드폰): 상단엔 주요 버튼만 있어 가로 스크롤 없이 줄바꿈으로 다 보임.
-     보조 기능은 [옵션] 패널로 빠져 있으므로 툴바가 단순함 */
+  /* 좁은 화면(핸드폰): 라벨을 숨기고 아이콘만 남겨 모든 버튼이 한 줄에 들어감.
+     보조 기능(전체화면·툴바 숨기기)은 [옵션] 패널로 빠져 있어 상단이 더 단순함 */
   @media (max-width: 760px) {
+    #toolbar { gap: 3px; padding: 6px 6px; }
+    #toolbar button .lbl { display: none; }   /* 아이콘만 → 한 줄 */
+    #toolbar button { padding: 7px 9px; }
+    .group { padding: 0 5px; gap: 3px; }
     .group:last-child { margin-left: 0; }
     #mainW, #subW, #eraseW { width: 180px; }
     input[type="range"] { width: 140px; }
     #cursor { display: none !important; }
   }
+  /* 옵션 패널 안의 보조 기능 버튼 행 */
+  #optionsPanel .opt-row.tools { gap: 10px; }
 </style>
 </head>
 <body>
 
 <div id="stage"><canvas id="c"></canvas></div>
 
-<!-- 상단: 주요 기능만 (가로 스크롤 없이 항상 한눈에) -->
+<!-- 상단: 주요 기능만 한 줄로. 좁은 화면에선 라벨이 숨고 아이콘만 남음 -->
 <div id="toolbar">
   <div class="group">
-    <button id="btnNew" title="현재 디스플레이 해상도로 새 도화지 (Ctrl+N)">새 도화지</button>
-    <button id="btnSave" title="PNG로 저장 (Ctrl+S)">저장</button>
+    <button id="btnNew" title="현재 디스플레이 해상도로 새 도화지 (Ctrl+N)"><span class="ic">🆕</span><span class="lbl">새 도화지</span></button>
+    <button id="btnSave" title="PNG로 저장 (Ctrl+S)"><span class="ic">💾</span><span class="lbl">저장</span></button>
   </div>
   <div class="group">
-    <button id="btnUndo" title="실행취소 (Ctrl+Z)">↶ 실행취소</button>
-    <button id="btnRedo" title="재실행 (Ctrl+Y)">↷ 재실행</button>
-    <button id="btnEraser" title="지우개 (그린 거미줄을 지움)">🧽 지우개</button>
+    <button id="btnUndo" title="실행취소 (Ctrl+Z)"><span class="ic">↶</span><span class="lbl">실행취소</span></button>
+    <button id="btnRedo" title="재실행 (Ctrl+Y)"><span class="ic">↷</span><span class="lbl">재실행</span></button>
+    <button id="btnEraser" title="지우개 (그린 거미줄을 지움)"><span class="ic">🧽</span><span class="lbl">지우개</span></button>
   </div>
   <div class="group">
-    <button id="btnOptions" title="색상·굵기 등 옵션 열기">⚙ 옵션</button>
-    <button id="btnFull" title="전체화면">⛶ 전체화면</button>
-    <button id="btnHide" title="툴바 숨기기">▲</button>
-    <button id="btnClose" title="닫기">닫기</button>
+    <button id="btnOptions" title="색상·굵기 등 옵션 열기"><span class="ic">⚙</span><span class="lbl">옵션</span></button>
+    <button id="btnClose" title="닫기"><span class="ic">✕</span><span class="lbl">닫기</span></button>
   </div>
 </div>
 
-<!-- 옵션 패널: [옵션] 버튼을 누르면 펼쳐지는 보조 기능(색상·굵기·열기) -->
+<!-- 옵션 패널: [옵션] 버튼을 누르면 펼쳐지는 보조 기능(전체화면·색상·굵기·열기) -->
 <div id="optionsPanel" class="closed">
+  <div class="opt-row tools">
+    <button id="btnFull" title="전체화면"><span class="ic">⛶</span><span class="lbl">전체화면</span></button>
+    <button id="btnHide" title="툴바 숨기기"><span class="ic">▲</span><span class="lbl">툴바 숨기기</span></button>
+  </div>
   <div class="opt-row">
     <label>선 굵기 <input type="range" id="mainW" min="0.1" max="3" step="0.1" value="0.5"><span class="val" id="mainWVal">0.5</span></label>
     <label>보조선 굵기 <input type="range" id="subW" min="0.05" max="2" step="0.05" value="0.3"><span class="val" id="subWVal">0.3</span></label>

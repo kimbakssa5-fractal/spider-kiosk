@@ -103,6 +103,8 @@
   .recent-del:active { background: #e05548; }
 
   /* ── 카메라 화면 ── */
+  /* 카메라 미리보기는 가로·세로 모두 화면을 꽉 채우고, 버튼은 미리보기 위에 띄운다 */
+  #scrCamera { gap: 0; }
   #camWrap { position: relative; }
   video, #photoWrap canvas {
     aspect-ratio: 16 / 9;
@@ -110,18 +112,33 @@
     background: #000;
     display: block;
   }
-  /* 카메라 미리보기: 핸드폰에서 화면을 꽉 차게(풀사이즈)로 크게 표시 */
-  video { width: min(96vw, calc(82vh * 16 / 9)); transform: scaleX(-1); object-fit: cover; }
+  /* 카메라 미리보기: 사진 비율(16:9)을 유지한 채 화면을 최대로 채움.
+     16:9 화면에선 가장자리 여백 없이 풀스크린, 그 외 비율에선 레터박스만 남음 */
+  video {
+    width: min(100vw, calc(100vh * 16 / 9));
+    border-radius: 0;
+    transform: scaleX(-1);
+    object-fit: cover;
+  }
+  /* 카메라 화면 버튼·오류 메시지: 미리보기 위 하단 중앙에 오버레이 */
+  #scrCamera .row {
+    position: absolute;
+    left: 0; right: 0; bottom: 22px;
+    z-index: 6;
+    padding: 0 10px;
+  }
+  #scrCamera #camError {
+    position: absolute;
+    left: 10px; right: 10px; bottom: 96px;
+    z-index: 6;
+    background: rgba(0,0,0,0.6);
+    padding: 8px 12px; border-radius: 10px;
+  }
   /* 꾸미기 사진: 위쪽 보내기 버튼 + 꾸미기 도구가 들어갈 자리를 위해 조금 작게 */
   #photoWrap canvas { width: min(82vw, calc(56vh * 16 / 9)); }
 
-  /* 핸드폰(좁은 화면): 카메라 미리보기를 폭 가득 */
-  @media (max-width: 760px) {
-    video { width: 96vw; }
-  }
-  /* 낮은 화면(가로 모드 폰 등): 도구막대가 스크롤 없이 다 보이게 사진을 줄임 */
+  /* 낮은 화면(가로 모드 폰 등): 꾸미기 도구막대가 스크롤 없이 다 보이게 사진을 줄임 */
   @media (max-height: 720px) {
-    video { width: min(96vw, calc(72vh * 16 / 9)); }
     #photoWrap canvas { width: min(82vw, calc(42vh * 16 / 9)); }
   }
   /* 그래도 넘칠 때를 대비해 꾸미기 화면은 세로 스크롤 허용(최후 안전장치) */
@@ -512,7 +529,7 @@
     if (portrait) {
       video.style.aspectRatio = '9 / 16';
       video.style.width = 'auto';
-      video.style.height = 'min(78vh, calc(96vw * 16 / 9))';
+      video.style.height = 'min(100vh, calc(100vw * 16 / 9))';   // 세로도 화면 꽉 채움(버튼은 오버레이)
       cvs.forEach((cv, i) => {
         cv.style.aspectRatio = '9 / 16';
         cv.style.width = 'auto';
