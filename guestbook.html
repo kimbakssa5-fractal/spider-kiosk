@@ -103,8 +103,10 @@
   .recent-del:active { background: #e05548; }
 
   /* ── 카메라 화면 ── */
-  /* 카메라 미리보기는 가로·세로 모두 화면을 꽉 채우고, 버튼은 미리보기 위에 띄운다 */
-  #scrCamera { gap: 0; }
+  /* 기본은 화면 안에 여유 있게 들어오는 표준 크기(버튼은 미리보기 아래 일반 배치).
+     [전체화면] 버튼을 누르면(body.fs) 미리보기가 화면을 꽉 채우고 버튼이 미리보기 위로
+     오버레이된다. 미리보기의 실제 크기/비율은 방향·전체화면 여부에 맞춰 JS에서 설정. */
+  #scrCamera { gap: 18px; }
   #camWrap { position: relative; }
   video, #photoWrap canvas {
     aspect-ratio: 16 / 9;
@@ -112,27 +114,28 @@
     background: #000;
     display: block;
   }
-  /* 카메라 미리보기: 사진 비율(16:9)을 유지한 채 화면을 최대로 채움.
-     16:9 화면에선 가장자리 여백 없이 풀스크린, 그 외 비율에선 레터박스만 남음 */
   video {
-    width: min(100vw, calc(100vh * 16 / 9));
-    border-radius: 0;
     transform: scaleX(-1);
     object-fit: cover;
   }
-  /* 카메라 화면 버튼·오류 메시지: 미리보기 위 하단 중앙에 오버레이 */
-  #scrCamera .row {
+  #scrCamera #camError {
+    background: rgba(0,0,0,0.6);
+    padding: 8px 12px; border-radius: 10px;
+    max-width: 90vw;
+  }
+  /* 전체화면 모드: 모서리 각지게 + 버튼·오류 메시지를 미리보기 위에 오버레이 */
+  body.fs #scrCamera { gap: 0; }
+  body.fs video { border-radius: 0; }
+  body.fs #scrCamera .row {
     position: absolute;
     left: 0; right: 0; bottom: 22px;
     z-index: 6;
     padding: 0 10px;
   }
-  #scrCamera #camError {
+  body.fs #scrCamera #camError {
     position: absolute;
     left: 10px; right: 10px; bottom: 96px;
     z-index: 6;
-    background: rgba(0,0,0,0.6);
-    padding: 8px 12px; border-radius: 10px;
   }
   /* 꾸미기 사진: 위쪽 보내기 버튼 + 꾸미기 도구가 들어갈 자리를 위해 조금 작게 */
   #photoWrap canvas { width: min(82vw, calc(56vh * 16 / 9)); }
@@ -264,6 +267,7 @@
     <button class="ctrl" id="btnCamBack">← 처음으로</button>
     <button class="ctrl primary" id="btnShoot" style="font-size:22px; padding:16px 56px">📷 촬영 (3초)</button>
     <button class="ctrl" id="btnFlip" title="전면/후면 카메라 전환">🔄 카메라 전환</button>
+    <button class="ctrl" id="btnCamFull" title="미리보기를 화면에 꽉 채우기">⛶ 전체화면</button>
   </div>
   <p class="sub" id="camError" style="color:#e88; display:none"></p>
 </div>
@@ -522,14 +526,30 @@
   const video = $('video');
   let facing = 'user';   // 'user'(전면) | 'environment'(후면)
 
-  // 기기 방향에 맞춰 사진 비율을 정한다: 세로 폰=세로 사진(꽉 채움), 가로 키오스크=가로 16:9
-  // 캔버스 4종의 버퍼 해상도와 화면 표시 크기를 함께 갱신.
+  let curPortrait = false;   // 현재 카메라 방향(세로 여부)
+  let isFs = false;          // 전체화면 모드 여부
+
+  // 카메라 미리보기 표시 크기: 기본은 화면 안에 여유 있게 들어오는 표준 크기,
+  // 전체화면(isFs)이면 사진 비율을 유지한 채 화면을 꽉 채운다.
+  function applyVideoSize() {
+    if (curPortrait) {
+      video.style.aspectRatio = '9 / 16';
+      video.style.width = 'auto';
+      video.style.height = isFs ? 'min(100vh, calc(100vw * 16 / 9))'
+                                : 'min(64vh, calc(78vw * 16 / 9))';
+    } else {
+      video.style.aspectRatio = '16 / 9';
+      video.style.height = 'auto';
+      video.style.width = isFs ? 'min(100vw, calc(100vh * 16 / 9))'
+                               : 'min(78vw, calc(58vh * 16 / 9))';
+    }
+  }
+
+  // 기기 방향에 맞춰 사진 비율을 정한다: 세로 폰=세로 사진, 가로 키오스크=가로 16:9.
+  // 미리보기는 applyVideoSize, 꾸미기 캔버스 4종은 여기서 표시 크기를 갱신.
   function applyDisplaySize(portrait) {
     const cvs = [photoCanvas, doodleCanvas, overlayCanvas, frameCanvas];
     if (portrait) {
-      video.style.aspectRatio = '9 / 16';
-      video.style.width = 'auto';
-      video.style.height = 'min(100vh, calc(100vw * 16 / 9))';   // 세로도 화면 꽉 채움(버튼은 오버레이)
       cvs.forEach((cv, i) => {
         cv.style.aspectRatio = '9 / 16';
         cv.style.width = 'auto';
@@ -537,16 +557,17 @@
       });
     } else {
       // 인라인 스타일 제거 → 기존 가로(16:9) CSS 규칙으로 복귀
-      [video, ...cvs].forEach(el => { el.style.aspectRatio = ''; el.style.width = ''; el.style.height = ''; });
+      cvs.forEach(el => { el.style.aspectRatio = ''; el.style.width = ''; el.style.height = ''; });
     }
+    applyVideoSize();
   }
   function setOrientation() {
-    const portrait = window.innerHeight > window.innerWidth;
-    PHOTO_W = portrait ? 720 : 1280;
-    PHOTO_H = portrait ? 1280 : 720;
+    curPortrait = window.innerHeight > window.innerWidth;
+    PHOTO_W = curPortrait ? 720 : 1280;
+    PHOTO_H = curPortrait ? 1280 : 720;
     [photoCanvas, doodleCanvas, overlayCanvas, frameCanvas]
       .forEach(cv => { cv.width = PHOTO_W; cv.height = PHOTO_H; });  // 버퍼 리사이즈(내용 초기화됨)
-    applyDisplaySize(portrait);
+    applyDisplaySize(curPortrait);
   }
 
   async function startCamera() {
@@ -1333,6 +1354,25 @@
   $('btnShoot').addEventListener('click', shoot);
   $('btnFlip').addEventListener('click', flipCamera);
   $('btnRetake').addEventListener('click', startCamera);
+
+  // 전체화면: 표준 + webkit(구형) 폴백. 미지원(iOS 사파리)이면 body.fs만 토글해 유사 전체화면.
+  const fsRequest = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+  const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
+  const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+  function setFs(on) {
+    isFs = on;
+    document.body.classList.toggle('fs', isFs);
+    $('btnCamFull').textContent = isFs ? '⛶ 전체화면 해제' : '⛶ 전체화면';
+    applyVideoSize();
+  }
+  $('btnCamFull').addEventListener('click', () => {
+    if (!fsRequest) { setFs(!isFs); return; }   // 미지원 브라우저: CSS 유사 전체화면
+    if (fsElement()) fsExit.call(document); else fsRequest.call(document.documentElement);
+  });
+  // F11·ESC 등으로 브라우저 전체화면 상태가 바뀌면 미리보기도 따라 맞춘다
+  const onFsChange = () => setFs(!!fsElement());
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
   $('btnSend').addEventListener('click', send);
   $('btnRetry').addEventListener('click', send);
   $('btnLocalSave').addEventListener('click', localSave);
