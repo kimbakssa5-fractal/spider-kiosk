@@ -570,6 +570,18 @@
     applyDisplaySize(curPortrait);
   }
 
+  // 기기를 회전(세로↔가로)하거나 전체화면에 진입해 화면 비율이 바뀌면 방향을 다시 감지.
+  // 카메라 화면일 때만 재실행한다(꾸미기 화면에서 버퍼를 다시 잡으면 찍은 사진이 지워짐).
+  // 방향이 그대로면(curPortrait 변화 없음) 비율만 다시 적용해 영상이 커지도록 한다.
+  function onViewportChange() {
+    if (!$('scrCamera').classList.contains('active')) return;
+    const portraitNow = window.innerHeight > window.innerWidth;
+    if (portraitNow === curPortrait) { applyVideoSize(); return; }
+    setOrientation();
+  }
+  window.addEventListener('resize', onViewportChange);
+  window.addEventListener('orientationchange', onViewportChange);
+
   async function startCamera() {
     show('scrCamera');
     $('camError').style.display = 'none';
@@ -1367,7 +1379,11 @@
   }
   $('btnCamFull').addEventListener('click', () => {
     if (!fsRequest) { setFs(!isFs); return; }   // 미지원 브라우저: CSS 유사 전체화면
-    if (fsElement()) fsExit.call(document); else fsRequest.call(document.documentElement);
+    if (fsElement()) { fsExit.call(document); return; }
+    // requestFullscreen이 거부되면 fullscreenchange가 안 떠 isFs가 갱신되지 않으므로
+    // 실패 시 CSS 유사 전체화면으로 폴백한다(전체화면이 "작게" 남는 문제 방지).
+    const p = fsRequest.call(document.documentElement);
+    if (p && p.catch) p.catch(() => setFs(true));
   });
   // F11·ESC 등으로 브라우저 전체화면 상태가 바뀌면 미리보기도 따라 맞춘다
   const onFsChange = () => setFs(!!fsElement());
