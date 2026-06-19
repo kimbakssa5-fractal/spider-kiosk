@@ -166,7 +166,6 @@
     .group:last-child { margin-left: 0; }
     #brushR, #cellS, #jitter { width: 160px; }
     input[type="range"] { width: 130px; }
-    #cursor { display: none !important; }
   }
 </style>
 </head>
@@ -405,25 +404,59 @@
     isDrawing = false;
   }
 
-  canvas.addEventListener('mousedown', pointerDown);
-  window.addEventListener('mousemove', e => {
-    // 커서 원: 화면상 표시 반경 = 변환 영역 크기 × 표시배율
+  // 터치 기기 여부 — 터치에서는 합성 마우스 이벤트로 원이 멈춰버리므로 분리 처리
+  const TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  let lastCX = window.innerWidth / 2, lastCY = window.innerHeight / 2;
+  let hideTimer = null;
+
+  // 변환 영역 크기 원(브러시 미리보기)을 화면 좌표에 표시
+  // autoHide=true 면 잠시 보였다가 사라짐(슬라이더로 크기 조절할 때 미리보기용)
+  function showCursor(clientX, clientY, autoHide) {
+    lastCX = clientX; lastCY = clientY;
     const rc = canvas.getBoundingClientRect();
     const scale = rc.width / W;
     const d = cfg.brushR * 2 * scale;
     cursor.style.width = d + 'px';
     cursor.style.height = d + 'px';
-    cursor.style.left = e.clientX + 'px';
-    cursor.style.top = e.clientY + 'px';
+    cursor.style.left = clientX + 'px';
+    cursor.style.top = clientY + 'px';
     cursor.style.display = hasImage ? 'block' : 'none';
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    if (autoHide) hideTimer = setTimeout(hideCursor, 900);
+  }
+  function hideCursor() {
+    cursor.style.display = 'none';
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+  }
+
+  // ── 마우스(데스크톱) ──
+  canvas.addEventListener('mousedown', e => { if (TOUCH) return; pointerDown(e); });
+  window.addEventListener('mousemove', e => {
+    if (TOUCH) return;               // 터치 기기의 합성 마우스 이벤트 무시
+    showCursor(e.clientX, e.clientY);
     pointerMove(e);
   });
-  window.addEventListener('mouseup', pointerUp);
-  canvas.addEventListener('mouseleave', () => { cursor.style.display = 'none'; });
+  window.addEventListener('mouseup', e => { if (TOUCH) return; pointerUp(); });
+  canvas.addEventListener('mouseleave', () => { if (!TOUCH) hideCursor(); });
 
-  canvas.addEventListener('touchstart', e => { e.preventDefault(); pointerDown(e); }, { passive: false });
-  canvas.addEventListener('touchmove',  e => { e.preventDefault(); pointerMove(e); }, { passive: false });
-  canvas.addEventListener('touchend',   e => { e.preventDefault(); pointerUp(); }, { passive: false });
+  // ── 터치(키오스크/모바일) — 누르고 있는 동안만 원 표시, 떼면 사라짐 ──
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    showCursor(t.clientX, t.clientY);
+    pointerDown(e);
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    showCursor(t.clientX, t.clientY);
+    pointerMove(e);
+  }, { passive: false });
+  canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    pointerUp();
+    hideCursor();
+  }, { passive: false });
 
   // ── 캔버스 초기화(이미지 없을 때 안내 화면) ───────────────
   function drawPlaceholder() {
@@ -501,7 +534,11 @@
   }
 
   // ── 설정 바인딩 ───────────────────────────────────────────
-  $('brushR').addEventListener('input', e => { cfg.brushR = +e.target.value; $('brushRVal').textContent = e.target.value; });
+  $('brushR').addEventListener('input', e => {
+    cfg.brushR = +e.target.value;
+    $('brushRVal').textContent = e.target.value;
+    showCursor(lastCX, lastCY, true);   // 크기 변경 즉시 원 미리보기(잠시 후 사라짐)
+  });
   $('cellS').addEventListener('input',  e => { cfg.cellS = +e.target.value;  $('cellSVal').textContent = e.target.value; });
   $('jitter').addEventListener('input', e => { cfg.jitter = +e.target.value; $('jitterVal').textContent = e.target.value; });
 
