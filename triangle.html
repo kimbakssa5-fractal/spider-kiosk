@@ -348,7 +348,7 @@
     style: 'fill',    // fill | edge | wire | gray
     erase: false,     // 원본 브러시(부분 되돌리기)
     animate: true,    // 전체 변환 애니메이션
-    adaptive: false,  // 적응형(로우폴리): 단조로운 곳 큰 삼각형, 디테일 작은 삼각형
+    adaptive: true,   // 적응형(로우폴리): 단조로운 곳 큰 삼각형, 디테일 작은 삼각형 (기본값)
     detailSens: 5,    // 디테일 민감도(1~10): 클수록 작은 삼각형 많아짐
   };
 
@@ -540,11 +540,10 @@
     triList = []; triBuckets = null;
     if (!srcData) return;
     buildGradient();
-    const base = Math.max(14, cfg.cellS);   // 단조로운 영역의 삼각형 크기
+    const base = Math.max(14, cfg.cellS);   // 단조로운 영역의 삼각형 크기(크게 유지)
     const sens = cfg.detailSens;            // 1~10
-    const thr1 = Math.max(0.04, 0.22 - sens * 0.016);
-    const thr2 = thr1 * 1.7;
-    const CAP = 5000;
+    const thr1 = Math.max(0.022, 0.135 - sens * 0.012);  // 낮을수록 디테일 영역 多
+    const CAP = 7000;
 
     const pts = [];
     const seen = new Set();
@@ -570,8 +569,12 @@
     for (let y = base; y < H; y += base)
       for (let x = base; x < W; x += base)
         addPt(x + (hash(x, y) - 0.5) * base * 0.45, y + (hash(x + 7, y + 3) - 0.5) * base * 0.45);
-    // 디테일 레벨(에지 강한 곳 → 점 추가 → 작은 삼각형)
-    const levels = [{ step: base / 2, thr: thr1 }, { step: Math.max(7, base / 4), thr: thr2 }];
+    // 디테일 레벨(에지 강할수록 더 작은 삼각형) — 단계적으로 세분화해 대비를 크게
+    const levels = [
+      { step: base / 2,              thr: thr1 },
+      { step: base / 4,              thr: thr1 * 2.0 },
+      { step: Math.max(6, base / 8), thr: thr1 * 3.6 },
+    ];
     for (const lv of levels) {
       const st = lv.step;
       let stop = false;
@@ -1105,6 +1108,10 @@
     }
     resetHistory();                 // 모드 전환 시 변환 키 체계가 달라 기록 무효
     cfg.adaptive = on;
+    applyAdaptiveUI(on);
+    if (on) { triList = []; ensureLowPoly(); }
+  }
+  function applyAdaptiveUI(on) {     // cfg.adaptive 값에 맞춰 UI 동기화(초기화·토글 공용)
     $('btnAdaptive').classList.toggle('on', on);
     $('cellLabelText').textContent = on ? '삼각형 기본 크기' : '모자익 크기';
     $('detailWrap').style.display = on ? 'flex' : 'none';
@@ -1113,7 +1120,6 @@
     $('hint').textContent = on
       ? '‘전체 변환’ 또는 드래그 — 단조로운 곳은 큰 삼각형, 디테일한 곳은 작은 삼각형'
       : SHAPE_HINT[cfg.shape];
-    if (on) { triList = []; ensureLowPoly(); }
   }
   $('btnAdaptive').addEventListener('click', () => setAdaptive(!cfg.adaptive));
 
@@ -1244,6 +1250,7 @@
 
   drawPlaceholder();
   updateHistoryButtons();
+  applyAdaptiveUI(cfg.adaptive);     // 기본 적응형 모드에 맞춰 UI 동기화
 
 })();
 </script>
