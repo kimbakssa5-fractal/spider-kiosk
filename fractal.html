@@ -112,8 +112,9 @@
     <label title="색 밴드 농도">색 농도 <input type="range" id="bandS" min="20" max="120" step="5" value="55"></label>
   </div>
   <div class="group">
-    <button id="btnOut" title="길게 눌러 축소"><span class="ic">🔍−</span><span class="lbl">축소</span></button>
-    <button id="btnReset" title="처음 화면으로"><span class="ic">↺</span><span class="lbl">리셋</span></button>
+    <button id="btnIn" title="확대 (누르면 한 단계, 길게 누르면 계속 확대)"><span class="ic">🔍＋</span></button>
+    <button id="btnOut" title="축소 (누르면 한 단계, 길게 누르면 계속 축소)"><span class="ic">🔍－</span></button>
+    <button id="btnReset" title="처음 화면으로 되돌리기"><span class="ic">↺</span></button>
   </div>
   <div class="group">
     <button id="btnSave" title="현재 화면 저장(PNG)"><span class="ic">💾</span><span class="lbl">저장</span></button>
@@ -306,14 +307,38 @@
     requestFull(); updateDepth();
   }, { passive: false });
 
-  // 길게 눌러 축소 버튼
-  function holdButton(btn, onDown) {
-    const d = e => { e.preventDefault(); onDown(); };
-    btn.addEventListener('mousedown', d); btn.addEventListener('touchstart', d, { passive: false });
-    btn.addEventListener('mouseup', endZoom); btn.addEventListener('mouseleave', endZoom);
-    btn.addEventListener('touchend', e => { e.preventDefault(); endZoom(); }, { passive: false });
+  // 화면 중앙 기준 한 단계 확대/축소
+  function stepZoom(factor) {
+    scale *= factor;
+    if (scale < MIN_SCALE) scale = MIN_SCALE; else if (scale > scale0) scale = scale0;
+    requestFull(); updateDepth();   // 중앙 고정 → cx, cy 변화 없음
   }
-  holdButton($('btnOut'), () => { zooming = false; startZoom(W / 2, H / 2, 1 / zoomInRate()); });
+
+  // 확대(+)/축소(−) 버튼: 짧게 누르면 한 단계, 길게 누르면 계속
+  function pressZoom(btn, dir) {
+    let held = false, timer = null;
+    const contRate = () => dir === 'in' ? zoomInRate() : 1 / zoomInRate();
+    const stepFactor = () => dir === 'in' ? 0.62 : 1 / 0.62;
+    const down = e => {
+      e.preventDefault();
+      held = false;
+      timer = setTimeout(() => { held = true; zooming = false; startZoom(W / 2, H / 2, contRate()); }, 240);
+    };
+    const up = e => {
+      if (e) e.preventDefault();
+      clearTimeout(timer);
+      if (held) endZoom(); else stepZoom(stepFactor());
+      held = false;
+    };
+    btn.addEventListener('mousedown', down);
+    btn.addEventListener('touchstart', down, { passive: false });
+    btn.addEventListener('mouseup', up);
+    btn.addEventListener('mouseleave', () => { clearTimeout(timer); if (held) { endZoom(); held = false; } });
+    btn.addEventListener('touchend', up, { passive: false });
+    btn.addEventListener('touchcancel', () => { clearTimeout(timer); if (held) { endZoom(); held = false; } });
+  }
+  pressZoom($('btnIn'), 'in');
+  pressZoom($('btnOut'), 'out');
 
   let hintTimer = setTimeout(() => $('hint').style.opacity = '0', 6000);
   function hideHint() { $('hint').style.opacity = '0'; clearTimeout(hintTimer); }
