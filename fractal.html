@@ -35,6 +35,20 @@
   .group { display: flex; align-items: center; gap: 4px; padding: 0 8px; border-right: 1px solid rgba(255,255,255,0.15); }
   .group:last-child { border-right: none; margin-left: auto; }
 
+  /* ── 옵션 패널: [옵션] 버튼으로 펼치는 보조 기능 ── */
+  #optionsPanel {
+    position: fixed; left: 0; right: 0; z-index: 98;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 12px 14px;
+    background: rgba(18, 20, 28, 0.96); backdrop-filter: blur(6px);
+    color: #ddd; font-size: 12px;
+    border-bottom: 1px solid rgba(239,154,91,0.4);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  }
+  #optionsPanel.closed { display: none; }
+  .opt-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .opt-row.tools { gap: 10px; }
+
   button {
     display: inline-flex; align-items: center; gap: 5px;
     background: #2c2f3a; border: 1px solid #4a4e5c; color: #eee;
@@ -94,7 +108,9 @@
     #toolbar button { padding: 8px 9px; }
     .group { padding: 0 5px; gap: 3px; }
     .group:last-child { margin-left: 0; }
-    input[type="range"] { width: 90px; }
+    /* 옵션 패널 안의 슬라이더는 라벨이 보이므로 충분히 넓게 */
+    #optionsPanel input[type="range"] { width: 160px; }
+    #optionsPanel .lbl { display: inline; }
   }
 </style>
 </head>
@@ -102,35 +118,45 @@
 
 <canvas id="c"></canvas>
 
+<!-- 상단: 주요 기능만 한 줄로. 좁은 화면에선 라벨이 숨고 아이콘만 남음 -->
 <div id="toolbar">
-  <div class="group">
-    <button id="btnMorph" title="색상이 서서히 변하는 모핑 효과"><span class="ic">🎨</span><span class="lbl">색상 모핑</span></button>
-    <button id="btnPalette" title="색상 팔레트 변경"><span class="ic">🌈</span><span class="lbl">팔레트</span></button>
-  </div>
-  <div class="group">
-    <label title="확대 속도">속도 <input type="range" id="zoomSpd" min="1" max="10" step="1" value="5"></label>
-    <label title="색 밴드 농도">색 농도 <input type="range" id="bandS" min="20" max="120" step="5" value="55"></label>
-  </div>
   <div class="group">
     <button id="btnIn" title="확대 (누르면 한 단계, 길게 누르면 계속 확대)"><span class="ic">🔍＋</span></button>
     <button id="btnOut" title="축소 (누르면 한 단계, 길게 누르면 계속 축소)"><span class="ic">🔍－</span></button>
-    <button id="btnReset" title="처음 화면으로 되돌리기"><span class="ic">↺</span></button>
+    <button id="btnReset" title="처음 화면으로 되돌리기"><span class="ic">↺</span><span class="lbl">처음으로</span></button>
   </div>
   <div class="group">
     <button id="btnSave" title="현재 화면 저장(PNG)"><span class="ic">💾</span><span class="lbl">저장</span></button>
-    <button id="btn4k" title="4K 고해상도로 저장"><span class="ic">🖼</span><span class="lbl">4K 저장</span></button>
     <button id="btnSend" title="QR로 핸드폰에 전송"><span class="ic">📱</span><span class="lbl">보내기</span></button>
   </div>
   <div class="group">
-    <button id="btnFull" title="전체화면"><span class="ic">⛶</span><span class="lbl">전체화면</span></button>
-    <button id="btnHide" title="툴바 숨기기"><span class="ic">▲</span></button>
+    <button id="btnOptions" title="색상·속도 등 옵션 열기"><span class="ic">⚙</span><span class="lbl">옵션</span></button>
     <button id="btnClose" title="닫기"><span class="ic">✕</span><span class="lbl">닫기</span></button>
   </div>
 </div>
+
+<!-- 옵션 패널: [옵션] 버튼을 누르면 펼쳐지는 보조 기능(전체화면·색상·속도·4K 저장) -->
+<div id="optionsPanel" class="closed">
+  <div class="opt-row tools">
+    <button id="btnHQ" title="고화질 줌: 깨지지 않게 한 프레임씩 또렷이 렌더(느림, 영상 캡처용). 끄면 빠른 미리보기"><span class="ic">🎬</span><span class="lbl">고화질 줌</span></button>
+    <button id="btnFull" title="전체화면"><span class="ic">⛶</span><span class="lbl">전체화면</span></button>
+    <button id="btnHide" title="툴바 숨기기"><span class="ic">▲</span><span class="lbl">툴바 숨기기</span></button>
+    <button id="btn4k" title="4K 고해상도로 저장"><span class="ic">🖼</span><span class="lbl">4K 저장</span></button>
+  </div>
+  <div class="opt-row">
+    <button id="btnMorph" title="색상이 서서히 변하는 모핑 효과"><span class="ic">🎨</span><span class="lbl">색상 모핑</span></button>
+    <button id="btnPalette" title="색상 팔레트 변경"><span class="ic">🌈</span><span class="lbl">팔레트</span></button>
+  </div>
+  <div class="opt-row">
+    <label title="확대 속도">속도 <input type="range" id="zoomSpd" min="1" max="10" step="1" value="5"></label>
+    <label title="색 밴드 농도">색 농도 <input type="range" id="bandS" min="20" max="120" step="5" value="55"></label>
+  </div>
+</div>
+
 <div id="showTab">▼ 메뉴</div>
 
 <div id="depth">×1</div>
-<div id="hint">이미지를 <b>길게 누르고 있으면</b> 그 지점으로 무한히 확대돼요 · 손을 떼면 선명하게 렌더링</div>
+<div id="hint">이미지를 <b>길게 누르고 있으면</b> 그 지점으로 무한히 확대돼요 · <b>고화질 줌</b>은 깨지지 않게 또렷이(느림), 옵션에서 끄면 빠른 미리보기</div>
 
 <!-- 전송/QR 오버레이 -->
 <div class="overlay" id="ovSend">
@@ -210,7 +236,7 @@
 
   // ── 상태 ──────────────────────────────────────────────────
   const canvas = $('c'), ctx = canvas.getContext('2d');
-  const toolbar = $('toolbar');
+  const toolbar = $('toolbar'), optionsPanel = $('optionsPanel');
   let W = 2, H = 2;
   let cx = -0.6, cy = 0, scale = 0.01, scale0 = 0.01, inited = false;
   const MIN_SCALE = 5e-16;
@@ -218,13 +244,16 @@
   let palIdx = 0, lut = buildLUT(PALETTES[0], LUT_N);
   let offset = 0, band = 0.55, morph = false;
   const MORPH_SPEED = 0.0026;
-  let zooming = false, zoomRate = 0.983, P = { x: 0, y: 0 }, ax = 0, ay = 0;
+  let zooming = false, zoomOut = false, zoomRate = 0.983, P = { x: 0, y: 0 }, ax = 0, ay = 0;
+  let HQ_MODE = true;   // 고화질 줌: 깨짐 없이(전체 해상도) — 느리지만 영상 캡처용으로 깔끔
 
   let iterBuf = null, fullImg = null, idleReady = false, fullState = null;
 
   function complexAt(px, py) { return { x: cx + (px - W / 2) * scale, y: cy - (py - H / 2) * scale }; }
   function maxIterFor(s) { const z = Math.max(0, Math.log2(scale0 / s)); return Math.min(2400, Math.round(150 + z * 32)); }
   function zoomInRate() { const v = +$('zoomSpd').value; return 1 - (0.006 + v * 0.0022); }   // 빠를수록 1에서 멀어짐
+  // 고화질 줌: 프레임 1장을 완성할 때마다 한 스텝씩 확대 → 속도 슬라이더가 '스텝 크기'(부드러움) 결정
+  function hqRate() { const v = +$('zoomSpd').value; return 1 - (0.015 + v * 0.004); }
   function updateDepth() {
     const z = scale0 / scale;
     let s; if (z < 1000) s = '×' + z.toFixed(z < 10 ? 1 : 0);
@@ -252,8 +281,41 @@
     updateDepth();
   }
 
+  // ── 고화질(HQ) 프레임 렌더: 전체 해상도로 다 그린 뒤에만 화면에 표시 → 깨짐/스윕 없음 ──
+  // 줌 중에는 한 프레임을 완성한 다음 한 스텝 확대하고 다음 프레임을 그린다(느리지만 매 프레임이 선명).
+  let hqIter = new Float32Array(1), hqImg = null, hqImgW = 0, hqImgH = 0, hq = null;
+  function hqStartFrame() {
+    if (hqIter.length < W * H) hqIter = new Float32Array(W * H);
+    if (hqImgW !== W || hqImgH !== H) { hqImg = ctx.createImageData(W, H); hqImgW = W; hqImgH = H; }
+    hq = { y: 0, mi: maxIterFor(scale) };
+    fullState = null; idleReady = false;
+  }
+  function hqStepFrame(budget) {
+    const t0 = performance.now();
+    while (hq.y < H) {
+      const y1 = Math.min(H, hq.y + 6);
+      mandelSmooth(cx, cy, scale, W, H, hq.mi, hqIter, hq.y, y1);
+      colorize(hqIter, hqImg.data, lut, offset, band, hq.y * W, y1 * W);
+      hq.y = y1;
+      if (performance.now() - t0 > budget) break;
+    }
+    if (hq.y >= H) {
+      ctx.putImageData(hqImg, 0, 0);   // 완성된 프레임만 화면에 노출
+      iterBuf = hqIter; fullImg = hqImg; idleReady = true; hq = null;
+      return true;
+    }
+    return false;
+  }
+  function hqZoomStep() {
+    const r = hqRate();
+    scale *= zoomOut ? 1 / r : r;
+    if (scale < MIN_SCALE) scale = MIN_SCALE;
+    else if (scale > scale0) scale = scale0;
+    cx = P.x - (ax - W / 2) * scale;
+    cy = P.y + (ay - H / 2) * scale;
+  }
   // ── 풀(고해상도) 렌더: 멈췄을 때 행 단위 점진 렌더 ─────────
-  function requestFull() { fullState = { y: 0, iter: new Float32Array(W * H), img: ctx.createImageData(W, H), mi: maxIterFor(scale) }; idleReady = false; }
+  function requestFull() { fullState = { y: 0, iter: new Float32Array(W * H), img: ctx.createImageData(W, H), mi: maxIterFor(scale) }; idleReady = false; hq = null; }
   function stepFull(budget) {
     const s = fullState, t0 = performance.now();
     while (s.y < H) {
@@ -278,7 +340,12 @@
 
   // ── 메인 루프 ─────────────────────────────────────────────
   function tick() {
-    if (zooming) { zoomStep(); if (morph) offset += MORPH_SPEED; renderLive(); }
+    if (zooming && HQ_MODE) {
+      // 고화질: 프레임을 끝까지 그린 뒤에만 한 스텝 확대 → 절대 깨지지 않음(대신 느림)
+      if (!hq) hqStartFrame();
+      if (hqStepFrame(16)) { hqZoomStep(); if (morph) offset += MORPH_SPEED; updateDepth(); }
+    }
+    else if (zooming) { zoomStep(); if (morph) offset += MORPH_SPEED; renderLive(); }
     else if (fullState) { stepFull(14); if (fullState === null) updateDepth(); }
     else if (morph && idleReady) { offset += MORPH_SPEED; recolorIdle(); }
     requestAnimationFrame(tick);
@@ -289,7 +356,7 @@
     const r = canvas.getBoundingClientRect(), t = e.touches ? e.touches[0] : e;
     return [(t.clientX - r.left) * W / r.width, (t.clientY - r.top) * H / r.height];
   }
-  function startZoom(px, py, rate) { P = complexAt(px, py); ax = px; ay = py; zoomRate = rate; zooming = true; hideHint(); }
+  function startZoom(px, py, rate) { P = complexAt(px, py); ax = px; ay = py; zoomRate = rate; zoomOut = rate > 1; zooming = true; hideHint(); }
   function endZoom() { if (!zooming) return; zooming = false; requestFull(); }
 
   canvas.addEventListener('mousedown', e => { startZoom(...bpos(e), zoomInRate()); });
@@ -359,13 +426,15 @@
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 
   // ── 팔레트 / 모핑 / 색 농도 ────────────────────────────────
-  function recolorNow() { if (idleReady && !zooming && !fullState) recolorIdle(); }
+  function recolorNow() { if (idleReady && !zooming && !fullState && !hq) recolorIdle(); }
   $('btnPalette').addEventListener('click', () => {
     palIdx = (palIdx + 1) % PALETTES.length;
     lut = buildLUT(PALETTES[palIdx], LUT_N);
     recolorNow();
   });
   $('btnMorph').addEventListener('click', () => { morph = !morph; $('btnMorph').classList.toggle('on', morph); });
+  $('btnHQ').classList.toggle('on', HQ_MODE);
+  $('btnHQ').addEventListener('click', () => { HQ_MODE = !HQ_MODE; $('btnHQ').classList.toggle('on', HQ_MODE); });
   $('bandS').addEventListener('input', e => { band = +e.target.value / 100; recolorNow(); });
   $('zoomSpd').addEventListener('input', () => { if (zooming) zoomRate = zoomInRate(); });
 
@@ -487,8 +556,21 @@
     if (!fsRequest) { toolbar.classList.toggle('hidden'); return; }
     if (fsElement()) fsExit.call(document); else fsRequest.call(docEl);
   });
-  $('btnHide').addEventListener('click', () => toolbar.classList.add('hidden'));
+
+  // 옵션 패널: 색상·속도 등 보조 기능을 펼치고 접음 (툴바 바로 아래에 위치)
+  function positionPanel() {
+    optionsPanel.style.top = (toolbar.classList.contains('hidden') ? 0 : toolbar.offsetHeight) + 'px';
+  }
+  function toggleOptions(force) {
+    const open = (force !== undefined) ? force : optionsPanel.classList.contains('closed');
+    optionsPanel.classList.toggle('closed', !open);
+    $('btnOptions').classList.toggle('on', open);
+    if (open) positionPanel();
+  }
+  $('btnOptions').addEventListener('click', () => toggleOptions());
+  $('btnHide').addEventListener('click', () => { toolbar.classList.add('hidden'); toggleOptions(false); });
   $('showTab').addEventListener('click', () => toolbar.classList.remove('hidden'));
+  window.addEventListener('resize', () => { if (!optionsPanel.classList.contains('closed')) positionPanel(); });
   $('btnClose').addEventListener('click', () => { location.href = 'index.html'; });
 
   // ── 시작 ──────────────────────────────────────────────────

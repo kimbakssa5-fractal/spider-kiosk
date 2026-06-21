@@ -420,18 +420,28 @@
     }
   }
 
-  canvas.addEventListener('mousedown', pointerDown);
-  window.addEventListener('mousemove', e => {
+  // 포인터 이벤트: 마우스·터치·펜(스타일러스)을 하나로 처리.
+  // 기존 터치 전용 코드는 펜 입력을 받지 못해(펜은 touch 이벤트를 발생시키지 않음) 그려지지 않았음.
+  function moveCursor(e) {
     cursor.style.display = 'block';
     cursor.style.left = e.clientX + 'px';
     cursor.style.top = e.clientY + 'px';
+  }
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    // 드래그가 캔버스 밖으로 나가도 같은 포인터를 계속 추적
+    if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (_) {} }
+    moveCursor(e);
+    pointerDown(e);
+  });
+  canvas.addEventListener('pointermove', e => {
+    e.preventDefault();
+    moveCursor(e);
     pointerMove(e);
   });
-  window.addEventListener('mouseup', pointerUp);
-
-  canvas.addEventListener('touchstart', e => { e.preventDefault(); pointerDown(e); }, { passive: false });
-  canvas.addEventListener('touchmove',  e => { e.preventDefault(); pointerMove(e); }, { passive: false });
-  canvas.addEventListener('touchend',   e => { e.preventDefault(); pointerUp(null); }, { passive: false });
+  canvas.addEventListener('pointerup', e => { e.preventDefault(); pointerUp(e); });
+  canvas.addEventListener('pointercancel', () => pointerUp(null));
+  canvas.addEventListener('pointerleave', () => { if (!isDrawing) cursor.style.display = 'none'; });
 
   // ── 메뉴: 새 도화지 ───────────────────────────────────────
   function newPaper() {
