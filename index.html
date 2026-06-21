@@ -2,172 +2,88 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>거미줄 키오스크</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fractal Universe</title>
 <style>
-  :root {
-    --bg1:#0e1c1b; --bg2:#1a322e;
-    --gold:#c9a25a; --gold-lt:#ecd49a; --gold-dk:#8a6d32;
-    --teal:#2f6f63; --teal-dk:#173d37;
-    --cream:#f2e7cc; --ink:#0c1513;
-    --red:#a8443a;
-    --serif: 'Georgia', 'Times New Roman', 'Apple SD Gothic Neo', serif;
-    --sans: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
   html, body {
-    min-height: 100%;
-    background:
-      radial-gradient(1200px 700px at 50% -10%, rgba(201,162,90,0.12), transparent 60%),
-      linear-gradient(160deg, var(--bg2), var(--bg1) 70%);
-    color: var(--cream);
-    font-family: var(--sans);
+    height: 100%;
+    background: #0b0a09;
+    overflow: hidden;
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
     user-select: none;
-    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-height: 100vh;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 28px 16px 40px;
-    gap: 26px;
   }
 
-  /* 은은한 거미줄 코너 장식 */
-  body::before, body::after {
-    content: ""; position: fixed; width: 280px; height: 280px;
-    background-repeat: no-repeat; opacity: 0.14; pointer-events: none; z-index: 0;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><g fill='none' stroke='%23c9a25a' stroke-width='0.7'><path d='M0 0 L100 100 M0 25 L75 100 M0 50 L50 100 M0 75 L25 100 M25 0 L100 75 M50 0 L100 50 M75 0 L100 25'/><path d='M0 14 Q40 40 14 100 M0 34 Q55 55 34 100 M0 56 Q70 70 56 100 M0 78 Q86 86 78 100'/></g></svg>");
-  }
-  body::before { top: 0; left: 0; }
-  body::after  { bottom: 0; right: 0; transform: rotate(180deg); }
-
-  .wrap {
-    position: relative; z-index: 1;
-    width: min(960px, 94vw);
-    display: flex; flex-direction: column; align-items: center;
-    gap: 22px;
-  }
-
-  /* 아르누보 아치 프레임 */
-  .hero {
+  /* 이미지 비율(1080:1920)에 정확히 맞춘 무대 — 레터박스 없음 */
+  .stage {
     position: relative;
-    padding: 16px;
-    border: 3px solid var(--gold);
-    border-radius: 140px 140px 22px 22px;
-    background:
-      radial-gradient(120% 90% at 50% 0%, rgba(47,111,99,0.45), transparent 70%),
-      linear-gradient(180deg, rgba(23,61,55,0.85), rgba(12,21,19,0.9));
-    box-shadow:
-      0 0 0 1px var(--gold-dk) inset,
-      0 0 0 7px rgba(12,21,19,0.6),
-      0 0 0 8px var(--gold-dk),
-      0 22px 60px rgba(0,0,0,0.55);
-    text-align: center;
+    width: min(100vw, calc(100vh * 1080 / 1920));
+    aspect-ratio: 1080 / 1920;
+    background: #0b0a09;
+    box-shadow: 0 0 80px rgba(0,0,0,0.6);
   }
-  .hero img {
+  .stage img.bg {
     display: block;
-    width: min(360px, 70vw);
-    height: auto;
-    margin: 4px auto 6px;
-    border-radius: 110px 110px 14px 14px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  }
-  .title {
-    font-family: var(--serif);
-    font-size: clamp(30px, 6vw, 50px);
-    font-weight: bold;
-    letter-spacing: 0.06em;
-    color: var(--gold-lt);
-    text-shadow: 0 2px 0 rgba(0,0,0,0.45), 0 0 22px rgba(201,162,90,0.25);
-    line-height: 1.1;
-  }
-  .flourish {
-    color: var(--gold);
-    font-size: 18px; letter-spacing: 0.5em;
-    margin: 6px 0 2px;
-  }
-  .sub {
-    color: rgba(242,231,204,0.7);
-    font-size: clamp(13px, 2.6vw, 16px);
-    letter-spacing: 0.04em;
-    margin-top: 2px;
-  }
-
-  .cards {
-    display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
     width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
   }
-  a.card {
-    flex: 1 1 240px;
-    max-width: 300px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 10px;
-    padding: 26px 18px;
-    min-height: 190px;
-    border-radius: 60px 60px 14px 14px;
-    border: 2px solid var(--gold);
-    text-decoration: none;
-    color: var(--cream);
-    background: linear-gradient(180deg, var(--teal), var(--teal-dk));
-    box-shadow: 0 0 0 1px var(--gold-dk) inset, 0 10px 26px rgba(0,0,0,0.45);
-    transition: transform 0.12s, box-shadow 0.12s;
-  }
-  a.card:hover { transform: translateY(-4px); box-shadow: 0 0 0 1px var(--gold-lt) inset, 0 16px 34px rgba(0,0,0,0.55); }
-  a.card:active { transform: scale(0.98); }
-  a.card .icon {
-    font-size: 50px;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
-  }
-  a.card .name {
-    font-family: var(--serif);
-    font-size: 23px; font-weight: bold; letter-spacing: 0.04em;
-    color: var(--gold-lt);
-  }
-  a.card .desc { font-size: 12.5px; opacity: 0.82; text-align: center; line-height: 1.5; }
 
-  footer {
-    position: relative; z-index: 1;
-    color: rgba(201,162,90,0.6); font-size: 12px;
-    font-family: var(--serif); letter-spacing: 0.1em;
+  /* 클릭 핫스팟 (퍼센트 좌표) */
+  a.hot {
+    position: absolute;
+    display: block;
+    border-radius: 18px;
+    text-decoration: none;
+    transition: box-shadow .18s ease, background .18s ease, transform .12s ease;
   }
-  footer a { color: rgba(201,162,90,0.75); text-decoration: none; }
+  a.hot:hover,
+  a.hot:focus {
+    background: radial-gradient(circle at center, rgba(236,212,154,0.18), transparent 70%);
+    box-shadow: 0 0 0 1.5px rgba(236,212,154,0.6), 0 0 26px rgba(201,162,90,0.45);
+  }
+  a.hot:active { transform: scale(0.97); }
+
+  /* 떠있는 오브젝트 영역 */
+  .obj-canvas { left: 13%; top:  6%; width: 29%; height: 22%; border-radius: 40% 40% 30% 30%; }
+  .obj-photo  { left: 46%; top:  9%; width: 32%; height: 16%; }
+  .obj-mosaic { left: 13%; top: 31%; width: 29%; height: 19%; }
+  .obj-zoom   { left: 54%; top: 34%; width: 28%; height: 17%; border-radius: 50%; }
+
+  /* 하단 텍스트 라벨 영역 */
+  .txt { left: 4%; width: 46%; height: 3.6%; border-radius: 10px; }
+  .txt-canvas { top: 71.4%; }
+  .txt-photo  { top: 75.0%; }
+  .txt-mosaic { top: 79.2%; }
+  .txt-zoom   { top: 82.8%; }
+
+  /* 접근성용 라벨 숨김 */
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="hero">
-      <img src="artiste.png" alt="거미 아티스트" loading="eager">
-      <div class="flourish">❦ ❦ ❦</div>
-      <h1 class="title">거미줄 키오스크</h1>
-      <p class="sub">거미 아티스트와 함께 — 원하는 작업을 선택하세요</p>
-    </div>
+  <div class="stage">
+    <img class="bg" src="01020304.png" alt="Fractal Universe 메뉴" loading="eager">
 
-    <div class="cards">
-      <a class="card" href="doodle.html">
-        <span class="icon">🕸</span>
-        <span class="name">거미줄 낙서장</span>
-        <span class="desc">드래그하면 거미줄 모양 낙서가 그려져요</span>
-      </a>
-      <a class="card" href="guestbook.html">
-        <span class="icon">📸</span>
-        <span class="name">포토 방명록</span>
-        <span class="desc">사진 찍고 QR로 핸드폰에 바로 전송</span>
-      </a>
-      <a class="card" href="triangle.html">
-        <span class="icon">🔺</span>
-        <span class="name">삼각형 모자익</span>
-        <span class="desc">사진을 문지르면 로우폴리 모자익으로 변신</span>
-      </a>
-      <a class="card" href="fractal.html">
-        <span class="icon">🌀</span>
-        <span class="name">무한 프랙탈 줌</span>
-        <span class="desc">길게 누르면 그 지점으로 끝없이 확대돼요</span>
-      </a>
-    </div>
+    <!-- 오브젝트 핫스팟 -->
+    <a class="hot obj-canvas" href="doodle.html"><span class="sr">01 fractal canvas — 거미줄 낙서장</span></a>
+    <a class="hot obj-photo"  href="guestbook.html"><span class="sr">02 fractal photo — 포토 방명록</span></a>
+    <a class="hot obj-mosaic" href="triangle.html"><span class="sr">03 fractal mosaic — 삼각형 모자익</span></a>
+    <a class="hot obj-zoom"   href="fractal.html"><span class="sr">04 fractal zoom — 무한 프랙탈 줌</span></a>
+
+    <!-- 텍스트 라벨 핫스팟 -->
+    <a class="hot txt txt-canvas" href="doodle.html"></a>
+    <a class="hot txt txt-photo"  href="guestbook.html"></a>
+    <a class="hot txt txt-mosaic" href="triangle.html"></a>
+    <a class="hot txt txt-zoom"   href="fractal.html"></a>
   </div>
-
-  <footer>spider-kiosk · <a href="admin.html">관리</a></footer>
 </body>
 </html>
