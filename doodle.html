@@ -6,11 +6,15 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>거미줄 낙서장</title>
+<title>Fractal Canvas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100;300;400;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --gold:#c9a25a; --gold-lt:#ecd49a; --gold-dk:#8a6d32;
     --teal:#2f6f63; --teal-dk:#173d37;
+    --noto: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -20,12 +24,11 @@
       radial-gradient(900px 600px at 50% -10%, rgba(201,162,90,0.10), transparent 60%),
       linear-gradient(160deg, #1a322e, #0e1c1b 70%);
     overflow: hidden;
-    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    font-family: var(--noto);
     user-select: none;
     -webkit-user-select: none;
     touch-action: manipulation;
   }
-  /* 모바일: 주소창에 따라 변하는 실제 표시 영역 기준 */
   @supports (height: 100dvh) {
     html, body { height: 100dvh; }
   }
@@ -37,7 +40,6 @@
     align-items: center;
     justify-content: center;
   }
-
   canvas#c {
     background: #ffffff;
     box-shadow: 0 4px 30px rgba(0,0,0,0.5);
@@ -45,104 +47,98 @@
     touch-action: none;
   }
 
-  /* ── 툴바 ─────────────────────────────────────── */
+  /* ── 상단 텍스트 메뉴 (fractal_3.png 시안 기반) ─────────────
+     새 도화지 - 색 | 이미지 불러오기 - 투명도 | 실행취소 - 재실행
+     | 선 굵기 - 색 | 보조선 굵기 - 색 | 전체화면 | 끝내기            */
   #toolbar {
     position: fixed;
     top: 0; left: 0; right: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    flex-wrap: nowrap;           /* 항상 한 줄 — 넘치면 가로 스크롤로 폴백 */
-    overflow-x: auto;
-    padding: 6px 10px;
-    background: linear-gradient(180deg, rgba(23,61,55,0.96), rgba(14,28,27,0.96));
-    border-bottom: 1px solid var(--gold-dk);
-    backdrop-filter: blur(6px);
-    color: var(--gold-lt);
-    font-size: 12px;
     z-index: 100;
+    padding: 9px 12px;
+    /* 시안처럼 위는 어둡고 아래로 갈수록 옅어지는 그라데이션 */
+    background: linear-gradient(180deg, rgba(8,14,13,0.97) 0%, rgba(14,28,27,0.82) 60%, rgba(14,28,27,0) 100%);
     transition: transform 0.25s ease;
   }
-  #toolbar::-webkit-scrollbar { display: none; }
   #toolbar.hidden { transform: translateY(-100%); }
 
-  /* ── 옵션 패널: [옵션] 버튼으로 펼치는 보조 기능 ── */
-  #optionsPanel {
-    position: fixed;
-    left: 0; right: 0;
-    z-index: 98;
+  #menu {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 12px 14px;
-    background: linear-gradient(180deg, rgba(20,52,47,0.98), rgba(12,21,19,0.98));
-    backdrop-filter: blur(6px);
+    align-items: center;
+    /* 들어가면 가운데, 넘치면 앞(왼쪽)부터 보이게 — 양 끝 잘림 방지 */
+    justify-content: safe center;
+    flex-wrap: nowrap;            /* 항상 한 줄 — 넘치면 가로 스크롤 */
+    gap: 8px;
+    overflow-x: auto;
+    white-space: nowrap;
     color: var(--gold-lt);
-    font-size: 12px;
-    border-bottom: 1px solid var(--gold-dk);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
   }
-  #optionsPanel.closed { display: none; }
-  .opt-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-  #btnOptions.on { background: linear-gradient(180deg, var(--gold-lt), var(--gold)); border-color: var(--gold); color: #2a1f0a; }
+  #menu::-webkit-scrollbar { display: none; }
 
-  .group {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0 8px;
-    border-right: 1px solid rgba(255,255,255,0.15);
-  }
-  .group:last-child { border-right: none; margin-left: auto; }
+  .grp { display: flex; align-items: center; gap: 6px; }
+  .div { color: rgba(236,212,154,0.35); font-weight: 100; padding: 0 2px; }
+  .sep { color: rgba(236,212,154,0.5); font-weight: 100; }
 
-  button {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background: linear-gradient(180deg, rgba(47,111,99,0.5), rgba(23,61,55,0.65));
-    border: 1px solid var(--gold-dk);
+  #menu button {
+    background: none;
+    border: none;
     color: var(--gold-lt);
-    border-radius: 5px;
-    padding: 5px 10px;
-    font-size: 12px;
-    font-family: inherit;
+    font-family: var(--noto);
+    font-weight: 400;
+    font-size: 13px;
+    padding: 4px 3px;
     cursor: pointer;
     white-space: nowrap;
   }
-  button .ic { font-size: 13px; line-height: 1; }
-  button:hover { background: rgba(47,111,99,0.7); }
-  button:active { background: rgba(47,111,99,0.9); }
-  button:disabled { opacity: 0.35; cursor: default; }
-  button.on { background: linear-gradient(180deg, var(--gold-lt), var(--gold)); border-color: var(--gold); color: #2a1f0a; }
+  #menu button:hover { color: #fff; }
+  #menu button:active { color: var(--gold); }
+  #menu button:disabled { opacity: 0.3; cursor: default; }
+  /* 슬라이더 항목이 선택된 상태(시안의 '선 굵기' 굵게 강조) */
+  #menu button.slbtn.active { color: #fff; font-weight: 700; }
 
-  label { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-  /* touch-action:none → 가로 스크롤 툴바 안에서도 슬라이더 드래그가 스크롤에 먹히지 않음 */
-  input[type="range"] { width: 70px; accent-color: var(--gold); touch-action: none; }
-  /* 굵기 조절 슬라이더는 미세 조정이 잦으므로 길게 */
-  #mainW, #subW, #eraseW { width: 220px; height: 26px; }
+  #menu .ctl {
+    display: flex; align-items: center; gap: 5px;
+    font-family: var(--noto);
+    font-weight: 300;
+    font-size: 13px;
+    color: var(--gold-lt);
+    white-space: nowrap;
+  }
+
+  /* ── 하단 슬라이더 부메뉴 (fractal_4.png): 항목 클릭 시 펼쳐짐 ── */
+  #sliderRow {
+    margin-top: 8px;
+    padding: 2px 6px 4px;
+  }
+  #sliderRow.closed { display: none; }
+  #sliderRow input[type="range"] {
+    display: block;
+    width: 100%;
+    height: 26px;
+  }
+
+  input[type="range"] {
+    width: 78px; height: 22px;
+    accent-color: var(--gold);
+    touch-action: none;
+    vertical-align: middle;
+  }
   input[type="color"] {
-    width: 26px; height: 22px;
+    width: 26px; height: 20px;
     border: 1px solid #555; border-radius: 4px;
     background: none; padding: 0; cursor: pointer;
   }
-  .val { width: 30px; text-align: right; color: var(--gold-lt); font-variant-numeric: tabular-nums; }
+  input[type="file"] { display: none; }
 
-  /* 툴바 다시 열기 탭 */
+  /* 메뉴 다시 열기 탭 (시안의 ▼ 표시) */
   #showTab {
     position: fixed;
     top: 0; left: 50%;
     transform: translateX(-50%);
-    background: rgba(34,34,34,0.85);
-    color: #aaa;
-    font-size: 11px;
-    padding: 3px 18px;
-    border-radius: 0 0 8px 8px;
+    color: var(--red, #d8423a);
+    background: rgba(8,14,13,0.85);
+    font-size: 13px;
+    padding: 2px 22px 4px;
+    border-radius: 0 0 10px 10px;
     cursor: pointer;
     z-index: 99;
     display: none;
@@ -161,117 +157,138 @@
     display: none;
   }
 
+  /* 중앙 안내문 — 시안대로 Noto Sans Thin, 그리기 시작하면 사라짐 */
   #hint {
     position: fixed;
-    bottom: 18px; left: 50%;
-    transform: translateX(-50%);
-    font-size: 11px;
-    letter-spacing: 0.2em;
-    color: rgba(0,0,0,0.35);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--noto);
+    font-weight: 100;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    color: rgba(0,0,0,0.4);
     pointer-events: none;
     z-index: 50;
+    text-align: center;
+    transition: opacity 0.3s ease;
   }
+  #hint.gone { opacity: 0; }
 
-  input[type="file"] { display: none; }
-
-  /* 좁은 화면(핸드폰): 라벨을 숨기고 아이콘만 남겨 모든 버튼이 한 줄에 들어감.
-     보조 기능(전체화면·툴바 숨기기)은 [옵션] 패널로 빠져 있어 상단이 더 단순함 */
   @media (max-width: 760px) {
-    #toolbar { gap: 3px; padding: 6px 6px; }
-    #toolbar button .lbl { display: none; }   /* 아이콘만 → 한 줄 */
-    #toolbar button { padding: 7px 9px; }
-    .group { padding: 0 5px; gap: 3px; }
-    .group:last-child { margin-left: 0; }
-    #mainW, #subW, #eraseW { width: 180px; }
-    input[type="range"] { width: 140px; }
+    #menu { gap: 6px; }
+    #menu button, #menu .ctl { font-size: 12px; }
+    input[type="range"] { width: 64px; }
     #cursor { display: none !important; }
   }
-  /* 옵션 패널 안의 보조 기능 버튼 행 */
-  #optionsPanel .opt-row.tools { gap: 10px; }
 </style>
 </head>
 <body>
 
 <div id="stage"><canvas id="c"></canvas></div>
 
-<!-- 상단: 주요 기능만 한 줄로. 좁은 화면에선 라벨이 숨고 아이콘만 남음 -->
+<!-- 상단 텍스트 메뉴: fractal_3.png 시안 그대로 -->
 <div id="toolbar">
-  <div class="group">
-    <button id="btnNew" title="현재 디스플레이 해상도로 새 도화지 (Ctrl+N)"><span class="ic">🆕</span><span class="lbl">새 도화지</span></button>
-    <button id="btnSave" title="PNG로 저장 (Ctrl+S)"><span class="ic">💾</span><span class="lbl">저장</span></button>
+  <div id="menu">
+    <div class="grp">
+      <button id="btnNew" title="새 도화지 (Ctrl+N)">새 도화지</button>
+      <span class="sep">-</span>
+      <label class="ctl">색 <input type="color" id="paperC" value="#ffffff" title="도화지 색"></label>
+    </div>
+    <span class="div">|</span>
+    <div class="grp">
+      <button id="btnOpen" title="이미지 불러오기 (Ctrl+O)">이미지 불러오기</button>
+      <span class="sep">-</span>
+      <button class="slbtn" data-ctl="imgAlpha" title="불러온 이미지 투명도">투명도</button>
+    </div>
+    <span class="div">|</span>
+    <div class="grp">
+      <button id="btnUndo" title="실행취소 (Ctrl+Z)">실행취소</button>
+      <span class="sep">-</span>
+      <button id="btnRedo" title="재실행 (Ctrl+Y)">재실행</button>
+    </div>
+    <span class="div">|</span>
+    <div class="grp">
+      <button class="slbtn" data-ctl="mainW">선 굵기</button>
+      <span class="sep">-</span>
+      <label class="ctl">색 <input type="color" id="mainC" value="#000000"></label>
+    </div>
+    <span class="div">|</span>
+    <div class="grp">
+      <button class="slbtn" data-ctl="subW">보조선 굵기</button>
+      <span class="sep">-</span>
+      <label class="ctl">색 <input type="color" id="subC" value="#000000"></label>
+    </div>
+    <span class="div">|</span>
+    <div class="grp">
+      <button id="btnFull" title="전체화면">전체화면</button>
+    </div>
+    <span class="div">|</span>
+    <div class="grp">
+      <button id="btnClose" title="끝내기">끝내기</button>
+    </div>
   </div>
-  <div class="group">
-    <button id="btnUndo" title="실행취소 (Ctrl+Z)"><span class="ic">↶</span><span class="lbl">실행취소</span></button>
-    <button id="btnRedo" title="재실행 (Ctrl+Y)"><span class="ic">↷</span><span class="lbl">재실행</span></button>
-    <button id="btnEraser" title="지우개 (그린 거미줄을 지움)"><span class="ic">🧽</span><span class="lbl">지우개</span></button>
-  </div>
-  <div class="group">
-    <button id="btnOptions" title="색상·굵기 등 옵션 열기"><span class="ic">⚙</span><span class="lbl">옵션</span></button>
-    <button id="btnClose" title="닫기"><span class="ic">✕</span><span class="lbl">닫기</span></button>
+  <!-- 하단 부메뉴: 슬라이더 항목(투명도·선 굵기·보조선 굵기)을 누르면 펼쳐짐 -->
+  <div id="sliderRow" class="closed">
+    <input type="range" id="slider">
   </div>
 </div>
 
-<!-- 옵션 패널: [옵션] 버튼을 누르면 펼쳐지는 보조 기능(전체화면·색상·굵기·열기) -->
-<div id="optionsPanel" class="closed">
-  <div class="opt-row tools">
-    <button id="btnFull" title="전체화면"><span class="ic">⛶</span><span class="lbl">전체화면</span></button>
-    <button id="btnHide" title="툴바 숨기기"><span class="ic">▲</span><span class="lbl">툴바 숨기기</span></button>
-  </div>
-  <div class="opt-row">
-    <label>선 굵기 <input type="range" id="mainW" min="0.1" max="3" step="0.1" value="0.5"><span class="val" id="mainWVal">0.5</span></label>
-    <label>보조선 굵기 <input type="range" id="subW" min="0.05" max="2" step="0.05" value="0.3"><span class="val" id="subWVal">0.3</span></label>
-    <label>지우개 굵기 <input type="range" id="eraseW" min="5" max="150" step="1" value="40"><span class="val" id="eraseWVal">40</span></label>
-  </div>
-  <div class="opt-row">
-    <label>선 색상 <input type="color" id="mainC" value="#000000"></label>
-    <label>보조선 색상 <input type="color" id="subC" value="#000000"></label>
-    <label>도화지 색상 <input type="color" id="paperC" value="#ffffff"></label>
-    <button id="btnOpen" title="이미지 열기 (Ctrl+O)">이미지 열기</button>
-  </div>
-</div>
-
-<div id="showTab">▼ 메뉴</div>
+<div id="showTab">▼</div>
 
 <div id="cursor"></div>
-<div id="hint">드래그하면 거미줄 낙서가 그려집니다</div>
+<div id="hint">드래그하거나 점을 찍으면 프랙탈 선이 그려집니다</div>
 <input type="file" id="fileInput" accept="image/*">
 
 <script>
 (() => {
   'use strict';
 
-  // ── 도화지: 현재 디스플레이 해상도에 따른 자동 크기 ──────────
-  let W = window.screen.width  || 1920;
-  let H = window.screen.height || 1080;
+  const $ = id => document.getElementById(id);
+  const toolbar = $('toolbar');
+  const hintEl = $('hint');
 
-  const canvas = document.getElementById('c');
+  // ── 도화지: 화면(표시 영역)을 꽉 채우는 자동 크기 ──────────
+  // 기기 해상도(screen.width/height)가 아닌 실제 표시 영역
+  // (visualViewport − 툴바) × DPR 로 잡아 도화지가 화면을 가득 채움.
+  function displaySize() {
+    const dpr = window.devicePixelRatio || 1;
+    const vv = window.visualViewport;
+    const tb = $('toolbar');
+    const cssW = vv ? vv.width : window.innerWidth;
+    const tbH = (tb && !tb.classList.contains('hidden')) ? tb.offsetHeight : 0;
+    const cssH = (vv ? vv.height : window.innerHeight) - tbH;
+    return { W: Math.max(1, Math.round(cssW * dpr)), H: Math.max(1, Math.round(cssH * dpr)) };
+  }
+  let { W, H } = displaySize();
+
+  const canvas = $('c');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   canvas.width = W;
   canvas.height = H;
-  // 그림은 투명 레이어에 그리고, 도화지 색은 CSS 배경으로 처리
-  // → 픽셀 감지(alpha>0)가 도화지 색과 무관하게 정확함
 
-  const cursor = document.getElementById('cursor');
-  const toolbar = document.getElementById('toolbar');
-  const optionsPanel = document.getElementById('optionsPanel');
+  const cursor = $('cursor');
 
   // ── 설정값 ────────────────────────────────────────────────
   const cfg = {
-    mainW: 0.5,     // 선 굵기 — 얇은 것이 핵심!
-    subW: 0.3,      // 보조선(거미줄 광선) 굵기
+    mainW: 0.5,
+    subW: 0.3,
     mainC: '#000000',
     subC: '#000000',
     paperC: '#ffffff',
-    radius: 250,    // 광선 탐색 반경
-    rays: 16,       // 이동당 광선 개수
-    erase: false,   // 지우개 모드
-    eraseW: Math.max(24, Math.round(Math.max(W, H) * 0.02)) // 지우개 굵기(해상도 비례)
+    radius: 250,
+    rays: 16,
+    erase: false,
+    imgAlpha: 1   // 불러온 이미지 투명도(0~1)
   };
 
   // ── 상태 ──────────────────────────────────────────────────
   let isDrawing = false;
   let oldx = 0, oldy = 0;
-  let dirty = false; // 저장 안 된 변경 여부
+  let dirty = false;
+
+  // 불러온 이미지(투명도 실시간 조절용)
+  let loadedImg = null;
+  let preLoadSnapshot = null;
 
   // ── Undo / Redo ───────────────────────────────────────────
   const undoStack = [];
@@ -297,9 +314,11 @@
     updateHistoryButtons();
   }
   function updateHistoryButtons() {
-    document.getElementById('btnUndo').disabled = !undoStack.length;
-    document.getElementById('btnRedo').disabled = !redoStack.length;
+    $('btnUndo').disabled = !undoStack.length;
+    $('btnRedo').disabled = !redoStack.length;
   }
+
+  function hideHint() { hintEl.classList.add('gone'); }
 
   // ── 색상 유틸 ─────────────────────────────────────────────
   function hexToRgba(hex, a) {
@@ -310,11 +329,8 @@
   }
 
   // ── 거미줄 광선 (원본 AS3 drawStar 포팅) ──────────────────
-  // 마우스 주변으로 랜덤 방향 광선을 쏘아, 이미 그려진 픽셀에
-  // 닿은 가장 먼 지점까지 초극세선으로 연결 → 거미줄 형태
   function drawStar(mx, my) {
     const r = cfg.radius;
-    // 광선 범위의 픽셀을 한 번만 읽어 캐시 (성능)
     const bx = Math.max(0, Math.floor(mx - r));
     const by = Math.max(0, Math.floor(my - r));
     const bw = Math.min(W, Math.ceil(mx + r)) - bx;
@@ -326,7 +342,7 @@
     function hasInk(x, y) {
       const ix = Math.round(x) - bx, iy = Math.round(y) - by;
       if (ix < 0 || iy < 0 || ix >= bw || iy >= bh) return false;
-      return data[(iy * bw + ix) * 4 + 3] > 0; // alpha > 0
+      return data[(iy * bw + ix) * 4 + 3] > 0;
     }
 
     ctx.save();
@@ -354,9 +370,7 @@
     ctx.restore();
   }
 
-  // ── 필압(펜 압력) → 굵기 계수 ─────────────────────────────
-  // 펜이고 압력값이 있으면 1x(가볍게)~3.5x(꾹)로 '더 굵어지는' 변화만 줌.
-  // → 손가락(1x)보다 절대 가늘어지지 않으므로 항상 보임. 그 외(마우스·손가락)는 1x.
+  // ── 필압 → 굵기 계수 ──────────────────────────────────────
   let penFactor = 1;
   function setPen(e) {
     penFactor = (e && e.pointerType === 'pen' && e.pressure > 0)
@@ -377,20 +391,6 @@
     ctx.restore();
   }
 
-  // ── 지우개 (그려진 잉크 레이어를 투명하게 — 도화지 색이 다시 드러남) ──
-  function eraseLine(x1, y1, x2, y2) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.lineWidth = cfg.eraseW;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
   // ── 좌표 변환 ─────────────────────────────────────────────
   function getPos(e) {
     const r = canvas.getBoundingClientRect();
@@ -403,23 +403,20 @@
   function pointerDown(e) {
     const p = getPos(e);
     setPen(e);
+    hideHint();
+    loadedImg = null;        // 그리기 시작 → 이미지 투명도 조절 종료(현재 상태 확정)
     snapshot();
     oldx = p.x; oldy = p.y;
     isDrawing = true;
     dirty = true;
-    if (cfg.erase) eraseLine(p.x, p.y, p.x, p.y);
-    else drawStar(p.x, p.y);
+    drawStar(p.x, p.y);
   }
   function pointerMove(e) {
     if (!isDrawing) return;
     const p = getPos(e);
     setPen(e);
-    if (cfg.erase) {
-      eraseLine(oldx, oldy, p.x, p.y);
-    } else {
-      drawStar(p.x, p.y);
-      drawLine(oldx, oldy, p.x, p.y);
-    }
+    drawStar(p.x, p.y);
+    drawLine(oldx, oldy, p.x, p.y);
     oldx = p.x; oldy = p.y;
   }
   function pointerUp(e) {
@@ -427,13 +424,10 @@
     isDrawing = false;
     if (e && !e.touches) {
       const p = getPos(e);
-      if (cfg.erase) eraseLine(oldx, oldy, p.x, p.y);
-      else { drawStar(p.x, p.y); drawLine(oldx, oldy, p.x, p.y); }
+      drawStar(p.x, p.y); drawLine(oldx, oldy, p.x, p.y);
     }
   }
 
-  // 포인터 이벤트: 마우스·터치·펜(스타일러스)을 하나로 처리.
-  // 기존 터치 전용 코드는 펜 입력을 받지 못해(펜은 touch 이벤트를 발생시키지 않음) 그려지지 않았음.
   function moveCursor(e) {
     cursor.style.display = 'block';
     cursor.style.left = e.clientX + 'px';
@@ -441,7 +435,6 @@
   }
   canvas.addEventListener('pointerdown', e => {
     e.preventDefault();
-    // 드래그가 캔버스 밖으로 나가도 같은 포인터를 계속 추적
     if (canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch (_) {} }
     moveCursor(e);
     pointerDown(e);
@@ -455,43 +448,47 @@
   canvas.addEventListener('pointercancel', () => pointerUp(null));
   canvas.addEventListener('pointerleave', () => { if (!isDrawing) cursor.style.display = 'none'; });
 
-  // ── 메뉴: 새 도화지 ───────────────────────────────────────
+  // ── 새 도화지 ─────────────────────────────────────────────
   function newPaper() {
     if (dirty && !confirm('현재 그림을 지우고 새 도화지를 만들까요?')) return;
-    W = window.screen.width  || 1920;
-    H = window.screen.height || 1080;
+    ({ W, H } = displaySize());
     canvas.width = W;
     canvas.height = H;
-    cfg.eraseW = Math.max(24, Math.round(Math.max(W, H) * 0.02));
-    $('eraseW').value = cfg.eraseW;
-    $('eraseWVal').textContent = cfg.eraseW;
     cfg.erase = false;
-    $('btnEraser').classList.remove('on');
+    loadedImg = null;
     undoStack.length = 0;
     redoStack.length = 0;
     dirty = false;
+    hintEl.classList.remove('gone');
     updateHistoryButtons();
     fit();
   }
 
-  // ── 메뉴: 열기 ────────────────────────────────────────────
-  const fileInput = document.getElementById('fileInput');
+  // ── 이미지 불러오기 (+ 투명도) ────────────────────────────
+  const fileInput = $('fileInput');
   function openImage() { fileInput.click(); }
+
+  function drawLoadedImage() {
+    if (!loadedImg || !preLoadSnapshot) return;
+    ctx.putImageData(preLoadSnapshot, 0, 0);   // 이미지 올리기 직전 상태로 복원
+    const s = Math.min(W / loadedImg.width, H / loadedImg.height, 1);
+    const dw = loadedImg.width * s, dh = loadedImg.height * s;
+    ctx.save();
+    ctx.globalAlpha = cfg.imgAlpha;
+    ctx.drawImage(loadedImg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    ctx.restore();
+  }
+
   fileInput.addEventListener('change', () => {
     const f = fileInput.files[0];
     if (!f) return;
     const img = new Image();
     img.onload = () => {
       snapshot();
-      ctx.clearRect(0, 0, W, H);
-      // 캔버스에 맞춰 그리기 (같은 해상도면 1:1)
-      const s = Math.min(W / img.width, H / img.height, 1);
-      const dw = img.width * s, dh = img.height * s;
-      ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
-      // 저장된 PNG는 도화지 색이 불투명하게 깔려 있으므로,
-      // 모서리 색(=도화지 색)과 같은 픽셀을 투명 처리해
-      // 거미줄 픽셀 감지가 다시 정상 동작하게 복원
-      restoreTransparency();
+      preLoadSnapshot = ctx.getImageData(0, 0, W, H);
+      loadedImg = img;
+      hideHint();
+      drawLoadedImage();          // 현재 투명도로 그리기 (이후 슬라이더로 실시간 조절)
       dirty = true;
       URL.revokeObjectURL(img.src);
     };
@@ -499,31 +496,7 @@
     fileInput.value = '';
   });
 
-  function restoreTransparency() {
-    const img = ctx.getImageData(0, 0, W, H);
-    const d = img.data;
-    // 네 모서리 중 가장 흔한 색을 도화지 색으로 간주
-    const corners = [0, (W - 1) * 4, (H - 1) * W * 4, ((H - 1) * W + W - 1) * 4];
-    const c = corners.map(i => [d[i], d[i + 1], d[i + 2]]);
-    const paper = c[0]; // 좌상단 기준
-    if (d[3] === 0) return; // 이미 투명 배경이면 그대로
-    const TOL = 12;
-    for (let i = 0; i < d.length; i += 4) {
-      if (Math.abs(d[i] - paper[0]) <= TOL &&
-          Math.abs(d[i + 1] - paper[1]) <= TOL &&
-          Math.abs(d[i + 2] - paper[2]) <= TOL) {
-        d[i + 3] = 0;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    // 도화지 색상 피커도 동기화
-    const hex = '#' + paper.map(v => v.toString(16).padStart(2, '0')).join('');
-    document.getElementById('paperC').value = hex;
-    cfg.paperC = hex;
-    canvas.style.background = hex;
-  }
-
-  // ── 메뉴: 저장 ────────────────────────────────────────────
+  // ── 저장 (Ctrl+S — 메뉴엔 없지만 단축키 유지) ─────────────
   function saveImage() {
     const out = document.createElement('canvas');
     out.width = W; out.height = H;
@@ -534,28 +507,21 @@
     const a = document.createElement('a');
     const t = new Date();
     const pad = n => String(n).padStart(2, '0');
-    a.download = `거미줄낙서_${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}.png`;
+    a.download = `fractal_${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}.png`;
     a.href = out.toDataURL('image/png');
     a.click();
     dirty = false;
   }
 
-  // ── 메뉴: 닫기 ────────────────────────────────────────────
+  // ── 끝내기 ────────────────────────────────────────────────
   function closeApp() {
     if (dirty && !confirm('저장하지 않은 그림이 있습니다. 닫을까요?')) return;
     ctx.clearRect(0, 0, W, H);
     dirty = false;
-    location.href = 'index.html'; // 메뉴로 돌아가기
+    location.href = 'index.html';
   }
 
-  // ── 설정 바인딩 ───────────────────────────────────────────
-  const $ = id => document.getElementById(id);
-  $('mainW').addEventListener('input', e => { cfg.mainW = +e.target.value; $('mainWVal').textContent = e.target.value; });
-  $('subW').addEventListener('input',  e => { cfg.subW = +e.target.value;  $('subWVal').textContent = e.target.value; });
-  $('eraseW').addEventListener('input', e => { cfg.eraseW = +e.target.value; $('eraseWVal').textContent = e.target.value; });
-  // 슬라이더 초기값을 해상도 비례 기본값과 동기화
-  $('eraseW').value = cfg.eraseW;
-  $('eraseWVal').textContent = cfg.eraseW;
+  // ── 색상 컨트롤 (스와치, 인라인 유지) ─────────────────────
   $('mainC').addEventListener('input', e => { cfg.mainC = e.target.value; });
   $('subC').addEventListener('input',  e => { cfg.subC = e.target.value; });
   $('paperC').addEventListener('input', e => {
@@ -563,44 +529,56 @@
     canvas.style.background = e.target.value;
   });
 
+  // ── 하단 슬라이더 부메뉴 (fractal_4.png) ──────────────────
+  // 슬라이더 항목을 누르면 메뉴 아래에 전체폭 슬라이더가 펼쳐짐.
+  // 같은 항목 재클릭 = 닫기, 다른 항목 클릭 = 전환.
+  const sliderRow = $('sliderRow');
+  const slider = $('slider');
+  const ctlDefs = {
+    imgAlpha: { min: 0,    max: 100, step: 1,    get: () => Math.round(cfg.imgAlpha * 100), set: v => { cfg.imgAlpha = v / 100; drawLoadedImage(); } },
+    mainW:    { min: 0.1,  max: 3,   step: 0.1,  get: () => cfg.mainW, set: v => { cfg.mainW = v; } },
+    subW:     { min: 0.05, max: 2,   step: 0.05, get: () => cfg.subW,  set: v => { cfg.subW = v; } }
+  };
+  let activeCtl = null;
+  const slbtns = Array.from(document.querySelectorAll('.slbtn'));
+
+  function openSlider(k) {
+    const d = ctlDefs[k]; if (!d) return;
+    activeCtl = k;
+    slider.min = d.min; slider.max = d.max; slider.step = d.step; slider.value = d.get();
+    sliderRow.classList.remove('closed');
+    slbtns.forEach(b => b.classList.toggle('active', b.dataset.ctl === k));
+    fit();
+  }
+  function closeSlider() {
+    activeCtl = null;
+    sliderRow.classList.add('closed');
+    slbtns.forEach(b => b.classList.remove('active'));
+    fit();
+  }
+  slbtns.forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.ctl;
+    (activeCtl === k) ? closeSlider() : openSlider(k);
+  }));
+  slider.addEventListener('input', e => { if (activeCtl) ctlDefs[activeCtl].set(+e.target.value); });
+
   $('btnNew').addEventListener('click', newPaper);
   $('btnOpen').addEventListener('click', openImage);
-  $('btnSave').addEventListener('click', saveImage);
   $('btnClose').addEventListener('click', closeApp);
   $('btnUndo').addEventListener('click', undo);
   $('btnRedo').addEventListener('click', redo);
-  $('btnEraser').addEventListener('click', () => {
-    cfg.erase = !cfg.erase;
-    $('btnEraser').classList.toggle('on', cfg.erase);
-  });
-  // 전체화면: 표준 + webkit(구형 안드로이드/사파리) 폴백,
-  // 둘 다 없는 iOS 사파리에서는 툴바를 숨겨 유사 전체화면으로 동작
+
+  // 전체화면: 표준 + webkit 폴백, 미지원 시 메뉴 숨김으로 유사 전체화면
   const docEl = document.documentElement;
   const fsRequest = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
   const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
   const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
   $('btnFull').addEventListener('click', () => {
-    if (!fsRequest) { // iOS 등 미지원 브라우저
-      toolbar.classList.toggle('hidden');
-      fit();
-      return;
-    }
+    if (!fsRequest) { toolbar.classList.toggle('hidden'); fit(); return; }
     if (fsElement()) fsExit.call(document);
     else fsRequest.call(docEl);
   });
-  // 옵션 패널: 색상·굵기 등 보조 기능을 펼치고 접음
-  function positionPanel() {
-    optionsPanel.style.top = (toolbar.classList.contains('hidden') ? 0 : toolbar.offsetHeight) + 'px';
-  }
-  function toggleOptions(force) {
-    const open = (force !== undefined) ? force : optionsPanel.classList.contains('closed');
-    optionsPanel.classList.toggle('closed', !open);
-    $('btnOptions').classList.toggle('on', open);
-    if (open) positionPanel();
-  }
-  $('btnOptions').addEventListener('click', () => toggleOptions());
-  $('btnHide').addEventListener('click', () => { toolbar.classList.add('hidden'); toggleOptions(false); });
-  $('showTab').addEventListener('click', () => toolbar.classList.remove('hidden'));
+  $('showTab').addEventListener('click', () => { toolbar.classList.remove('hidden'); fit(); });
 
   // 단축키
   window.addEventListener('keydown', e => {
@@ -613,9 +591,7 @@
     else if (k === 'o') { e.preventDefault(); openImage(); }
   });
 
-  // ── 화면 맞춤 (비율 유지) ─────────────────────────────────
-  // 모바일은 주소창 때문에 innerHeight가 실제 표시 영역과 다를 수 있어
-  // visualViewport 기준으로 계산 → 캔버스가 잘리지 않고 전체가 보임
+  // ── 화면 맞춤 (도화지가 표시 영역을 가득 채움) ───────────────
   function fit() {
     const vv = window.visualViewport;
     const tbH = toolbar.classList.contains('hidden') ? 0 : toolbar.offsetHeight;
@@ -624,8 +600,8 @@
     const s = Math.min(availW / W, availH / H);
     canvas.style.width = (W * s) + 'px';
     canvas.style.height = (H * s) + 'px';
-    document.getElementById('stage').style.top = tbH + 'px';
-    if (!optionsPanel.classList.contains('closed')) positionPanel();
+    $('stage').style.top = tbH + 'px';
+    $('stage').style.height = availH + 'px';
   }
   window.addEventListener('resize', fit);
   window.addEventListener('orientationchange', () => setTimeout(fit, 250));
