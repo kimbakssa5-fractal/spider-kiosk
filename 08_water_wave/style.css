@@ -1,0 +1,95 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #2399b5;
+  font-family: "Noto Sans KR", system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#stage {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;   /* 포인터 드래그를 직접 처리 */
+  cursor: ns-resize;
+}
+
+/* fff 로고 */
+.logo {
+  position: fixed;
+  top: 22px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 22px;
+  color: #fff;
+  letter-spacing: 1px;
+  pointer-events: none;
+  opacity: .9;
+}
+.logo span { opacity: .6; }
+
+/* 안내 문구 (잠시 후 사라짐) */
+.hint {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, .85);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  pointer-events: none;
+  transition: opacity .8s ease;
+}
+.hint.hidden { opacity: 0; }
+
+/* 하단 UI */
+.ui {
+  position: fixed;
+  bottom: 26px;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+.dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .9);
+  cursor: pointer;
+  padding: 0;
+  background: transparent;
+  transition: transform .15s ease;
+}
+.dot:hover { transform: scale(1.12); }
+.dot.blue { background: #ffffff; }
+.dot.rainbow {
+  background: conic-gradient(#ff3b3b, #ff9500, #ffe500, #4cd964, #00b9e4, #5b6cff, #ff3b3b);
+}
+.dot.is-active { box-shadow: 0 0 0 3px rgba(255, 255, 255, .35); }
+
+.text-btn {
+  margin-left: 8px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, .8);
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.text-btn:hover { color: #fff; }
