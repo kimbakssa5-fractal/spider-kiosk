@@ -25,7 +25,7 @@
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
   // 화면 방향별 기본 배경: PC(가로) = 가로형(트리 90° 회전), 폰(세로) = 세로형
-  const ASSET_VER = "4";
+  const ASSET_VER = "5";
   const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg?v=" + ASSET_VER;
   const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg?v=" + ASSET_VER;
 
@@ -72,7 +72,7 @@
       gl_Position = vec4(aPos, 0.0, 1.0);
     }`;
 
-  // ① 배경 패스: cover-fit 배경을 scene FBO 에 그림
+  // ① 배경 패스: cover-fit 배경을 scene FBO 에 그림 (alpha=0 → "물고기 아님" 마스크)
   const FS_BG = `
     precision highp float;
     varying vec2 vUv;
@@ -81,10 +81,11 @@
     uniform vec2 uBgOffset;
     void main() {
       vec2 imgUv = vUv * uBgScale + uBgOffset;
-      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb, 1.0);
+      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb, 0.0);
     }`;
 
-  // ② 잉어 패스: 클립공간 정점 + 아틀라스 UV, 알파 블렌딩으로 scene 위 합성
+  // ② 잉어 패스: 클립공간 정점 + 아틀라스 UV, 알파 블렌딩으로 scene 위 합성.
+  //   색·무늬는 아틀라스 변종(홍백/주황/삼색/황금) 그대로 사용 → 텍스처 색을 그대로 출력.
   const VS_FISH = `
     attribute vec2 aClip;
     attribute vec2 aUv;
@@ -105,6 +106,7 @@
 
   // ③ 물 패스: scene(배경+잉어) 을 높이맵으로 굴절 + 회색 multiply 음영 → 화면
   //    scene 은 FBO(bottom-up) 라 세로를 뒤집어 샘플(1.0 - y). disp 부호는 원본과 동일.
+  //    scene.a = 물고기 마스크 → 물고기는 음영(h)을 덜 먹여 선명하게(흰 몸이 회색으로 가라앉지 않게).
   const FS_WATER = `
     precision highp float;
     varying vec2 vUv;
@@ -115,8 +117,14 @@
       float h = texture2D(uHeight, vUv).r;        // 0.502 .. 1.0
       vec2 disp = (h - 0.5) * uDispUv;
       vec2 suv = vec2(vUv.x + disp.x, 1.0 - vUv.y - disp.y);
-      vec3 scene = texture2D(uScene, clamp(suv, 0.0, 1.0)).rgb;
-      gl_FragColor = vec4(scene * h, 1.0);
+      vec4 scene = texture2D(uScene, clamp(suv, 0.0, 1.0));
+      float fish = scene.a;                        // 물고기 마스크(0=배경,1=물고기)
+      float shade = mix(h, mix(h, 1.0, 0.72), fish); // 물고기는 음영 완화 → 색이 살아남
+      vec3 col = scene.rgb;
+      // 물고기는 채도 부스트 → 흰 바탕은 그대로, 빨강/주황/금색 무늬가 선명해짐
+      float l = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(vec3(l), col, 1.0 + fish * 0.9);
+      gl_FragColor = vec4(clamp(col, 0.0, 1.0) * shade, 1.0);
     }`;
 
   function compile(type, src) {
@@ -272,13 +280,17 @@
 
   function rand(a, b) { return a + Math.random() * (b - a); }
   function makeFish() {
+    // 색·무늬 변종(홍백/주황/삼색/황금)을 랜덤 배정 → 여러 색이 섞여 헤엄
+    const vs = koiAtlas.variants;
+    const variant = vs[(Math.random() * vs.length) | 0];
     return {
+      variant: variant,
       nx: Math.random(), ny: Math.random(),        // 위치(정규화 top-down 0..1)
       heading: Math.random() * Math.PI * 2,
       lenFrac: rand(FISH_LEN_MIN, FISH_LEN_MAX),
       speedFrac: rand(FISH_SPEED_MIN, FISH_SPEED_MAX),
       turnFreq: rand(0.06, 0.16), turnPhase: Math.random() * 6.28, turnAmp: rand(0.18, 0.40),
-      frame: Math.random() * koiAtlas.count,        // 헤엄 사이클 위상(프레임)
+      frame: Math.random() * variant.count,         // 헤엄 사이클 위상(프레임)
       animFps: koiAtlas.fps * rand(0.8, 1.12),
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
     };
@@ -434,8 +446,10 @@
       const hl = lenPx * 0.5, hw = hl * aspect;
       const cx = f.nx * W, cy = f.ny * H;             // 중심(px, top-down)
 
-      // 현재 프레임 셀 → UV (머리=셀 위 v0, 꼬리=셀 아래 v1)
-      const fi = ((f.frame | 0) % koiAtlas.count + koiAtlas.count) % koiAtlas.count;
+      // 현재 프레임 셀 → UV (변종 셀범위 내에서 사이클, 머리=셀 위 v0, 꼬리=셀 아래 v1)
+      const vcount = f.variant.count;
+      const local = (((f.frame | 0) % vcount) + vcount) % vcount;
+      const fi = f.variant.start + local;
       const col = fi % koiAtlas.cols, row = (fi / koiAtlas.cols) | 0;
       const u0 = (col * cellW) / koiAtlas.atlasW, u1 = (col * cellW + cellW) / koiAtlas.atlasW;
       const v0 = (row * cellH) / koiAtlas.atlasH, v1 = (row * cellH + cellH) / koiAtlas.atlasH;
@@ -495,8 +509,10 @@
       gl.enableVertexAttribArray(locFish.aUv);
       gl.vertexAttribPointer(locFish.aUv, 2, gl.FLOAT, false, 16, 8);
       gl.enable(gl.BLEND);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      // 색은 일반 over-블렌딩, 알파(마스크)는 누적 over → scene.a = 물고기 커버리지
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.drawArrays(gl.TRIANGLES, 0, fishVertCount);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.disable(gl.BLEND);
     }
 
