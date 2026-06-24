@@ -1,4 +1,4 @@
-// 물결 Trace — 원본 ConvolutionFilterExample_1080.fla(AS3)의 로직을 그대로 재현.
+// 물결 Trace — 원본 ConvolutionFilterExample_1080.fla(AS3)의 로직을 그대로 재현 + 황금 잉어.
 //
 // 원본 알고리즘 (프레임 스크립트 분석 결과):
 //   late = 8                       시뮬레이션 해상도 = 무대 / 8
@@ -10,9 +10,12 @@
 //   bitmap(bd_filter).blendMode = MULTIPLY  → 높이맵 회색을 multiply 로 덧씌움 (음영)
 //   draw() : 마우스다운/이동 시 흰색 원(Res_mc, 반경 16px)을 bd1 에 1/8 스케일로 스탬프
 //
-// 즉 최종 = (배경이미지를 높이맵으로 굴절) × (높이맵 회색 multiply).
-// 풀해상도 픽셀 굴절은 Canvas2D 로는 너무 느려 WebGL 프래그먼트 셰이더로 재현한다.
-// 파동 시뮬레이션 자체는 작은 그리드(무대/8)라 JS 로 충분.
+// === 06: 황금 잉어 추가 ===
+//   원본의 비활성 Fish_Mv 를 되살린 것. 렌더는 3패스로 재구성:
+//     ① 배경을 오프스크린 FBO(scene) 에 cover-fit 으로 그림
+//     ② 잉어 스프라이트(koi-atlas.png, 알파)를 scene 위에 합성 → 물고기가 "물 속"에 있게 됨
+//     ③ 물 셰이더가 scene(배경+물고기)을 높이맵으로 굴절 + 음영 → 잉어도 물결에 굴절/일렁임
+//   잉어는 천천히 배회(wander)하며 헤엄치고, 꼬리 쪽에 아주 약한 잔물결(wake)을 남긴다.
 
 (function () {
   "use strict";
@@ -22,24 +25,22 @@
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
   // 화면 방향별 기본 배경: PC(가로) = 가로형(트리 90° 회전), 폰(세로) = 세로형
-  // ?v=N 캐시버전: 이미지 내용 바뀌면 N 을 올려 브라우저 캐시 강제 갱신.
   const ASSET_VER = "2";
   const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg?v=" + ASSET_VER;
   const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg?v=" + ASSET_VER;
 
   // 키보드로 실시간 미세조정 (1/2 DAMPING, 3/4 DISP_SCALE, 5/6 SPLASH_RADIUS, 7/8 FPS)
-  let SPLASH_RADIUS_PX = 18;                       // Res_mc 흰 원 반경(풀해상도 px) — 부드럽게 살짝 키움
-  let DISP_SCALE = 60;                             // DisplacementMapFilter scaleX/Y (굴절 세기)
-  let FPS = 40;                                    // 원본 무대 frameRate (고정 타임스텝)
+  let SPLASH_RADIUS_PX = 18;
+  let DISP_SCALE = 60;
+  let FPS = 40;
   let STEP_MS = 1000 / FPS;
-  let DAMPING = 0.992;                             // 잔물결이 부드럽게 잦아들도록 약한 감쇠
+  let DAMPING = 0.992;
 
-  // 부드러운 물결의 핵심:
-  //  - 원본 브러시(Res_mc)는 안티앨리어싱된 흰 원 → 가장자리가 부드럽다. 하드한 255 원반을
-  //    찍으면 격자 체커보드 모드(이 커널은 그 모드의 이득이 ~1.67 이라 증폭됨)가 튀어 거칠어진다.
-  //    → 가장자리를 코사인으로 페더링한 soft splash 로 고주파 주입을 줄인다.
-  //  - rAF 는 모니터 주사율(60/144Hz)이라 시뮬이 빨라지고 버석거린다 → 40fps 고정 타임스텝.
-  //  - 약한 감쇠로 물결이 우아하게 잦아들게 한다.
+  // ---- 황금 잉어 파라미터 ----
+  let FISH_COUNT = 6;                 // 동시에 헤엄치는 잉어 수 (9/0 키로 가감)
+  const FISH_LEN_MIN = 0.12, FISH_LEN_MAX = 0.18;  // 화면 짧은변 대비 몸길이 비율
+  const FISH_SPEED_MIN = 0.035, FISH_SPEED_MAX = 0.060; // 화면 짧은변/초 (유유히)
+  const FISH_WAKE_PEAK = 26;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
 
   const canvas = document.getElementById("scene");
   const ambient = document.getElementById("ambient");
@@ -59,30 +60,62 @@
   }
 
   // ---------------------------------------------------------------
-  // 셰이더
+  // 셰이더 (3패스)
   // ---------------------------------------------------------------
-  const VS = `
+  // 풀스크린 정점 셰이더 (vUv = top-down, (0,0)=좌상단)
+  const VS_FULL = `
     attribute vec2 aPos;
     varying vec2 vUv;
     void main() {
-      vUv = vec2(aPos.x * 0.5 + 0.5, 0.5 - aPos.y * 0.5); // (0,0)=좌상단
+      vUv = vec2(aPos.x * 0.5 + 0.5, 0.5 - aPos.y * 0.5);
       gl_Position = vec4(aPos, 0.0, 1.0);
     }`;
 
-  const FS = `
+  // ① 배경 패스: cover-fit 배경을 scene FBO 에 그림
+  const FS_BG = `
     precision highp float;
     varying vec2 vUv;
-    uniform sampler2D uBg;       // 배경 이미지 (cover-fit, 좌상단 (0,0))
-    uniform sampler2D uHeight;   // 높이맵 (wave+128)/255, 좌상단 (0,0)
-    uniform vec2 uBgScale;       // 화면uv -> 이미지uv (cover)
+    uniform sampler2D uBg;
+    uniform vec2 uBgScale;
     uniform vec2 uBgOffset;
-    uniform vec2 uDispUv;        // DISP_SCALE / (canvasW, canvasH)
     void main() {
-      float h = texture2D(uHeight, vUv).r;        // 0.502 .. 1.0 (정지 시 0.502)
-      vec2 disp = (h - 0.5) * uDispUv;            // 화면공간 굴절량
-      vec2 imgUv = (vUv + disp) * uBgScale + uBgOffset;
-      vec3 bg = texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb;
-      gl_FragColor = vec4(bg * h, 1.0);           // 굴절된 배경 × 회색 multiply
+      vec2 imgUv = vUv * uBgScale + uBgOffset;
+      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb, 1.0);
+    }`;
+
+  // ② 잉어 패스: 클립공간 정점 + 아틀라스 UV, 알파 블렌딩으로 scene 위 합성
+  const VS_FISH = `
+    attribute vec2 aClip;
+    attribute vec2 aUv;
+    varying vec2 vUvF;
+    void main() {
+      vUvF = aUv;
+      gl_Position = vec4(aClip, 0.0, 1.0);
+    }`;
+  const FS_FISH = `
+    precision highp float;
+    varying vec2 vUvF;
+    uniform sampler2D uKoi;
+    void main() {
+      vec4 c = texture2D(uKoi, vUvF);
+      if (c.a < 0.01) discard;
+      gl_FragColor = c;
+    }`;
+
+  // ③ 물 패스: scene(배경+잉어) 을 높이맵으로 굴절 + 회색 multiply 음영 → 화면
+  //    scene 은 FBO(bottom-up) 라 세로를 뒤집어 샘플(1.0 - y). disp 부호는 원본과 동일.
+  const FS_WATER = `
+    precision highp float;
+    varying vec2 vUv;
+    uniform sampler2D uScene;
+    uniform sampler2D uHeight;
+    uniform vec2 uDispUv;
+    void main() {
+      float h = texture2D(uHeight, vUv).r;        // 0.502 .. 1.0
+      vec2 disp = (h - 0.5) * uDispUv;
+      vec2 suv = vec2(vUv.x + disp.x, 1.0 - vUv.y - disp.y);
+      vec3 scene = texture2D(uScene, clamp(suv, 0.0, 1.0)).rgb;
+      gl_FragColor = vec4(scene * h, 1.0);
     }`;
 
   function compile(type, src) {
@@ -93,54 +126,85 @@
       throw new Error(gl.getShaderInfoLog(s));
     return s;
   }
-  const prog = gl.createProgram();
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
-  gl.linkProgram(prog);
-  gl.useProgram(prog);
+  function makeProg(vs, fs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+      throw new Error(gl.getProgramInfoLog(p));
+    return p;
+  }
+  const progBg = makeProg(VS_FULL, FS_BG);
+  const progFish = makeProg(VS_FISH, FS_FISH);
+  const progWater = makeProg(VS_FULL, FS_WATER);
 
-  // 풀스크린 삼각형 2개
+  // 풀스크린 삼각형 스트립
   const quad = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  const aPos = gl.getAttribLocation(prog, "aPos");
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-  const uBg = gl.getUniformLocation(prog, "uBg");
-  const uHeight = gl.getUniformLocation(prog, "uHeight");
-  const uBgScale = gl.getUniformLocation(prog, "uBgScale");
-  const uBgOffset = gl.getUniformLocation(prog, "uBgOffset");
-  const uDispUv = gl.getUniformLocation(prog, "uDispUv");
-  gl.uniform1i(uBg, 0);
-  gl.uniform1i(uHeight, 1);
+  // 프로그램별 attribute/uniform 위치
+  const locBg = {
+    aPos: gl.getAttribLocation(progBg, "aPos"),
+    uBg: gl.getUniformLocation(progBg, "uBg"),
+    uBgScale: gl.getUniformLocation(progBg, "uBgScale"),
+    uBgOffset: gl.getUniformLocation(progBg, "uBgOffset"),
+  };
+  const locFish = {
+    aClip: gl.getAttribLocation(progFish, "aClip"),
+    aUv: gl.getAttribLocation(progFish, "aUv"),
+    uKoi: gl.getUniformLocation(progFish, "uKoi"),
+  };
+  const locWater = {
+    aPos: gl.getAttribLocation(progWater, "aPos"),
+    uScene: gl.getUniformLocation(progWater, "uScene"),
+    uHeight: gl.getUniformLocation(progWater, "uHeight"),
+    uDispUv: gl.getUniformLocation(progWater, "uDispUv"),
+  };
+  gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0);
+  gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
+  gl.useProgram(progWater); gl.uniform1i(locWater.uScene, 3); gl.uniform1i(locWater.uHeight, 1);
 
   // ---------------------------------------------------------------
-  // 텍스처: 배경(0) + 높이맵(1)
+  // 텍스처: 배경(0) · 높이맵(1) · 잉어아틀라스(2) · scene FBO(3)
   // ---------------------------------------------------------------
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); // 배경/높이맵 모두 자연(top-down) 정렬로 통일
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
-  const bgTex = gl.createTexture();
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, bgTex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  // 로드 전 임시 1px
+  function makeTex(unit, wrap, filter) {
+    const t = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    return t;
+  }
+
+  const bgTex = makeTex(0, gl.CLAMP_TO_EDGE, gl.LINEAR);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([20, 30, 20, 255]));
+  const heightTex = makeTex(1, gl.CLAMP_TO_EDGE, gl.LINEAR);
+  const koiTex = makeTex(2, gl.CLAMP_TO_EDGE, gl.LINEAR);
+  const sceneTex = makeTex(3, gl.CLAMP_TO_EDGE, gl.LINEAR);
 
-  const heightTex = gl.createTexture();
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, heightTex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  // scene FBO
+  const fbo = gl.createFramebuffer();
+  function resizeSceneTex() {
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvasW, canvasH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
 
+  // ---------------------------------------------------------------
+  // 배경 로딩 / 교체
+  // ---------------------------------------------------------------
   let bgImage = null, bgW = 1, bgH = 1, bgReady = false;
-  let usingDefaultBg = true;        // 사용자가 직접 교체하면 false → 방향 자동전환 멈춤
-  let currentDefaultSrc = null;     // 현재 적용된 기본 배경 src (중복 로드 방지)
+  let usingDefaultBg = true;
+  let currentDefaultSrc = null;
   function loadBackground(src) {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -153,7 +217,6 @@
     };
     img.src = src;
   }
-  // 화면 방향에 맞는 기본 배경 적용 (가로/세로). 이미 같은 것이면 다시 안 불러옴.
   function applyDefaultBg() {
     const landscape = window.innerWidth >= window.innerHeight;
     const src = landscape ? DEFAULT_BG_LANDSCAPE : DEFAULT_BG_PORTRAIT;
@@ -161,12 +224,11 @@
     currentDefaultSrc = src;
     loadBackground(src);
   }
-  function useCustomBg(dataUrl) {   // 사용자 직접 교체
+  function useCustomBg(dataUrl) {
     usingDefaultBg = false;
     loadBackground(dataUrl);
   }
 
-  // 배경 교체(향후 첨부) — 파일 선택
   bgInput.addEventListener("change", function (e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -174,7 +236,6 @@
     reader.onload = function (ev) { useCustomBg(ev.target.result); };
     reader.readAsDataURL(file);
   });
-  // 드래그&드롭 교체도 지원
   window.addEventListener("dragover", function (e) { e.preventDefault(); });
   window.addEventListener("drop", function (e) {
     e.preventDefault();
@@ -187,20 +248,64 @@
   });
 
   // ---------------------------------------------------------------
+  // 잉어 아틀라스 로딩 + 개체 생성
+  // ---------------------------------------------------------------
+  let koiAtlas = null, koiReady = false;   // {atlasW, atlasH, fish:[{x,y,w,h}]}
+  let fishes = [];
+  function loadKoi() {
+    fetch("assets/koi-atlas.json").then(function (r) { return r.json(); }).then(function (meta) {
+      const img = new Image();
+      img.onload = function () {
+        koiAtlas = meta;
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, koiTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        koiReady = true;
+        spawnFishes();
+      };
+      img.src = "assets/koi-atlas.png";
+    }).catch(function () { /* 잉어 없이도 물결은 동작 */ });
+  }
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function makeFish() {
+    const n = koiAtlas.fish.length;
+    const sprite = (Math.random() * n) | 0;
+    return {
+      sprite: sprite,
+      nx: Math.random(), ny: Math.random(),        // 위치(정규화 top-down 0..1)
+      heading: Math.random() * Math.PI * 2,
+      lenFrac: rand(FISH_LEN_MIN, FISH_LEN_MAX),
+      speedFrac: rand(FISH_SPEED_MIN, FISH_SPEED_MAX),
+      turnFreq: rand(0.08, 0.22), turnPhase: Math.random() * 6.28, turnAmp: rand(0.25, 0.55),
+      swimFreq: rand(5.0, 7.0), swimPhase: Math.random() * 6.28, swimAmp: rand(0.06, 0.13),
+      rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
+    };
+  }
+  function spawnFishes() {
+    fishes = [];
+    for (let i = 0; i < FISH_COUNT; i++) fishes.push(makeFish());
+    fishVerts = new Float32Array(FISH_COUNT * 6 * 4);
+  }
+
+  let fishBuf = gl.createBuffer();
+  let fishVerts = new Float32Array(0);
+
+  // ---------------------------------------------------------------
   // 크기 / 시뮬레이션 그리드
   // ---------------------------------------------------------------
   let canvasW = 0, canvasH = 0, gridW = 0, gridH = 0;
-  let bufA = null, bufB = null;     // Float32 파동 버퍼
-  let heightData = null;            // Uint8 (wave+128) 높이맵
+  let bufA = null, bufB = null;
+  let heightData = null;
 
   function updateBgCover() {
     if (!bgReady) return;
     const scale = Math.max(canvasW / bgW, canvasH / bgH);
     const dw = bgW * scale, dh = bgH * scale;
     const dx = (canvasW - dw) / 2, dy = (canvasH - dh) / 2;
-    gl.useProgram(prog);
-    gl.uniform2f(uBgScale, canvasW / dw, canvasH / dh);
-    gl.uniform2f(uBgOffset, -dx / dw, -dy / dh);
+    gl.useProgram(progBg);
+    gl.uniform2f(locBg.uBgScale, canvasW / dw, canvasH / dh);
+    gl.uniform2f(locBg.uBgOffset, -dx / dw, -dy / dh);
   }
 
   function resize() {
@@ -220,29 +325,26 @@
     heightData = new Uint8Array(gridW * gridH * 4);
     for (let i = 3; i < heightData.length; i += 4) heightData[i] = 255;
 
+    resizeSceneTex();
     applyDispScale();
     updateBgCover();
-    if (usingDefaultBg) applyDefaultBg();   // 방향 바뀌면 가로/세로 기본 배경 자동 전환
+    if (usingDefaultBg) applyDefaultBg();
   }
   function applyDispScale() {
-    gl.useProgram(prog);
-    gl.uniform2f(uDispUv, DISP_SCALE / canvasW, DISP_SCALE / canvasH);
+    gl.useProgram(progWater);
+    gl.uniform2f(locWater.uDispUv, DISP_SCALE / canvasW, DISP_SCALE / canvasH);
   }
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", resize);
-  // 전체화면 진입/이탈(특히 폰에서 가로 회전) 시에도 방향 재평가 → 가로/세로 배경 fit
   document.addEventListener("fullscreenchange", resize);
   document.addEventListener("webkitfullscreenchange", resize);
 
   // ---------------------------------------------------------------
   // 파동 발생 (Res_mc 흰 원 스탬프)
-  //   원본 AS3: MOUSE_DOWN / MOUSE_MOVE 둘 다 draw() 호출 → 마우스는 hover 만 해도 파동.
-  //   터치: pointermove 는 접촉 중에만 발생하므로 drag 시에만 파동(요구사항).
-  //   포인터(마우스/터치/펜)별로 PointerEvent 가 독립 발생 → 멀티터치 자동 지원.
   // ---------------------------------------------------------------
   function splash(cssX, cssY, peak) {
-    const amp = peak == null ? 255 : peak;            // 진폭(유도용 자동물결은 약하게)
-    const dpr = canvasW / window.innerWidth;
+    const amp = peak == null ? 255 : peak;
+    const dpr = canvasW / (window.innerWidth || canvasW);
     const gx = (cssX * dpr) / LATE;
     const gy = (cssY * dpr) / LATE;
     const r = Math.max(1.5, (SPLASH_RADIUS_PX * dpr) / LATE);
@@ -251,12 +353,11 @@
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         const dx = x - gx, dy = y - gy;
-        const d = Math.sqrt(dx * dx + dy * dy) / r;   // 0(중심)~1(가장자리)
+        const d = Math.sqrt(dx * dx + dy * dy) / r;
         if (d <= 1) {
-          // 코사인 페더링: 중심 amp → 가장자리 0 으로 부드럽게 (안티앨리어싱 브러시 재현)
           const v = amp * (0.5 + 0.5 * Math.cos(Math.PI * d));
           const i = y * gridW + x;
-          if (v > bufA[i]) bufA[i] = v;               // 겹쳐 찍어도 어두워지지 않게 max
+          if (v > bufA[i]) bufA[i] = v;
         }
       }
     }
@@ -268,17 +369,14 @@
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   });
   canvas.addEventListener("pointermove", function (e) {
-    // 빠른 드래그/이동도 끊김 없이: 합쳐진 중간 이벤트까지 모두 스탬프.
-    // 동시 터치는 pointerId 별로 이 핸들러가 각각 호출되어 멀티터치가 그대로 동작.
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evs) splash(ev.clientX, ev.clientY);
   });
 
   // ---------------------------------------------------------------
-  // 파동 시뮬레이션:  newB = clamp(conv(A) - B);  swap(A,B)
+  // 파동 시뮬레이션
   // ---------------------------------------------------------------
   function clampIdx(v, max) { return v < 0 ? 0 : (v > max ? max : v); }
-
   function step() {
     const w = gridW, h = gridH, A = bufA, B = bufB, hd = heightData;
     for (let y = 0; y < h; y++) {
@@ -292,38 +390,137 @@
         let v = (sum / KERNEL_DIVISOR - B[y1 + x]) * DAMPING;
         if (v < 0) v = 0; else if (v > 255) v = 255;
         B[y1 + x] = v;
-        const g = (v + 128) | 0;                 // bd_filter = wave + 128 (8bit clamp)
+        const g = (v + 128) | 0;
         const di = (y1 + x) * 4;
         const gg = g > 255 ? 255 : g;
         hd[di] = gg; hd[di + 1] = gg; hd[di + 2] = gg;
       }
     }
-    bufA = B; bufB = A;                          // swap
+    bufA = B; bufB = A;
   }
 
   // ---------------------------------------------------------------
-  // 렌더
+  // 잉어 업데이트 + 정점 빌드
+  //   위치/회전 계산은 top-down(화면) px 공간에서 → 정규화 → 클립으로 매핑.
+  //   클립 y 는 1-2*ny (물 패스의 세로 뒤집힘과 정합 → 화면에 바르게 나옴).
   // ---------------------------------------------------------------
-  function render() {
+  function updateFishes(dtSec, tSec, W, H) {
+    if (!koiReady || !fishes.length) return 0;
+    if (W == null) W = window.innerWidth;
+    if (H == null) H = window.innerHeight;
+    const minDim = Math.min(W, H);
+    let vi = 0;
+    for (let k = 0; k < fishes.length; k++) {
+      const f = fishes[k];
+      // 천천히 배회: heading 에 느린 사인 흔들림
+      f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec;
+      const lenPx = f.lenFrac * minDim;
+      const speedPx = f.speedFrac * minDim;
+      // 이동(heading 방향). 정규화 좌표로 누적(축별 px→정규화).
+      f.nx += Math.cos(f.heading) * speedPx * dtSec / W;
+      f.ny += Math.sin(f.heading) * speedPx * dtSec / H;
+      // 화면 밖으로 완전히 나가면 반대편에서 재등장
+      const mx = lenPx / W, my = lenPx / H;
+      if (f.nx < -mx) f.nx = 1 + mx; else if (f.nx > 1 + mx) f.nx = -mx;
+      if (f.ny < -my) f.ny = 1 + my; else if (f.ny > 1 + my) f.ny = -my;
+
+      // 헤엄치는 요(yaw) 흔들림 — 몸이 좌우로 살랑이는 느낌
+      const drawH = f.heading + Math.sin(tSec * f.swimFreq + f.swimPhase) * f.swimAmp;
+      const fwdx = Math.cos(drawH), fwdy = Math.sin(drawH);
+      const sidx = -Math.sin(drawH), sidy = Math.cos(drawH);
+
+      const m = koiAtlas.fish[f.sprite];
+      const aspect = m.h / m.w;
+      const hl = lenPx * 0.5, hw = hl * aspect;
+      const cx = f.nx * W, cy = f.ny * H;   // 중심(px, top-down)
+
+      const u0 = m.x / koiAtlas.atlasW, u1 = (m.x + m.w) / koiAtlas.atlasW;
+      const v0 = m.y / koiAtlas.atlasH, v1 = (m.y + m.h) / koiAtlas.atlasH;
+
+      // 네 모서리(px) → 클립. A:head-top B:head-bot C:tail-top D:tail-bot
+      const Ax = cx + fwdx * hl - sidx * hw, Ay = cy + fwdy * hl - sidy * hw;
+      const Bx = cx + fwdx * hl + sidx * hw, By = cy + fwdy * hl + sidy * hw;
+      const Cx = cx - fwdx * hl - sidx * hw, Cy = cy - fwdy * hl - sidy * hw;
+      const Dx = cx - fwdx * hl + sidx * hw, Dy = cy - fwdy * hl + sidy * hw;
+      function px2clip(out, oi, X, Y, u, v) {
+        out[oi] = (X / W) * 2 - 1; out[oi + 1] = 1 - (Y / H) * 2;
+        out[oi + 2] = u; out[oi + 3] = v;
+      }
+      px2clip(fishVerts, vi, Ax, Ay, u1, v0); vi += 4;
+      px2clip(fishVerts, vi, Bx, By, u1, v1); vi += 4;
+      px2clip(fishVerts, vi, Cx, Cy, u0, v0); vi += 4;
+      px2clip(fishVerts, vi, Cx, Cy, u0, v0); vi += 4;
+      px2clip(fishVerts, vi, Bx, By, u1, v1); vi += 4;
+      px2clip(fishVerts, vi, Dx, Dy, u0, v1); vi += 4;
+
+      // 꼬리 쪽에 아주 약한 잔물결(wake)
+      f.rip -= dtSec;
+      if (f.rip <= 0) {
+        f.rip = f.ripEvery;
+        splash(cx - fwdx * hl, cy - fwdy * hl, FISH_WAKE_PEAK);
+      }
+    }
+    return vi / 4; // 정점 수
+  }
+
+  // ---------------------------------------------------------------
+  // 렌더 (3패스)
+  // ---------------------------------------------------------------
+  function renderScene(fishVertCount) {
+    // 높이맵 업로드
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, heightTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gridW, gridH, 0, gl.RGBA, gl.UNSIGNED_BYTE, heightData);
+
+    // ① 배경 → scene FBO
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.viewport(0, 0, canvasW, canvasH);
+    gl.useProgram(progBg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.enableVertexAttribArray(locBg.aPos);
+    gl.vertexAttribPointer(locBg.aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.disable(gl.BLEND);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // ② 잉어 → scene FBO (알파 블렌딩)
+    if (fishVertCount > 0) {
+      gl.useProgram(progFish);
+      gl.bindBuffer(gl.ARRAY_BUFFER, fishBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, fishVerts, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(locFish.aClip);
+      gl.vertexAttribPointer(locFish.aClip, 2, gl.FLOAT, false, 16, 0);
+      gl.enableVertexAttribArray(locFish.aUv);
+      gl.vertexAttribPointer(locFish.aUv, 2, gl.FLOAT, false, 16, 8);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawArrays(gl.TRIANGLES, 0, fishVertCount);
+      gl.disable(gl.BLEND);
+    }
+
+    // ③ 물 패스 → 화면
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvasW, canvasH);
+    gl.useProgram(progWater);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.enableVertexAttribArray(locWater.aPos);
+    gl.vertexAttribPointer(locWater.aPos, 2, gl.FLOAT, false, 0, 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  // 고정 40fps 타임스텝: 모니터 주사율과 무관하게 원본과 같은 속도/부드러움 유지.
-  // 시뮬은 40Hz 로만 갱신하고, 화면은 매 rAF 마다 그려 디스플레이는 매끈하게.
-  let acc = 0, last = performance.now();
-  let fpsFrames = 0, fpsLast = last;     // 실측 FPS 카운터(원본 FPSCheck 대응)
+  // 고정 40fps 타임스텝(물 시뮬), 렌더/잉어는 매 프레임.
+  let acc = 0, last = performance.now(), startT = last;
+  let fpsFrames = 0, fpsLast = last;
   function loop(now) {
     let dt = now - last; last = now;
-    if (dt > 250) dt = 250;        // 탭 비활성 후 복귀 시 폭주 방지
+    if (dt > 250) dt = 250;
     acc += dt;
     let n = 0;
     while (acc >= STEP_MS && n < 4) { step(); acc -= STEP_MS; n++; }
-    render();
 
-    // 실측 렌더 FPS 를 0.5초마다 갱신 (목표 시뮬 FPS 도 함께 표시)
+    const dtSec = dt / 1000, tSec = (now - startT) / 1000;
+    const fishVertCount = updateFishes(dtSec, tSec);
+    renderScene(fishVertCount);
+
     fpsFrames++;
     if (now - fpsLast >= 500) {
       const fps = Math.round((fpsFrames * 1000) / (now - fpsLast));
@@ -333,7 +530,8 @@
     requestAnimationFrame(loop);
   }
 
-  resize();              // 내부에서 applyDefaultBg() 호출 → 방향에 맞는 기본 배경 로드
+  resize();
+  loadKoi();
   requestAnimationFrame(loop);
 
   // ---------------------------------------------------------------
@@ -348,17 +546,16 @@
     trySound(); window.removeEventListener("pointerdown", once);
   });
 
-  // 동작 함수 (버튼/키보드 공용)
-  function openBgPicker() { bgInput.click(); }                       // b
-  function toggleSound() {                                            // s
+  function openBgPicker() { bgInput.click(); }
+  function toggleSound() {
     if (soundOn) { ambient.pause(); soundOn = false; }
     else trySound();
   }
-  function toggleFullscreen() {                                       // f
+  function toggleFullscreen() {
     if (!document.fullscreenElement) { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); }
     else if (document.exitFullscreen) document.exitFullscreen();
   }
-  function toggleMenu() {                                             // m
+  function toggleMenu() {
     const hide = toolbar.classList.toggle("hidden");
     fpsEl.classList.toggle("hidden", hide);
   }
@@ -368,7 +565,7 @@
   fsBtn.addEventListener("click", toggleFullscreen);
 
   // ---------------------------------------------------------------
-  // 실시간 미세조정 + HUD (현재 값 잠깐 표시)
+  // 실시간 미세조정 + HUD
   // ---------------------------------------------------------------
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
   const hud = document.createElement("div");
@@ -381,26 +578,29 @@
     clearTimeout(hudTimer);
     hudTimer = setTimeout(function () { hud.classList.remove("show"); }, 1400);
   }
+  function setFishCount(dir) {
+    FISH_COUNT = clamp(FISH_COUNT + dir, 0, 14);
+    if (koiReady) spawnFishes();
+    showHud("FISH  " + FISH_COUNT);
+  }
   function adjust(param, dir) {
     switch (param) {
-      case "DAMPING":   // 1↑ / 2↓  (0.900 ~ 1.000)
+      case "DAMPING":
         DAMPING = clamp(Math.round((DAMPING + dir * 0.002) * 1000) / 1000, 0.900, 1.000);
         showHud("DAMPING  " + DAMPING.toFixed(3)); break;
-      case "DISP":      // 3↑ / 4↓  (0 ~ 240) 굴절 세기
+      case "DISP":
         DISP_SCALE = clamp(DISP_SCALE + dir * 5, 0, 240); applyDispScale();
         showHud("DISP_SCALE  " + DISP_SCALE); break;
-      case "SPLASH":    // 5↑ / 6↓  (2 ~ 80) 물결 반경
+      case "SPLASH":
         SPLASH_RADIUS_PX = clamp(SPLASH_RADIUS_PX + dir * 2, 2, 80);
         showHud("SPLASH_RADIUS  " + SPLASH_RADIUS_PX); break;
-      case "FPS":       // 7↑ / 8↓  (10 ~ 120)
+      case "FPS":
         FPS = clamp(FPS + dir * 5, 10, 120); STEP_MS = 1000 / FPS;
         showHud("FPS  " + FPS); break;
     }
   }
 
-  // 키보드 — 물리 키 기준(e.code)이라 한/영 입력 상태와 무관하게 동작.
-  //   토글: b 배경교체 · s 소리 · f 전체화면 · m 메뉴   (누르고 있어도 1회만)
-  //   미세조정: 1/2 DAMPING · 3/4 DISP_SCALE · 5/6 SPLASH_RADIUS · 7/8 FPS  (누르고 있으면 연속)
+  // 키보드 — 물리 키 기준(e.code). 토글 B/S/F/M · 미세조정 1~8 · 잉어수 0(▲)/9(▼)
   window.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     switch (e.code) {
@@ -416,15 +616,17 @@
       case "Digit6": case "Numpad6": e.preventDefault(); adjust("SPLASH", -1); break;
       case "Digit7": case "Numpad7": e.preventDefault(); adjust("FPS", +1); break;
       case "Digit8": case "Numpad8": e.preventDefault(); adjust("FPS", -1); break;
+      case "Digit0": case "Numpad0": if (e.repeat) return; e.preventDefault(); setFishCount(+1); break;
+      case "Digit9": case "Numpad9": if (e.repeat) return; e.preventDefault(); setFishCount(-1); break;
     }
   });
 
   // ---------------------------------------------------------------
-  // 중앙 'Touch here' 유도: 잔잔한 자동 물결 + 힌트, 입력 시 사라지고 무입력 시 재등장
+  // 중앙 'Touch here' 유도
   // ---------------------------------------------------------------
   const hint = document.getElementById("hint");
-  const IDLE_MS = 7000;          // 무입력 7초 후 다시 유도
-  const ATTRACT_MS = 1150;       // 자동 물결 주기
+  const IDLE_MS = 7000;
+  const ATTRACT_MS = 1150;
   let attractOn = false, attractTimer = null, idleTimer = null;
 
   function attractStart() {
@@ -434,7 +636,7 @@
     attractTimer = setInterval(function () {
       if (document.hidden) return;
       const jx = (Math.random() * 2 - 1) * 10, jy = (Math.random() * 2 - 1) * 10;
-      splash(window.innerWidth / 2 + jx, window.innerHeight / 2 + jy, 150); // 잔잔하게
+      splash(window.innerWidth / 2 + jx, window.innerHeight / 2 + jy, 150);
     }, ATTRACT_MS);
   }
   function attractStop() {
@@ -444,10 +646,9 @@
     clearInterval(attractTimer); attractTimer = null;
   }
   function onUserActivity(e) {
-    // 실제 터치/클릭(또는 터치 드래그)일 때만 숨김 — 마우스가 살짝 지나가는 hover 로는 안 사라짐
     if (e.type === "pointerdown" || e.pointerType === "touch") attractStop();
     clearTimeout(idleTimer);
-    idleTimer = setTimeout(attractStart, IDLE_MS);   // 무입력 지속 시 다시 유도
+    idleTimer = setTimeout(attractStart, IDLE_MS);
   }
   canvas.addEventListener("pointerdown", onUserActivity);
   canvas.addEventListener("pointermove", onUserActivity);
