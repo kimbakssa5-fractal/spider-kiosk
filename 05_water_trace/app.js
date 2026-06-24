@@ -228,6 +228,9 @@
   }
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", resize);
+  // 전체화면 진입/이탈(특히 폰에서 가로 회전) 시에도 방향 재평가 → 가로/세로 배경 fit
+  document.addEventListener("fullscreenchange", resize);
+  document.addEventListener("webkitfullscreenchange", resize);
 
   // ---------------------------------------------------------------
   // 파동 발생 (Res_mc 흰 원 스탬프)
