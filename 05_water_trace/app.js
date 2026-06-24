@@ -240,7 +240,8 @@
   //   터치: pointermove 는 접촉 중에만 발생하므로 drag 시에만 파동(요구사항).
   //   포인터(마우스/터치/펜)별로 PointerEvent 가 독립 발생 → 멀티터치 자동 지원.
   // ---------------------------------------------------------------
-  function splash(cssX, cssY) {
+  function splash(cssX, cssY, peak) {
+    const amp = peak == null ? 255 : peak;            // 진폭(유도용 자동물결은 약하게)
     const dpr = canvasW / window.innerWidth;
     const gx = (cssX * dpr) / LATE;
     const gy = (cssY * dpr) / LATE;
@@ -252,8 +253,8 @@
         const dx = x - gx, dy = y - gy;
         const d = Math.sqrt(dx * dx + dy * dy) / r;   // 0(중심)~1(가장자리)
         if (d <= 1) {
-          // 코사인 페더링: 중심 255 → 가장자리 0 으로 부드럽게 (안티앨리어싱 브러시 재현)
-          const v = 255 * (0.5 + 0.5 * Math.cos(Math.PI * d));
+          // 코사인 페더링: 중심 amp → 가장자리 0 으로 부드럽게 (안티앨리어싱 브러시 재현)
+          const v = amp * (0.5 + 0.5 * Math.cos(Math.PI * d));
           const i = y * gridW + x;
           if (v > bufA[i]) bufA[i] = v;               // 겹쳐 찍어도 어두워지지 않게 max
         }
@@ -417,4 +418,38 @@
       case "Digit8": case "Numpad8": e.preventDefault(); adjust("FPS", -1); break;
     }
   });
+
+  // ---------------------------------------------------------------
+  // 중앙 'Touch here' 유도: 잔잔한 자동 물결 + 힌트, 입력 시 사라지고 무입력 시 재등장
+  // ---------------------------------------------------------------
+  const hint = document.getElementById("hint");
+  const IDLE_MS = 7000;          // 무입력 7초 후 다시 유도
+  const ATTRACT_MS = 1150;       // 자동 물결 주기
+  let attractOn = false, attractTimer = null, idleTimer = null;
+
+  function attractStart() {
+    if (attractOn) return;
+    attractOn = true;
+    if (hint) hint.classList.remove("hidden");
+    attractTimer = setInterval(function () {
+      if (document.hidden) return;
+      const jx = (Math.random() * 2 - 1) * 10, jy = (Math.random() * 2 - 1) * 10;
+      splash(window.innerWidth / 2 + jx, window.innerHeight / 2 + jy, 150); // 잔잔하게
+    }, ATTRACT_MS);
+  }
+  function attractStop() {
+    if (!attractOn) return;
+    attractOn = false;
+    if (hint) hint.classList.add("hidden");
+    clearInterval(attractTimer); attractTimer = null;
+  }
+  function onUserActivity(e) {
+    // 실제 터치/클릭(또는 터치 드래그)일 때만 숨김 — 마우스가 살짝 지나가는 hover 로는 안 사라짐
+    if (e.type === "pointerdown" || e.pointerType === "touch") attractStop();
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(attractStart, IDLE_MS);   // 무입력 지속 시 다시 유도
+  }
+  canvas.addEventListener("pointerdown", onUserActivity);
+  canvas.addEventListener("pointermove", onUserActivity);
+  attractStart();
 })();

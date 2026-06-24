@@ -46,6 +46,79 @@ html, body {
   background: rgba(0, 0, 0, 0.8);
 }
 
+/* 중앙 터치 유도 */
+#hint {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  pointer-events: none;   /* 터치는 캔버스로 통과 */
+  user-select: none;
+  opacity: 1;
+  transition: opacity 0.6s ease;
+}
+#hint.hidden { opacity: 0; }
+
+#hint .tap {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#hint .hand {
+  width: 66px;
+  height: 66px;
+  fill: #ffffff;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.55));
+  animation: tapbob 2.4s ease-in-out infinite;
+  z-index: 2;
+}
+#hint .ring {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+  opacity: 0;
+  animation: hintripple 2.4s ease-out infinite;
+}
+#hint .ring:nth-child(2) { animation-delay: 0.8s; }
+#hint .ring:nth-child(3) { animation-delay: 1.6s; }
+
+#hint .hint-text {
+  color: #ffffff;
+  font-family: "Noto Sans KR", "Noto Sans", sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.7), 0 0 26px rgba(0, 0, 0, 0.5);
+  animation: hinttext 2.4s ease-in-out infinite;
+}
+
+@keyframes tapbob {
+  0%, 100% { transform: translateY(-6px) scale(1); }
+  45%      { transform: translateY(5px)  scale(0.93); }
+  62%      { transform: translateY(2px)  scale(0.98); }
+}
+@keyframes hintripple {
+  0%   { transform: scale(0.35); opacity: 0; }
+  18%  { opacity: 0.8; }
+  100% { transform: scale(3.6);  opacity: 0; }
+}
+@keyframes hinttext {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
 #fps {
   position: fixed;
   top: 12px;
