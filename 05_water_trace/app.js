@@ -21,9 +21,11 @@
   const LATE = 8;                                  // 시뮬레이션 다운스케일
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
-  // 화면 방향별 기본 배경: PC(가로) = 가로형, 폰(세로) = 세로형
-  const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg";
-  const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg";
+  // 화면 방향별 기본 배경: PC(가로) = 가로형(트리 90° 회전), 폰(세로) = 세로형
+  // ?v=N 캐시버전: 이미지 내용 바뀌면 N 을 올려 브라우저 캐시 강제 갱신.
+  const ASSET_VER = "2";
+  const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg?v=" + ASSET_VER;
+  const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg?v=" + ASSET_VER;
 
   // 키보드로 실시간 미세조정 (1/2 DAMPING, 3/4 DISP_SCALE, 5/6 SPLASH_RADIUS, 7/8 FPS)
   let SPLASH_RADIUS_PX = 18;                       // Res_mc 흰 원 반경(풀해상도 px) — 부드럽게 살짝 키움
