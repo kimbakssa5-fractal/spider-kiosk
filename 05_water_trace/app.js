@@ -21,7 +21,7 @@
   const LATE = 8;                                  // 시뮬레이션 다운스케일
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
-  const DEFAULT_BG = "assets/background.jpg";
+  const DEFAULT_BG = "assets/fractal-tree.jpg";
 
   // 키보드로 실시간 미세조정 (1/2 DAMPING, 3/4 DISP_SCALE, 5/6 SPLASH_RADIUS, 7/8 FPS)
   let SPLASH_RADIUS_PX = 18;                       // Res_mc 흰 원 반경(풀해상도 px) — 부드럽게 살짝 키움
