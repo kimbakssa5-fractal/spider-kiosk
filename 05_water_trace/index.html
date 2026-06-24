@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>물결 Trace</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="fps">FPS --</div>
+
+  <div id="toolbar">
+    <label class="btn" for="bgInput">Background image (B)</label>
+    <input type="file" id="bgInput" accept="image/*" hidden>
+    <button id="soundBtn" class="btn">Sound (S)</button>
+    <button id="fsBtn" class="btn">Full screen (F)</button>
+    <button id="hideBtn" class="btn">Menu (M)</button>
+  </div>
+
+  <audio id="ambient" src="assets/ambient.mp3" loop preload="auto"></audio>
+
+  <script src="app.js"></script>
+</body>
+</html>
