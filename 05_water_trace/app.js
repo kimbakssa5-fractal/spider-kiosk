@@ -21,7 +21,9 @@
   const LATE = 8;                                  // 시뮬레이션 다운스케일
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
-  const DEFAULT_BG = "assets/fractal-tree.jpg";
+  // 화면 방향별 기본 배경: PC(가로) = 가로형, 폰(세로) = 세로형
+  const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg";
+  const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg";
 
   // 키보드로 실시간 미세조정 (1/2 DAMPING, 3/4 DISP_SCALE, 5/6 SPLASH_RADIUS, 7/8 FPS)
   let SPLASH_RADIUS_PX = 18;                       // Res_mc 흰 원 반경(풀해상도 px) — 부드럽게 살짝 키움
@@ -135,6 +137,8 @@
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
   let bgImage = null, bgW = 1, bgH = 1, bgReady = false;
+  let usingDefaultBg = true;        // 사용자가 직접 교체하면 false → 방향 자동전환 멈춤
+  let currentDefaultSrc = null;     // 현재 적용된 기본 배경 src (중복 로드 방지)
   function loadBackground(src) {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -147,13 +151,25 @@
     };
     img.src = src;
   }
+  // 화면 방향에 맞는 기본 배경 적용 (가로/세로). 이미 같은 것이면 다시 안 불러옴.
+  function applyDefaultBg() {
+    const landscape = window.innerWidth >= window.innerHeight;
+    const src = landscape ? DEFAULT_BG_LANDSCAPE : DEFAULT_BG_PORTRAIT;
+    if (src === currentDefaultSrc) return;
+    currentDefaultSrc = src;
+    loadBackground(src);
+  }
+  function useCustomBg(dataUrl) {   // 사용자 직접 교체
+    usingDefaultBg = false;
+    loadBackground(dataUrl);
+  }
 
   // 배경 교체(향후 첨부) — 파일 선택
   bgInput.addEventListener("change", function (e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function (ev) { loadBackground(ev.target.result); };
+    reader.onload = function (ev) { useCustomBg(ev.target.result); };
     reader.readAsDataURL(file);
   });
   // 드래그&드롭 교체도 지원
@@ -163,7 +179,7 @@
     const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (file && /^image\//.test(file.type)) {
       const reader = new FileReader();
-      reader.onload = function (ev) { loadBackground(ev.target.result); };
+      reader.onload = function (ev) { useCustomBg(ev.target.result); };
       reader.readAsDataURL(file);
     }
   });
@@ -204,12 +220,14 @@
 
     applyDispScale();
     updateBgCover();
+    if (usingDefaultBg) applyDefaultBg();   // 방향 바뀌면 가로/세로 기본 배경 자동 전환
   }
   function applyDispScale() {
     gl.useProgram(prog);
     gl.uniform2f(uDispUv, DISP_SCALE / canvasW, DISP_SCALE / canvasH);
   }
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", resize);
 
   // ---------------------------------------------------------------
   // 파동 발생 (Res_mc 흰 원 스탬프)
@@ -309,8 +327,7 @@
     requestAnimationFrame(loop);
   }
 
-  resize();
-  loadBackground(DEFAULT_BG);
+  resize();              // 내부에서 applyDefaultBg() 호출 → 방향에 맞는 기본 배경 로드
   requestAnimationFrame(loop);
 
   // ---------------------------------------------------------------
