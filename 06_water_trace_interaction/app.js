@@ -25,7 +25,7 @@
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
   // 화면 방향별 기본 배경: PC(가로) = 가로형(트리 90° 회전), 폰(세로) = 세로형
-  const ASSET_VER = "3";
+  const ASSET_VER = "4";
   const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg?v=" + ASSET_VER;
   const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg?v=" + ASSET_VER;
 
@@ -37,10 +37,11 @@
   let DAMPING = 0.992;
 
   // ---- 황금 잉어 파라미터 ----
+  //   fish01 헤엄 사이클(73프레임, 머리=위) 프레임 애니메이션 사용 → 몸이 자연스럽게 일렁임.
   let FISH_COUNT = 6;                 // 동시에 헤엄치는 잉어 수 (9/0 키로 가감)
-  const FISH_LEN_MIN = 0.12, FISH_LEN_MAX = 0.18;  // 화면 짧은변 대비 몸길이 비율
-  const FISH_SPEED_MIN = 0.035, FISH_SPEED_MAX = 0.060; // 화면 짧은변/초 (유유히)
-  const FISH_WAKE_PEAK = 26;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
+  const FISH_LEN_MIN = 0.22, FISH_LEN_MAX = 0.34;  // 화면 짧은변 대비 몸길이 비율 (크게)
+  const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
+  const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
 
   const canvas = document.getElementById("scene");
   const ambient = document.getElementById("ambient");
@@ -248,12 +249,14 @@
   });
 
   // ---------------------------------------------------------------
-  // 잉어 아틀라스 로딩 + 개체 생성
+  // 잉어 헤엄 아틀라스 로딩 + 개체 생성
+  //   koi-swim.png: fish01 헤엄 사이클을 셀 그리드로 팩(머리=셀 위쪽).
+  //   meta: {cellW,cellH,cols,rows,count,fps,atlasW,atlasH}
   // ---------------------------------------------------------------
-  let koiAtlas = null, koiReady = false;   // {atlasW, atlasH, fish:[{x,y,w,h}]}
+  let koiAtlas = null, koiReady = false;
   let fishes = [];
   function loadKoi() {
-    fetch("assets/koi-atlas.json?v=" + ASSET_VER).then(function (r) { return r.json(); }).then(function (meta) {
+    fetch("assets/koi-swim.json?v=" + ASSET_VER).then(function (r) { return r.json(); }).then(function (meta) {
       const img = new Image();
       img.onload = function () {
         koiAtlas = meta;
@@ -263,22 +266,20 @@
         koiReady = true;
         spawnFishes();
       };
-      img.src = "assets/koi-atlas.png?v=" + ASSET_VER;
+      img.src = "assets/koi-swim.png?v=" + ASSET_VER;
     }).catch(function () { /* 잉어 없이도 물결은 동작 */ });
   }
 
   function rand(a, b) { return a + Math.random() * (b - a); }
   function makeFish() {
-    const n = koiAtlas.fish.length;
-    const sprite = (Math.random() * n) | 0;
     return {
-      sprite: sprite,
       nx: Math.random(), ny: Math.random(),        // 위치(정규화 top-down 0..1)
       heading: Math.random() * Math.PI * 2,
       lenFrac: rand(FISH_LEN_MIN, FISH_LEN_MAX),
       speedFrac: rand(FISH_SPEED_MIN, FISH_SPEED_MAX),
-      turnFreq: rand(0.08, 0.22), turnPhase: Math.random() * 6.28, turnAmp: rand(0.25, 0.55),
-      swimFreq: rand(5.0, 7.0), swimPhase: Math.random() * 6.28, swimAmp: rand(0.06, 0.13),
+      turnFreq: rand(0.06, 0.16), turnPhase: Math.random() * 6.28, turnAmp: rand(0.18, 0.40),
+      frame: Math.random() * koiAtlas.count,        // 헤엄 사이클 위상(프레임)
+      animFps: koiAtlas.fps * rand(0.8, 1.12),
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
     };
   }
@@ -412,8 +413,9 @@
     let vi = 0;
     for (let k = 0; k < fishes.length; k++) {
       const f = fishes[k];
-      // 천천히 배회: heading 에 느린 사인 흔들림
+      // 천천히 배회: heading 에 느린 사인 흔들림 (몸통 일렁임은 프레임 애니메이션이 담당)
       f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec;
+      f.frame += f.animFps * dtSec;     // 헤엄 사이클 진행
       const lenPx = f.lenFrac * minDim;
       const speedPx = f.speedFrac * minDim;
       // 이동(heading 방향). 정규화 좌표로 누적(축별 px→정규화).
@@ -424,34 +426,35 @@
       if (f.nx < -mx) f.nx = 1 + mx; else if (f.nx > 1 + mx) f.nx = -mx;
       if (f.ny < -my) f.ny = 1 + my; else if (f.ny > 1 + my) f.ny = -my;
 
-      // 헤엄치는 요(yaw) 흔들림 — 몸이 좌우로 살랑이는 느낌
-      const drawH = f.heading + Math.sin(tSec * f.swimFreq + f.swimPhase) * f.swimAmp;
-      const fwdx = Math.cos(drawH), fwdy = Math.sin(drawH);
-      const sidx = -Math.sin(drawH), sidy = Math.cos(drawH);
+      const fwdx = Math.cos(f.heading), fwdy = Math.sin(f.heading);   // 머리 방향
+      const sidx = -Math.sin(f.heading), sidy = Math.cos(f.heading);
 
-      const m = koiAtlas.fish[f.sprite];
-      const aspect = m.h / m.w;
+      const cellW = koiAtlas.cellW, cellH = koiAtlas.cellH;
+      const aspect = cellW / cellH;                  // 몸 폭/길이
       const hl = lenPx * 0.5, hw = hl * aspect;
-      const cx = f.nx * W, cy = f.ny * H;   // 중심(px, top-down)
+      const cx = f.nx * W, cy = f.ny * H;             // 중심(px, top-down)
 
-      const u0 = m.x / koiAtlas.atlasW, u1 = (m.x + m.w) / koiAtlas.atlasW;
-      const v0 = m.y / koiAtlas.atlasH, v1 = (m.y + m.h) / koiAtlas.atlasH;
+      // 현재 프레임 셀 → UV (머리=셀 위 v0, 꼬리=셀 아래 v1)
+      const fi = ((f.frame | 0) % koiAtlas.count + koiAtlas.count) % koiAtlas.count;
+      const col = fi % koiAtlas.cols, row = (fi / koiAtlas.cols) | 0;
+      const u0 = (col * cellW) / koiAtlas.atlasW, u1 = (col * cellW + cellW) / koiAtlas.atlasW;
+      const v0 = (row * cellH) / koiAtlas.atlasH, v1 = (row * cellH + cellH) / koiAtlas.atlasH;
 
-      // 네 모서리(px) → 클립. A:head-top B:head-bot C:tail-top D:tail-bot
-      const Ax = cx + fwdx * hl - sidx * hw, Ay = cy + fwdy * hl - sidy * hw;
-      const Bx = cx + fwdx * hl + sidx * hw, By = cy + fwdy * hl + sidy * hw;
-      const Cx = cx - fwdx * hl - sidx * hw, Cy = cy - fwdy * hl - sidy * hw;
-      const Dx = cx - fwdx * hl + sidx * hw, Dy = cy - fwdy * hl + sidy * hw;
+      // 네 모서리(px) → 클립. 머리=+fwd(v0), 꼬리=-fwd(v1), 좌=u0/우=u1
+      const Ax = cx + fwdx * hl - sidx * hw, Ay = cy + fwdy * hl - sidy * hw; // head-left
+      const Bx = cx + fwdx * hl + sidx * hw, By = cy + fwdy * hl + sidy * hw; // head-right
+      const Cx = cx - fwdx * hl - sidx * hw, Cy = cy - fwdy * hl - sidy * hw; // tail-left
+      const Dx = cx - fwdx * hl + sidx * hw, Dy = cy - fwdy * hl + sidy * hw; // tail-right
       function px2clip(out, oi, X, Y, u, v) {
         out[oi] = (X / W) * 2 - 1; out[oi + 1] = 1 - (Y / H) * 2;
         out[oi + 2] = u; out[oi + 3] = v;
       }
-      px2clip(fishVerts, vi, Ax, Ay, u1, v0); vi += 4;
-      px2clip(fishVerts, vi, Bx, By, u1, v1); vi += 4;
-      px2clip(fishVerts, vi, Cx, Cy, u0, v0); vi += 4;
-      px2clip(fishVerts, vi, Cx, Cy, u0, v0); vi += 4;
-      px2clip(fishVerts, vi, Bx, By, u1, v1); vi += 4;
-      px2clip(fishVerts, vi, Dx, Dy, u0, v1); vi += 4;
+      px2clip(fishVerts, vi, Ax, Ay, u0, v0); vi += 4;
+      px2clip(fishVerts, vi, Bx, By, u1, v0); vi += 4;
+      px2clip(fishVerts, vi, Cx, Cy, u0, v1); vi += 4;
+      px2clip(fishVerts, vi, Cx, Cy, u0, v1); vi += 4;
+      px2clip(fishVerts, vi, Bx, By, u1, v0); vi += 4;
+      px2clip(fishVerts, vi, Dx, Dy, u1, v1); vi += 4;
 
       // 꼬리 쪽에 아주 약한 잔물결(wake)
       f.rip -= dtSec;
