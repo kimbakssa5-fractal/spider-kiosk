@@ -25,7 +25,7 @@
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
   // 화면 방향별 기본 배경: PC(가로) = 가로형(트리 90° 회전), 폰(세로) = 세로형
-  const ASSET_VER = "2";
+  const ASSET_VER = "3";
   const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg?v=" + ASSET_VER;
   const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg?v=" + ASSET_VER;
 
@@ -253,7 +253,7 @@
   let koiAtlas = null, koiReady = false;   // {atlasW, atlasH, fish:[{x,y,w,h}]}
   let fishes = [];
   function loadKoi() {
-    fetch("assets/koi-atlas.json").then(function (r) { return r.json(); }).then(function (meta) {
+    fetch("assets/koi-atlas.json?v=" + ASSET_VER).then(function (r) { return r.json(); }).then(function (meta) {
       const img = new Image();
       img.onload = function () {
         koiAtlas = meta;
@@ -263,7 +263,7 @@
         koiReady = true;
         spawnFishes();
       };
-      img.src = "assets/koi-atlas.png";
+      img.src = "assets/koi-atlas.png?v=" + ASSET_VER;
     }).catch(function () { /* 잉어 없이도 물결은 동작 */ });
   }
 
