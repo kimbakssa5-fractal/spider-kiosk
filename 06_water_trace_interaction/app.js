@@ -42,12 +42,18 @@
   const FISH_LEN_MIN = 0.22, FISH_LEN_MAX = 0.34;  // 화면 짧은변 대비 몸길이 비율 (크게)
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
-  // 도망 상호작용: 마우스 커서/터치 드래그가 가까이 오면 반대로 빠르게 헤엄쳐 달아남
-  const FLEE_RADIUS_FRAC = 0.26;      // 도망 반경(화면 짧은변 대비)
-  const FLEE_BOOST = 4.0;             // 패닉 시 속도 배수(+)
-  const FLEE_TURN = 11.0;             // 패닉 시 방향 전환 속도(rad/s 가중)
-  const PANIC_DECAY = 0.75;           // 패닉 감쇠 시간상수(초)
+  // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
+  const FLEE_RADIUS_FRAC = 0.32;      // 도망 반경(화면 짧은변 대비) — 더 멀리서 반응
+  const FLEE_BOOST = 5.5;             // 패닉 시 속도 배수(+) — 더 빠른 대시
+  const FLEE_TURN = 17.0;             // 패닉 시 방향 전환 속도(rad/s 가중) — 더 민첩
+  const PANIC_GAIN = 1.8;             // 근접 강도 → 패닉 증폭(예민하게)
+  const PANIC_DECAY = 0.85;           // 패닉 감쇠 시간상수(초)
   const POINTER_TTL = 0.45;           // 포인터가 멈춘 뒤 이만큼 지나면 진정(초)
+  // 몸 휨(도망 방향으로 C자): 선회 각속도+패닉에 비례
+  const FISH_SEG = 7;                 // 몸 분절 수
+  const BEND_GAIN = 0.055;            // 각속도(rad/s) → 휨
+  const BEND_MAX = 1.5;               // 최대 휨(라디안, 몸 전체 분배)
+  const BEND_SMOOTH = 13.0;           // 휨 추종 속도
 
   const canvas = document.getElementById("scene");
   const ambient = document.getElementById("ambient");
@@ -300,12 +306,13 @@
       animFps: koiAtlas.fps * rand(0.8, 1.12),
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
       panic: 0,                                       // 도망 흥분도(0~1+), 시간에 따라 감쇠
+      bend: 0, prevHeading: 0,                        // 몸 휨(라디안), 직전 heading
     };
   }
   function spawnFishes() {
     fishes = [];
     for (let i = 0; i < FISH_COUNT; i++) fishes.push(makeFish());
-    fishVerts = new Float32Array(FISH_COUNT * 6 * 4);
+    fishVerts = new Float32Array(FISH_COUNT * FISH_SEG * 6 * 4);  // 분절당 2삼각형
   }
 
   let fishBuf = gl.createBuffer();
@@ -419,7 +426,7 @@
   const MOTION_MS = 66;                // 모션 검사 주기
   const MOTION_DIFF_T = 12;            // 셀 휘도 변화 임계(민감)
   const MOTION_BLOCK_T = 0.05;         // 블록 strength 임계(이상이면 도망 점 생성)
-  const MOTION_FLEE_MULT = 1.5;        // 모션 점 도망 반경 배수(사람은 넓게)
+  const MOTION_FLEE_MULT = 2.0;        // 모션 점 도망 반경 배수(사람은 넓게)
   const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
   const CAM_MIRROR = false;            // 좌우 반전(거울 끔) — 모션 매핑
@@ -628,7 +635,8 @@
         let diff = desired - f.heading;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // [-π,π]
         f.heading += diff * Math.min(1, FLEE_TURN * (0.3 + maxS) * dtSec);
-        if (maxS > f.panic) f.panic = maxS;          // 흥분도 상승
+        const tgt = Math.min(1.2, maxS * PANIC_GAIN); // 근접 강도 증폭 → 더 예민
+        if (tgt > f.panic) f.panic = tgt;            // 흥분도 상승
       }
       // 패닉 감쇠
       f.panic *= Math.exp(-dtSec / PANIC_DECAY);
@@ -656,8 +664,6 @@
       if (f.ny < -my) f.ny = 1 + my; else if (f.ny > 1 + my) f.ny = -my;
 
       const fwdx = Math.cos(f.heading), fwdy = Math.sin(f.heading);   // 머리 방향
-      const sidx = -Math.sin(f.heading), sidy = Math.cos(f.heading);
-
       const cellW = koiAtlas.cellW, cellH = koiAtlas.cellH;
       const aspect = cellW / cellH;                  // 몸 폭/길이
       const hw = hl * aspect;
@@ -671,21 +677,42 @@
       const u0 = (col * cellW) / koiAtlas.atlasW, u1 = (col * cellW + cellW) / koiAtlas.atlasW;
       const v0 = (row * cellH) / koiAtlas.atlasH, v1 = (row * cellH + cellH) / koiAtlas.atlasH;
 
-      // 네 모서리(px) → 클립. 머리=+fwd(v0), 꼬리=-fwd(v1), 좌=u0/우=u1
-      const Ax = cx + fwdx * hl - sidx * hw, Ay = cy + fwdy * hl - sidy * hw; // head-left
-      const Bx = cx + fwdx * hl + sidx * hw, By = cy + fwdy * hl + sidy * hw; // head-right
-      const Cx = cx - fwdx * hl - sidx * hw, Cy = cy - fwdy * hl - sidy * hw; // tail-left
-      const Dx = cx - fwdx * hl + sidx * hw, Dy = cy - fwdy * hl + sidy * hw; // tail-right
+      // === 몸 휨: 선회 각속도 × (1+패닉) 에 비례해 도망 방향으로 C자 ===
+      let dH = f.heading - f.prevHeading;
+      dH = Math.atan2(Math.sin(dH), Math.cos(dH));
+      f.prevHeading = f.heading;
+      let targetBend = (dH / dtSec) * BEND_GAIN * (1 + f.panic * 1.5);
+      if (targetBend > BEND_MAX) targetBend = BEND_MAX; else if (targetBend < -BEND_MAX) targetBend = -BEND_MAX;
+      f.bend += (targetBend - f.bend) * Math.min(1, BEND_SMOOTH * dtSec);
+
       function px2clip(out, oi, X, Y, u, v) {
         out[oi] = (X / W) * 2 - 1; out[oi + 1] = 1 - (Y / H) * 2;
         out[oi + 2] = u; out[oi + 3] = v;
       }
-      px2clip(fishVerts, vi, Ax, Ay, u0, v0); vi += 4;
-      px2clip(fishVerts, vi, Bx, By, u1, v0); vi += 4;
-      px2clip(fishVerts, vi, Cx, Cy, u0, v1); vi += 4;
-      px2clip(fishVerts, vi, Cx, Cy, u0, v1); vi += 4;
-      px2clip(fishVerts, vi, Bx, By, u1, v0); vi += 4;
-      px2clip(fishVerts, vi, Dx, Dy, u1, v1); vi += 4;
+      // 머리에서 꼬리로 척추를 걸으며 분절 스트립 생성. 뒤 방향 = (heading+π) - bend*t → 꼬리가 휜다.
+      const headWX = cx + fwdx * hl, headWY = cy + fwdy * hl;
+      const stepLen = lenPx / FISH_SEG, baseBack = f.heading + Math.PI;
+      let spx = headWX, spy = headWY;
+      let pLx = 0, pLy = 0, pRx = 0, pRy = 0, pV = v0;
+      for (let sgi = 0; sgi <= FISH_SEG; sgi++) {
+        const t = sgi / FISH_SEG;
+        const backAng = baseBack - f.bend * t;
+        const fwdAng = backAng + Math.PI;
+        const perpx = -Math.sin(fwdAng), perpy = Math.cos(fwdAng);
+        const lx = spx + perpx * hw, ly = spy + perpy * hw;   // 좌 → u0
+        const rx = spx - perpx * hw, ry = spy - perpy * hw;   // 우 → u1
+        const vv = v0 + (v1 - v0) * t;
+        if (sgi > 0) {
+          px2clip(fishVerts, vi, pLx, pLy, u0, pV); vi += 4;
+          px2clip(fishVerts, vi, pRx, pRy, u1, pV); vi += 4;
+          px2clip(fishVerts, vi, lx, ly, u0, vv); vi += 4;
+          px2clip(fishVerts, vi, lx, ly, u0, vv); vi += 4;
+          px2clip(fishVerts, vi, pRx, pRy, u1, pV); vi += 4;
+          px2clip(fishVerts, vi, rx, ry, u1, vv); vi += 4;
+        }
+        pLx = lx; pLy = ly; pRx = rx; pRy = ry; pV = vv;
+        if (sgi < FISH_SEG) { spx += Math.cos(backAng) * stepLen; spy += Math.sin(backAng) * stepLen; }
+      }
 
       // 꼬리 쪽에 아주 약한 잔물결(wake)
       f.rip -= dtSec;
