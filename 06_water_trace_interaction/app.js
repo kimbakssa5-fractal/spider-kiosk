@@ -420,34 +420,12 @@
   const MOTION_DIFF_T = 12;            // 셀 휘도 변화 임계(민감)
   const MOTION_BLOCK_T = 0.05;         // 블록 strength 임계(이상이면 도망 점 생성)
   const MOTION_FLEE_MULT = 1.5;        // 모션 점 도망 반경 배수(사람은 넓게)
-  const MOTION_SPLASH_MS = 110;        // 모션 물결 주기
+  const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
+  const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
   const CAM_MIRROR = false;            // 좌우 반전(거울 끔) — 모션 매핑
   let camOn = false, xrayOn = false, camStream = null, camVideo = null;
   let mctx = null, prevLuma = null, motionAcc = 0, motionSplashAcc = 0, motionTotal = 0;
-
-  function motionFromLuma(luma, prev, W, H) {
-    const blocks = new Float32Array(MBX * MBY);
-    let total = 0;
-    for (let y = 0; y < MH; y++) {
-      const by = (y * MBY / MH) | 0, row = y * MW;
-      for (let x = 0; x < MW; x++) {
-        const d = Math.abs(luma[row + x] - prev[row + x]);
-        if (d > MOTION_DIFF_T) { blocks[by * MBX + (x * MBX / MW | 0)] += d; total += d; }
-      }
-    }
-    motionTotal = total;
-    const cellsPerBlock = (MW / MBX) * (MH / MBY);
-    const pts = [];
-    for (let by = 0; by < MBY; by++) {
-      for (let bx = 0; bx < MBX; bx++) {
-        const strength = Math.min(1, blocks[by * MBX + bx] / (cellsPerBlock * 70));
-        if (strength > MOTION_BLOCK_T) {
-          pts.push({ x: ((bx + 0.5) / MBX) * W, y: ((by + 0.5) / MBY) * H, w: strength, r: MOTION_FLEE_MULT });
-        }
-      }
-    }
-    return pts;
-  }
+  let motionCells = [];                // 이번 틱에 움직인 미세 셀들 {x,y,d} (MW×MH 좌표) — 물결 발생용
 
   function updateMotion() {
     if (!camOn || !camVideo || camVideo.readyState < 2 || !camVideo.videoWidth) return;
@@ -457,15 +435,50 @@
     const luma = new Float32Array(MW * MH);
     for (let i = 0, p = 0; i < luma.length; i++, p += 4)
       luma[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
-    if (prevLuma) motionPoints = motionFromLuma(luma, prevLuma, window.innerWidth, window.innerHeight);
+    if (prevLuma) {
+      const W = window.innerWidth, H = window.innerHeight;
+      const blocks = new Float32Array(MBX * MBY);
+      const cells = [];
+      let total = 0;
+      for (let y = 0; y < MH; y++) {
+        const row = y * MW, by = (y * MBY / MH) | 0;
+        for (let x = 0; x < MW; x++) {
+          const d = Math.abs(luma[row + x] - prevLuma[row + x]);
+          if (d > MOTION_DIFF_T) {
+            blocks[by * MBX + (x * MBX / MW | 0)] += d;
+            total += d;
+            cells.push({ x: x, y: y, d: d });        // 실제 움직인 미세 셀(연속 위치원)
+          }
+        }
+      }
+      motionTotal = total;
+      motionCells = cells;
+      // 물고기 도망용 = 코어스 블록 점(시각적 격자 무관)
+      const cellsPerBlock = (MW / MBX) * (MH / MBY);
+      const pts = [];
+      for (let by = 0; by < MBY; by++) {
+        for (let bx = 0; bx < MBX; bx++) {
+          const strength = Math.min(1, blocks[by * MBX + bx] / (cellsPerBlock * 70));
+          if (strength > MOTION_BLOCK_T)
+            pts.push({ x: ((bx + 0.5) / MBX) * W, y: ((by + 0.5) / MBY) * H, w: strength, r: MOTION_FLEE_MULT });
+        }
+      }
+      motionPoints = pts;
+    }
     prevLuma = luma;
   }
 
-  // 모션 지점에 물결도 일으켜 카메라 반응을 눈에 보이게(잔물결)
+  // 물결은 '실제 움직인 미세 셀'에서 발생 + 셀 내부 랜덤 지터 → 격자 정렬 없이 사람 움직임을 따라감.
   function motionSplashes() {
-    for (let i = 0; i < motionPoints.length; i++) {
-      const mp = motionPoints[i];
-      if (mp.w > 0.12) splash(mp.x, mp.y, 90 + 140 * mp.w);
+    const cells = motionCells;
+    if (!cells.length) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const n = Math.min(MOTION_SPLASH_N, cells.length);
+    for (let i = 0; i < n; i++) {
+      const c = cells[(Math.random() * cells.length) | 0];   // 강한 영역일수록 셀이 많아 더 자주 뽑힘
+      const sx = ((c.x + Math.random()) / MW) * W;            // 셀 내부 지터(연속 위치)
+      const sy = ((c.y + Math.random()) / MH) * H;
+      splash(sx, sy, 70 + 90 * Math.min(1, c.d / 100));       // 작은 물결 다수 → 자연스러운 교란
     }
   }
 
