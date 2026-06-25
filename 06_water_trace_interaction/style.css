@@ -164,11 +164,10 @@ html, body {
   opacity: 1;
 }
 
-/* 카메라 video: 기본은 우하단 작은 거울 미리보기 */
+/* 카메라 video: 기본은 우하단 작은 미리보기 (좌우 반전=거울 끔, 모션 매핑과 일치) */
 #camVideo {
   position: fixed;
   pointer-events: none;
-  transform: scaleX(-1);            /* 거울 */
   background: #000;
 }
 #camVideo.preview {

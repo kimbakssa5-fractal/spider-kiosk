@@ -421,7 +421,7 @@
   const MOTION_BLOCK_T = 0.05;         // 블록 strength 임계(이상이면 도망 점 생성)
   const MOTION_FLEE_MULT = 1.5;        // 모션 점 도망 반경 배수(사람은 넓게)
   const MOTION_SPLASH_MS = 110;        // 모션 물결 주기
-  const CAM_MIRROR = true;
+  const CAM_MIRROR = false;            // 좌우 반전(거울 끔) — 모션 매핑
   let camOn = false, xrayOn = false, camStream = null, camVideo = null;
   let mctx = null, prevLuma = null, motionAcc = 0, motionSplashAcc = 0, motionTotal = 0;
 
