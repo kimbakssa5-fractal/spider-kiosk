@@ -794,6 +794,7 @@
       case "KeyF": if (e.repeat) return; e.preventDefault(); toggleFullscreen(); break;
       case "KeyM": if (e.repeat) return; e.preventDefault(); toggleMenu(); break;
       case "KeyC": if (e.repeat) return; e.preventDefault(); toggleCamera(); break;
+      case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
       case "Digit3": case "Numpad3": e.preventDefault(); adjust("DISP", +1); break;
