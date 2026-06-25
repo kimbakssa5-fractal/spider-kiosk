@@ -588,7 +588,13 @@
     let vi = 0;
     for (let k = 0; k < fishes.length; k++) {
       const f = fishes[k];
-      const fx = f.nx * W, fy = f.ny * H;            // 현재 위치(px)
+      const lenPx = f.lenFrac * minDim;
+      const hl = lenPx * 0.5;
+      const fx = f.nx * W, fy = f.ny * H;            // 현재 중심(px)
+      const oldHeading = f.heading;
+      // 머리(회전 피벗) 위치 — 도망 시 이 점을 고정하고 몸이 회전
+      const headX = fx + Math.cos(oldHeading) * hl;
+      const headY = fy + Math.sin(oldHeading) * hl;
 
       // --- 도망: 가까운 포인터(들)로부터 멀어지는 방향으로 빠르게 선회 ---
       let ax = 0, ay = 0, maxS = 0;
@@ -618,11 +624,19 @@
       // 천천히 배회: heading 에 느린 사인 흔들림 (패닉 시엔 약화, 몸통 일렁임은 프레임 애니메이션 담당)
       f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec * (1 - Math.min(1, f.panic));
       f.frame += f.animFps * (1 + f.panic * 1.8) * dtSec;   // 패닉 시 꼬리짓 빨라짐
-      const lenPx = f.lenFrac * minDim;
+
+      // 회전축: 평상시엔 몸 중앙, 도망(패닉)할수록 머리로 → 머리 고정하고 몸·꼬리가 휙 돈다
+      const pivotW = Math.min(1, f.panic * 1.3);
+      const headPivotCx = headX - Math.cos(f.heading) * hl;
+      const headPivotCy = headY - Math.sin(f.heading) * hl;
+      let cxC = fx + (headPivotCx - fx) * pivotW;
+      let cyC = fy + (headPivotCy - fy) * pivotW;
+
+      // 전진(heading 방향)
       const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST);  // 패닉 시 가속
-      // 이동(heading 방향). 정규화 좌표로 누적(축별 px→정규화).
-      f.nx += Math.cos(f.heading) * speedPx * dtSec / W;
-      f.ny += Math.sin(f.heading) * speedPx * dtSec / H;
+      cxC += Math.cos(f.heading) * speedPx * dtSec;
+      cyC += Math.sin(f.heading) * speedPx * dtSec;
+      f.nx = cxC / W; f.ny = cyC / H;
       // 화면 밖으로 완전히 나가면 반대편에서 재등장
       const mx = lenPx / W, my = lenPx / H;
       if (f.nx < -mx) f.nx = 1 + mx; else if (f.nx > 1 + mx) f.nx = -mx;
@@ -633,7 +647,7 @@
 
       const cellW = koiAtlas.cellW, cellH = koiAtlas.cellH;
       const aspect = cellW / cellH;                  // 몸 폭/길이
-      const hl = lenPx * 0.5, hw = hl * aspect;
+      const hw = hl * aspect;
       const cx = f.nx * W, cy = f.ny * H;             // 중심(px, top-down)
 
       // 현재 프레임 셀 → UV (변종 셀범위 내에서 사이클, 머리=셀 위 v0, 꼬리=셀 아래 v1)
