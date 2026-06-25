@@ -473,27 +473,43 @@
     if (!camVideo) return;
     camVideo.className = xrayOn ? "xray" : "preview";
   }
+  function onCamStream(stream, cb) {
+    camStream = stream;
+    camVideo = document.createElement("video");
+    camVideo.id = "camVideo";
+    camVideo.autoplay = true; camVideo.playsInline = true; camVideo.muted = true;
+    camVideo.srcObject = stream;
+    document.body.appendChild(camVideo);   // DOM 에 붙여야 프레임이 안정적으로 디코드됨
+    camVideo.play().catch(function () {});
+    const mc = document.createElement("canvas"); mc.width = MW; mc.height = MH;
+    mctx = mc.getContext("2d", { willReadFrequently: true });
+    prevLuma = null; motionPoints = []; camOn = true;
+    applyCamClass();
+    showHud("CAMERA on");
+    if (cb) cb();
+  }
   function startCamera(cb) {
     if (camOn) { if (cb) cb(); return; }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showHud("카메라 미지원"); return; }
+    if (!window.isSecureContext) { showHud("HTTPS(보안 연결) 필요"); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showHud("이 브라우저는 카메라 미지원"); return; }
     showHud("카메라 요청…");
-    navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: "user" }, audio: false })
-      .then(function (stream) {
-        camStream = stream;
-        camVideo = document.createElement("video");
-        camVideo.id = "camVideo";
-        camVideo.autoplay = true; camVideo.playsInline = true; camVideo.muted = true;
-        camVideo.srcObject = stream;
-        document.body.appendChild(camVideo);   // DOM 에 붙여야 프레임이 안정적으로 디코드됨
-        camVideo.play().catch(function () {});
-        const mc = document.createElement("canvas"); mc.width = MW; mc.height = MH;
-        mctx = mc.getContext("2d", { willReadFrequently: true });
-        prevLuma = null; motionPoints = []; camOn = true;
-        applyCamClass();
-        showHud("CAMERA on");
-        if (cb) cb();
-      })
-      .catch(function () { showHud("카메라 거부/실패"); });
+    function fail(err) {
+      const name = (err && err.name) || "?";
+      console.warn("getUserMedia 실패:", name, err && err.message);
+      let msg = "카메라 실패: " + name;
+      if (name === "NotAllowedError") msg = "카메라 권한 거부됨 — 주소창 카메라 아이콘에서 허용";
+      else if (name === "NotReadableError" || name === "TrackStartError") msg = "카메라 사용 중(다른 앱) — 닫고 다시";
+      else if (name === "NotFoundError" || name === "OverconstrainedError") msg = "카메라 장치를 못 찾음";
+      showHud(msg);
+    }
+    // 1차: 이상적 해상도(제약 약함) → 실패 시 2차: video:true(최소 제약)
+    navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      .then(function (stream) { onCamStream(stream, cb); })
+      .catch(function () {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          .then(function (stream) { onCamStream(stream, cb); })
+          .catch(fail);
+      });
   }
   function stopCamera() {
     if (!camOn) return;
