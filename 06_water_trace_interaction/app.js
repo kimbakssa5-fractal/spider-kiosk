@@ -42,6 +42,12 @@
   const FISH_LEN_MIN = 0.22, FISH_LEN_MAX = 0.34;  // 화면 짧은변 대비 몸길이 비율 (크게)
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
+  // 도망 상호작용: 마우스 커서/터치 드래그가 가까이 오면 반대로 빠르게 헤엄쳐 달아남
+  const FLEE_RADIUS_FRAC = 0.26;      // 도망 반경(화면 짧은변 대비)
+  const FLEE_BOOST = 4.0;             // 패닉 시 속도 배수(+)
+  const FLEE_TURN = 11.0;             // 패닉 시 방향 전환 속도(rad/s 가중)
+  const PANIC_DECAY = 0.75;           // 패닉 감쇠 시간상수(초)
+  const POINTER_TTL = 0.45;           // 포인터가 멈춘 뒤 이만큼 지나면 진정(초)
 
   const canvas = document.getElementById("scene");
   const ambient = document.getElementById("ambient");
@@ -293,6 +299,7 @@
       frame: Math.random() * variant.count,         // 헤엄 사이클 위상(프레임)
       animFps: koiAtlas.fps * rand(0.8, 1.12),
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
+      panic: 0,                                       // 도망 흥분도(0~1+), 시간에 따라 감쇠
     };
   }
   function spawnFishes() {
@@ -376,15 +383,29 @@
     }
   }
 
+  // 활성 포인터 추적 (도망 상호작용용). 마우스는 hover, 터치는 접촉 중 위치.
+  //   POINTER_TTL 동안 움직임이 없으면 비활성 → 물고기 진정.
+  const pointers = new Map();   // id -> {x, y, t(sec)}
+  function nowSec() { return performance.now() / 1000; }
+  function notePointer(id, x, y) { pointers.set(id, { x: x, y: y, t: nowSec() }); }
+  function dropPointer(id) { pointers.delete(id); }
+
   canvas.style.touchAction = "none";
   canvas.addEventListener("pointerdown", function (e) {
     splash(e.clientX, e.clientY);
+    notePointer(e.pointerId, e.clientX, e.clientY);
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   });
   canvas.addEventListener("pointermove", function (e) {
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evs) splash(ev.clientX, ev.clientY);
+    notePointer(e.pointerId, e.clientX, e.clientY);
   });
+  canvas.addEventListener("pointerup", function (e) { dropPointer(e.pointerId); });
+  canvas.addEventListener("pointercancel", function (e) { dropPointer(e.pointerId); });
+  // 마우스가 창 밖으로 나가면 그 포인터 제거(물고기 진정)
+  window.addEventListener("pointerout", function (e) { if (e.pointerType === "mouse") dropPointer(e.pointerId); });
+  window.addEventListener("blur", function () { pointers.clear(); });
 
   // ---------------------------------------------------------------
   // 파동 시뮬레이션
@@ -422,14 +443,47 @@
     if (W == null) W = window.innerWidth;
     if (H == null) H = window.innerHeight;
     const minDim = Math.min(W, H);
+    // 활성 포인터 목록(만료 제거) — 도망 계산용
+    const tnow = nowSec();
+    const active = [];
+    pointers.forEach(function (p, id) {
+      if (tnow - p.t > POINTER_TTL) pointers.delete(id);
+      else active.push(p);
+    });
+    const fleeR = FLEE_RADIUS_FRAC * minDim;
     let vi = 0;
     for (let k = 0; k < fishes.length; k++) {
       const f = fishes[k];
-      // 천천히 배회: heading 에 느린 사인 흔들림 (몸통 일렁임은 프레임 애니메이션이 담당)
-      f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec;
-      f.frame += f.animFps * dtSec;     // 헤엄 사이클 진행
+      const fx = f.nx * W, fy = f.ny * H;            // 현재 위치(px)
+
+      // --- 도망: 가까운 포인터(들)로부터 멀어지는 방향으로 빠르게 선회 ---
+      let ax = 0, ay = 0, maxS = 0;
+      for (let pi = 0; pi < active.length; pi++) {
+        const dx = fx - active[pi].x, dy = fy - active[pi].y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < fleeR) {
+          const s = 1 - dist / fleeR;                // 0(가장자리)~1(중심)
+          const inv = s / (dist || 1);
+          ax += dx * inv; ay += dy * inv;            // 멀어지는 방향(가중)
+          if (s > maxS) maxS = s;
+        }
+      }
+      if (maxS > 0 && (ax || ay)) {
+        const desired = Math.atan2(ay, ax);
+        let diff = desired - f.heading;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // [-π,π]
+        f.heading += diff * Math.min(1, FLEE_TURN * (0.3 + maxS) * dtSec);
+        if (maxS > f.panic) f.panic = maxS;          // 흥분도 상승
+      }
+      // 패닉 감쇠
+      f.panic *= Math.exp(-dtSec / PANIC_DECAY);
+      if (f.panic < 0.003) f.panic = 0;
+
+      // 천천히 배회: heading 에 느린 사인 흔들림 (패닉 시엔 약화, 몸통 일렁임은 프레임 애니메이션 담당)
+      f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec * (1 - Math.min(1, f.panic));
+      f.frame += f.animFps * (1 + f.panic * 1.8) * dtSec;   // 패닉 시 꼬리짓 빨라짐
       const lenPx = f.lenFrac * minDim;
-      const speedPx = f.speedFrac * minDim;
+      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST);  // 패닉 시 가속
       // 이동(heading 방향). 정규화 좌표로 누적(축별 px→정규화).
       f.nx += Math.cos(f.heading) * speedPx * dtSec / W;
       f.ny += Math.sin(f.heading) * speedPx * dtSec / H;
