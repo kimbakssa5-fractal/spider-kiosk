@@ -163,3 +163,20 @@ html, body {
 #hud.show {
   opacity: 1;
 }
+
+/* 카메라 미리보기(거울) — 작동 확인용, 우하단 */
+#camPreview {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: 180px;
+  height: 101px;
+  object-fit: cover;
+  transform: scaleX(-1);            /* 거울 */
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  opacity: 0.85;
+  z-index: 9;
+  background: #000;
+  pointer-events: none;
+}

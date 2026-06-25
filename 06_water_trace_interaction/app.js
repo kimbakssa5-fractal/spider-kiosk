@@ -386,6 +386,7 @@
   // 활성 포인터 추적 (도망 상호작용용). 마우스는 hover, 터치는 접촉 중 위치.
   //   POINTER_TTL 동안 움직임이 없으면 비활성 → 물고기 진정.
   const pointers = new Map();   // id -> {x, y, t(sec)}
+  let motionPoints = [];        // 카메라 모션 점 [{x,y,w}] (CSS px) — 매 모션틱 갱신
   function nowSec() { return performance.now() / 1000; }
   function notePointer(id, x, y) { pointers.set(id, { x: x, y: y, t: nowSec() }); }
   function dropPointer(id) { pointers.delete(id); }
@@ -406,6 +407,87 @@
   // 마우스가 창 밖으로 나가면 그 포인터 제거(물고기 진정)
   window.addEventListener("pointerout", function (e) { if (e.pointerType === "mouse") dropPointer(e.pointerId); });
   window.addEventListener("blur", function () { pointers.clear(); });
+
+  // ---------------------------------------------------------------
+  // 카메라(웹캠 C920) 모션 반응
+  //   영상을 작은 격자에 그려 프레임 차분 → 움직이는 블록을 도망 점(motionPoints)으로.
+  //   거울처럼 좌우 반전 매핑. 권한 필요 → 버튼/C 키로 켠다(키오스크는 1회 탭).
+  // ---------------------------------------------------------------
+  const MW = 64, MH = 36;              // 모션 샘플 격자
+  const MBX = 8, MBY = 5;              // 도망 점 블록 격자
+  const MOTION_MS = 70;                // 모션 검사 주기
+  const MOTION_DIFF_T = 20;            // 셀 휘도 변화 임계
+  const MOTION_BLOCK_T = 0.14;         // 블록 strength 임계(이상이면 도망 점 생성)
+  const CAM_MIRROR = true;
+  let camOn = false, camStream = null, camVideo = null;
+  let mctx = null, prevLuma = null, camPreview = null, motionAcc = 0;
+
+  function motionFromLuma(luma, prev, W, H) {
+    const blocks = new Float32Array(MBX * MBY);
+    for (let y = 0; y < MH; y++) {
+      const by = (y * MBY / MH) | 0, row = y * MW;
+      for (let x = 0; x < MW; x++) {
+        const d = Math.abs(luma[row + x] - prev[row + x]);
+        if (d > MOTION_DIFF_T) blocks[by * MBX + (x * MBX / MW | 0)] += d;
+      }
+    }
+    const cellsPerBlock = (MW / MBX) * (MH / MBY);
+    const pts = [];
+    for (let by = 0; by < MBY; by++) {
+      for (let bx = 0; bx < MBX; bx++) {
+        const strength = Math.min(1, blocks[by * MBX + bx] / (cellsPerBlock * 110));
+        if (strength > MOTION_BLOCK_T) {
+          pts.push({ x: ((bx + 0.5) / MBX) * W, y: ((by + 0.5) / MBY) * H, w: strength });
+        }
+      }
+    }
+    return pts;
+  }
+
+  function updateMotion() {
+    if (!camOn || !camVideo || camVideo.readyState < 2) return;
+    if (CAM_MIRROR) { mctx.save(); mctx.scale(-1, 1); mctx.drawImage(camVideo, -MW, 0, MW, MH); mctx.restore(); }
+    else mctx.drawImage(camVideo, 0, 0, MW, MH);
+    const data = mctx.getImageData(0, 0, MW, MH).data;
+    const luma = new Float32Array(MW * MH);
+    for (let i = 0, p = 0; i < luma.length; i++, p += 4)
+      luma[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+    if (prevLuma) motionPoints = motionFromLuma(luma, prevLuma, window.innerWidth, window.innerHeight);
+    prevLuma = luma;
+  }
+
+  function startCamera() {
+    if (camOn) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showHud("카메라 미지원"); return; }
+    showHud("카메라 요청…");
+    navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: "user" }, audio: false })
+      .then(function (stream) {
+        camStream = stream;
+        camVideo = document.createElement("video");
+        camVideo.autoplay = true; camVideo.playsInline = true; camVideo.muted = true;
+        camVideo.srcObject = stream;
+        camVideo.play().catch(function () {});
+        const mc = document.createElement("canvas"); mc.width = MW; mc.height = MH;
+        mctx = mc.getContext("2d", { willReadFrequently: true });
+        prevLuma = null; motionPoints = []; camOn = true;
+        // 작은 미리보기(거울) — 작동 확인용
+        camPreview = document.createElement("video");
+        camPreview.autoplay = true; camPreview.playsInline = true; camPreview.muted = true;
+        camPreview.srcObject = stream; camPreview.id = "camPreview";
+        document.body.appendChild(camPreview);
+        showHud("CAMERA on");
+      })
+      .catch(function () { showHud("카메라 거부/실패"); });
+  }
+  function stopCamera() {
+    if (!camOn) return;
+    camOn = false; motionPoints = []; prevLuma = null;
+    if (camStream) camStream.getTracks().forEach(function (t) { t.stop(); });
+    camStream = null; camVideo = null; mctx = null;
+    if (camPreview) { camPreview.remove(); camPreview = null; }
+    showHud("CAMERA off");
+  }
+  function toggleCamera() { camOn ? stopCamera() : startCamera(); }
 
   // ---------------------------------------------------------------
   // 파동 시뮬레이션
@@ -443,13 +525,14 @@
     if (W == null) W = window.innerWidth;
     if (H == null) H = window.innerHeight;
     const minDim = Math.min(W, H);
-    // 활성 포인터 목록(만료 제거) — 도망 계산용
+    // 도망 소스 = 활성 포인터(마우스/터치, 가중 1) + 카메라 모션 점(가중 strength)
     const tnow = nowSec();
     const active = [];
     pointers.forEach(function (p, id) {
       if (tnow - p.t > POINTER_TTL) pointers.delete(id);
-      else active.push(p);
+      else active.push({ x: p.x, y: p.y, w: 1 });
     });
+    for (let mi = 0; mi < motionPoints.length; mi++) active.push(motionPoints[mi]);
     const fleeR = FLEE_RADIUS_FRAC * minDim;
     let vi = 0;
     for (let k = 0; k < fishes.length; k++) {
@@ -462,7 +545,7 @@
         const dx = fx - active[pi].x, dy = fy - active[pi].y;
         const dist = Math.hypot(dx, dy);
         if (dist < fleeR) {
-          const s = 1 - dist / fleeR;                // 0(가장자리)~1(중심)
+          const s = (1 - dist / fleeR) * active[pi].w; // 0~1, 모션 점은 strength 가중
           const inv = s / (dist || 1);
           ax += dx * inv; ay += dy * inv;            // 멀어지는 방향(가중)
           if (s > maxS) maxS = s;
@@ -591,6 +674,8 @@
     while (acc >= STEP_MS && n < 4) { step(); acc -= STEP_MS; n++; }
 
     const dtSec = dt / 1000, tSec = (now - startT) / 1000;
+    // 카메라 모션 검사(주기적)
+    if (camOn) { motionAcc += dt; if (motionAcc >= MOTION_MS) { motionAcc = 0; updateMotion(); } }
     const fishVertCount = updateFishes(dtSec, tSec);
     renderScene(fishVertCount);
 
@@ -636,6 +721,8 @@
   soundBtn.addEventListener("click", toggleSound);
   hideBtn.addEventListener("click", toggleMenu);
   fsBtn.addEventListener("click", toggleFullscreen);
+  const camBtn = document.getElementById("camBtn");
+  if (camBtn) camBtn.addEventListener("click", toggleCamera);
 
   // ---------------------------------------------------------------
   // 실시간 미세조정 + HUD
@@ -681,6 +768,7 @@
       case "KeyS": if (e.repeat) return; e.preventDefault(); toggleSound(); break;
       case "KeyF": if (e.repeat) return; e.preventDefault(); toggleFullscreen(); break;
       case "KeyM": if (e.repeat) return; e.preventDefault(); toggleMenu(); break;
+      case "KeyC": if (e.repeat) return; e.preventDefault(); toggleCamera(); break;
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
       case "Digit3": case "Numpad3": e.preventDefault(); adjust("DISP", +1); break;
