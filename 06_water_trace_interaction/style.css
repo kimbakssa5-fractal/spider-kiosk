@@ -164,19 +164,33 @@ html, body {
   opacity: 1;
 }
 
-/* 카메라 미리보기(거울) — 작동 확인용, 우하단 */
-#camPreview {
+/* 카메라 video: 기본은 우하단 작은 거울 미리보기 */
+#camVideo {
   position: fixed;
+  pointer-events: none;
+  transform: scaleX(-1);            /* 거울 */
+  background: #000;
+}
+#camVideo.preview {
   right: 12px;
   bottom: 12px;
   width: 180px;
   height: 101px;
   object-fit: cover;
-  transform: scaleX(-1);            /* 거울 */
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 6px;
   opacity: 0.85;
   z-index: 9;
-  background: #000;
-  pointer-events: none;
+}
+/* X 키: 카메라를 전체 화면에 X레이처럼 투영 (반전+시안, screen 블렌드) */
+#camVideo.xray {
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  z-index: 7;                       /* 물 캔버스 위, 툴바/힌트 아래 */
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  filter: invert(1) grayscale(1) brightness(1.15) contrast(1.5) sepia(1) hue-rotate(140deg) saturate(4);
 }

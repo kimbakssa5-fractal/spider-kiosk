@@ -409,35 +409,40 @@
   window.addEventListener("blur", function () { pointers.clear(); });
 
   // ---------------------------------------------------------------
-  // 카메라(웹캠 C920) 모션 반응
+  // 카메라(웹캠 C920) 모션 반응 + X레이 투영
   //   영상을 작은 격자에 그려 프레임 차분 → 움직이는 블록을 도망 점(motionPoints)으로.
   //   거울처럼 좌우 반전 매핑. 권한 필요 → 버튼/C 키로 켠다(키오스크는 1회 탭).
+  //   X 키: 카메라 화면을 전체에 X레이처럼 투영(반전+시안 틴트, screen 블렌드).
   // ---------------------------------------------------------------
-  const MW = 64, MH = 36;              // 모션 샘플 격자
+  const MW = 80, MH = 45;              // 모션 샘플 격자
   const MBX = 8, MBY = 5;              // 도망 점 블록 격자
-  const MOTION_MS = 70;                // 모션 검사 주기
-  const MOTION_DIFF_T = 20;            // 셀 휘도 변화 임계
-  const MOTION_BLOCK_T = 0.14;         // 블록 strength 임계(이상이면 도망 점 생성)
+  const MOTION_MS = 66;                // 모션 검사 주기
+  const MOTION_DIFF_T = 12;            // 셀 휘도 변화 임계(민감)
+  const MOTION_BLOCK_T = 0.05;         // 블록 strength 임계(이상이면 도망 점 생성)
+  const MOTION_FLEE_MULT = 1.5;        // 모션 점 도망 반경 배수(사람은 넓게)
+  const MOTION_SPLASH_MS = 110;        // 모션 물결 주기
   const CAM_MIRROR = true;
-  let camOn = false, camStream = null, camVideo = null;
-  let mctx = null, prevLuma = null, camPreview = null, motionAcc = 0;
+  let camOn = false, xrayOn = false, camStream = null, camVideo = null;
+  let mctx = null, prevLuma = null, motionAcc = 0, motionSplashAcc = 0, motionTotal = 0;
 
   function motionFromLuma(luma, prev, W, H) {
     const blocks = new Float32Array(MBX * MBY);
+    let total = 0;
     for (let y = 0; y < MH; y++) {
       const by = (y * MBY / MH) | 0, row = y * MW;
       for (let x = 0; x < MW; x++) {
         const d = Math.abs(luma[row + x] - prev[row + x]);
-        if (d > MOTION_DIFF_T) blocks[by * MBX + (x * MBX / MW | 0)] += d;
+        if (d > MOTION_DIFF_T) { blocks[by * MBX + (x * MBX / MW | 0)] += d; total += d; }
       }
     }
+    motionTotal = total;
     const cellsPerBlock = (MW / MBX) * (MH / MBY);
     const pts = [];
     for (let by = 0; by < MBY; by++) {
       for (let bx = 0; bx < MBX; bx++) {
-        const strength = Math.min(1, blocks[by * MBX + bx] / (cellsPerBlock * 110));
+        const strength = Math.min(1, blocks[by * MBX + bx] / (cellsPerBlock * 70));
         if (strength > MOTION_BLOCK_T) {
-          pts.push({ x: ((bx + 0.5) / MBX) * W, y: ((by + 0.5) / MBY) * H, w: strength });
+          pts.push({ x: ((bx + 0.5) / MBX) * W, y: ((by + 0.5) / MBY) * H, w: strength, r: MOTION_FLEE_MULT });
         }
       }
     }
@@ -445,7 +450,7 @@
   }
 
   function updateMotion() {
-    if (!camOn || !camVideo || camVideo.readyState < 2) return;
+    if (!camOn || !camVideo || camVideo.readyState < 2 || !camVideo.videoWidth) return;
     if (CAM_MIRROR) { mctx.save(); mctx.scale(-1, 1); mctx.drawImage(camVideo, -MW, 0, MW, MH); mctx.restore(); }
     else mctx.drawImage(camVideo, 0, 0, MW, MH);
     const data = mctx.getImageData(0, 0, MW, MH).data;
@@ -456,38 +461,53 @@
     prevLuma = luma;
   }
 
-  function startCamera() {
-    if (camOn) return;
+  // 모션 지점에 물결도 일으켜 카메라 반응을 눈에 보이게(잔물결)
+  function motionSplashes() {
+    for (let i = 0; i < motionPoints.length; i++) {
+      const mp = motionPoints[i];
+      if (mp.w > 0.12) splash(mp.x, mp.y, 90 + 140 * mp.w);
+    }
+  }
+
+  function applyCamClass() {
+    if (!camVideo) return;
+    camVideo.className = xrayOn ? "xray" : "preview";
+  }
+  function startCamera(cb) {
+    if (camOn) { if (cb) cb(); return; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showHud("카메라 미지원"); return; }
     showHud("카메라 요청…");
-    navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: "user" }, audio: false })
+    navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: "user" }, audio: false })
       .then(function (stream) {
         camStream = stream;
         camVideo = document.createElement("video");
+        camVideo.id = "camVideo";
         camVideo.autoplay = true; camVideo.playsInline = true; camVideo.muted = true;
         camVideo.srcObject = stream;
+        document.body.appendChild(camVideo);   // DOM 에 붙여야 프레임이 안정적으로 디코드됨
         camVideo.play().catch(function () {});
         const mc = document.createElement("canvas"); mc.width = MW; mc.height = MH;
         mctx = mc.getContext("2d", { willReadFrequently: true });
         prevLuma = null; motionPoints = []; camOn = true;
-        // 작은 미리보기(거울) — 작동 확인용
-        camPreview = document.createElement("video");
-        camPreview.autoplay = true; camPreview.playsInline = true; camPreview.muted = true;
-        camPreview.srcObject = stream; camPreview.id = "camPreview";
-        document.body.appendChild(camPreview);
+        applyCamClass();
         showHud("CAMERA on");
+        if (cb) cb();
       })
       .catch(function () { showHud("카메라 거부/실패"); });
   }
   function stopCamera() {
     if (!camOn) return;
-    camOn = false; motionPoints = []; prevLuma = null;
+    camOn = false; xrayOn = false; motionPoints = []; prevLuma = null;
     if (camStream) camStream.getTracks().forEach(function (t) { t.stop(); });
-    camStream = null; camVideo = null; mctx = null;
-    if (camPreview) { camPreview.remove(); camPreview = null; }
+    camStream = null; mctx = null;
+    if (camVideo) { camVideo.remove(); camVideo = null; }
     showHud("CAMERA off");
   }
   function toggleCamera() { camOn ? stopCamera() : startCamera(); }
+  function toggleXray() {
+    if (!camOn) { startCamera(function () { xrayOn = true; applyCamClass(); showHud("X-RAY on"); }); return; }
+    xrayOn = !xrayOn; applyCamClass(); showHud(xrayOn ? "X-RAY on" : "X-RAY off");
+  }
 
   // ---------------------------------------------------------------
   // 파동 시뮬레이션
@@ -530,7 +550,7 @@
     const active = [];
     pointers.forEach(function (p, id) {
       if (tnow - p.t > POINTER_TTL) pointers.delete(id);
-      else active.push({ x: p.x, y: p.y, w: 1 });
+      else active.push({ x: p.x, y: p.y, w: 1, r: 1 });
     });
     for (let mi = 0; mi < motionPoints.length; mi++) active.push(motionPoints[mi]);
     const fleeR = FLEE_RADIUS_FRAC * minDim;
@@ -542,10 +562,12 @@
       // --- 도망: 가까운 포인터(들)로부터 멀어지는 방향으로 빠르게 선회 ---
       let ax = 0, ay = 0, maxS = 0;
       for (let pi = 0; pi < active.length; pi++) {
-        const dx = fx - active[pi].x, dy = fy - active[pi].y;
+        const a = active[pi];
+        const rad = fleeR * (a.r || 1);
+        const dx = fx - a.x, dy = fy - a.y;
         const dist = Math.hypot(dx, dy);
-        if (dist < fleeR) {
-          const s = (1 - dist / fleeR) * active[pi].w; // 0~1, 모션 점은 strength 가중
+        if (dist < rad) {
+          const s = (1 - dist / rad) * a.w;          // 0~1, 모션 점은 strength 가중
           const inv = s / (dist || 1);
           ax += dx * inv; ay += dy * inv;            // 멀어지는 방향(가중)
           if (s > maxS) maxS = s;
@@ -674,8 +696,11 @@
     while (acc >= STEP_MS && n < 4) { step(); acc -= STEP_MS; n++; }
 
     const dtSec = dt / 1000, tSec = (now - startT) / 1000;
-    // 카메라 모션 검사(주기적)
-    if (camOn) { motionAcc += dt; if (motionAcc >= MOTION_MS) { motionAcc = 0; updateMotion(); } }
+    // 카메라 모션 검사(주기적) + 모션 물결
+    if (camOn) {
+      motionAcc += dt; if (motionAcc >= MOTION_MS) { motionAcc = 0; updateMotion(); }
+      motionSplashAcc += dt; if (motionSplashAcc >= MOTION_SPLASH_MS) { motionSplashAcc = 0; motionSplashes(); }
+    }
     const fishVertCount = updateFishes(dtSec, tSec);
     renderScene(fishVertCount);
 
