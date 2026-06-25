@@ -488,28 +488,43 @@
     showHud("CAMERA on");
     if (cb) cb();
   }
+  let camStarting = false;
   function startCamera(cb) {
     if (camOn) { if (cb) cb(); return; }
+    if (camStarting) return;
     if (!window.isSecureContext) { showHud("HTTPS(보안 연결) 필요"); return; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showHud("이 브라우저는 카메라 미지원"); return; }
+    camStarting = true;
     showHud("카메라 요청…");
     function fail(err) {
+      camStarting = false;
       const name = (err && err.name) || "?";
       console.warn("getUserMedia 실패:", name, err && err.message);
       let msg = "카메라 실패: " + name;
       if (name === "NotAllowedError") msg = "카메라 권한 거부됨 — 주소창 카메라 아이콘에서 허용";
-      else if (name === "NotReadableError" || name === "TrackStartError") msg = "카메라 사용 중(다른 앱) — 닫고 다시";
+      else if (name === "NotReadableError" || name === "TrackStartError" || name === "AbortError")
+        msg = "카메라 사용 중 — 다른 탭/줌/Logitech/윈도우 카메라 닫고 C 다시";
       else if (name === "NotFoundError" || name === "OverconstrainedError") msg = "카메라 장치를 못 찾음";
       showHud(msg);
     }
-    // 1차: 이상적 해상도(제약 약함) → 실패 시 2차: video:true(최소 제약)
-    navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
-      .then(function (stream) { onCamStream(stream, cb); })
-      .catch(function () {
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-          .then(function (stream) { onCamStream(stream, cb); })
-          .catch(fail);
-      });
+    function ok(stream) { camStarting = false; onCamStream(stream, cb); }
+    // NotReadable(점유)면 잠깐 뒤 자동 재시도(최대 3회) — 점유가 짧으면 통과
+    let tries = 0;
+    function attempt() {
+      tries++;
+      navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+        .then(ok)
+        .catch(function (err) {
+          const n = err && err.name;
+          if (n === "OverconstrainedError" || n === "NotFoundError") {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(ok).catch(fail);
+          } else if ((n === "NotReadableError" || n === "TrackStartError" || n === "AbortError") && tries < 3) {
+            showHud("카메라 잡는 중… (" + tries + "/3)");
+            setTimeout(attempt, 700);
+          } else fail(err);
+        });
+    }
+    attempt();
   }
   function stopCamera() {
     if (!camOn) return;
