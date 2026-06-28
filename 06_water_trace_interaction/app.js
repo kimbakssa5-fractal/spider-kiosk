@@ -24,10 +24,12 @@
   const LATE = 8;                                  // 시뮬레이션 다운스케일
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
-  // 화면 방향별 기본 배경: PC(가로) = 가로형(트리 90° 회전), 폰(세로) = 세로형
+  // 배경 슬라이드쇼: 아래 이미지들을 순차 크로스페이드 재생(물결에 굴절됨).
+  //   교체/추가: assets/bg-01.jpg, bg-02.jpg ... 파일을 바꾸거나 목록에 더하면 됨.
   const ASSET_VER = "6";
-  const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg?v=" + ASSET_VER;
-  const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg?v=" + ASSET_VER;
+  const BG_SLIDES = ["assets/bg-01.jpg", "assets/bg-02.jpg", "assets/bg-03.jpg"];
+  const SLIDE_HOLD_MS = 8000;          // 각 장면 표시 시간
+  const SLIDE_FADE_MS = 1500;          // 크로스페이드 시간
 
   // 키보드로 실시간 미세조정 (1/2 DAMPING, 3/4 DISP_SCALE, 5/6 SPLASH_RADIUS, 7/8 FPS)
   let SPLASH_RADIUS_PX = 18;
@@ -223,31 +225,79 @@
   // ---------------------------------------------------------------
   // 배경 로딩 / 교체
   // ---------------------------------------------------------------
-  let bgImage = null, bgW = 1, bgH = 1, bgReady = false;
-  let usingDefaultBg = true;
-  let currentDefaultSrc = null;
-  function loadBackground(src) {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = function () {
-      bgImage = img; bgW = img.width; bgH = img.height; bgReady = true;
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, bgTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      updateBgCover();
-    };
-    img.src = src;
+  // 2D 오프스크린 캔버스에 cover-fit 합성 → bgTex 업로드. 셰이더 cover 는 identity.
+  //   전환(크로스페이드) 중에만 매 프레임 업로드 → 평상시 부하 0. 배경은 굴절되므로 1600px 로 캡.
+  const bgCanvas = document.createElement("canvas");
+  const bgCtx = bgCanvas.getContext("2d");
+  let bgReady = false;
+  let slides = [];                       // {img, loaded}
+  let curImg = null, inImg = null;       // 현재/들어오는 이미지
+  let slideIdx = 0, holdAcc = 0, fadeT = 0, transitioning = false;
+  let usingSlideshow = true;             // 수동 배경 교체 시 false (슬라이드쇼 멈춤)
+
+  function sizeBgCanvas() {
+    const aspect = canvasW / Math.max(1, canvasH), cap = 1600;
+    let w = canvasW, h = canvasH;
+    if (Math.max(w, h) > cap) { if (w >= h) { w = cap; h = Math.round(cap / aspect); } else { h = cap; w = Math.round(cap * aspect); } }
+    bgCanvas.width = Math.max(2, w); bgCanvas.height = Math.max(2, h);
   }
-  function applyDefaultBg() {
-    const landscape = window.innerWidth >= window.innerHeight;
-    const src = landscape ? DEFAULT_BG_LANDSCAPE : DEFAULT_BG_PORTRAIT;
-    if (src === currentDefaultSrc) return;
-    currentDefaultSrc = src;
-    loadBackground(src);
+  function coverDraw(img, alpha) {
+    if (!img) return;
+    const cw = bgCanvas.width, ch = bgCanvas.height;
+    const scale = Math.max(cw / img.width, ch / img.height);
+    const dw = img.width * scale, dh = img.height * scale;
+    bgCtx.globalAlpha = alpha;
+    bgCtx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+    bgCtx.globalAlpha = 1;
   }
-  function useCustomBg(dataUrl) {
-    usingDefaultBg = false;
-    loadBackground(dataUrl);
+  function composeUpload() {
+    if (!curImg) return;
+    bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+    coverDraw(curImg, 1);
+    if (transitioning) coverDraw(inImg, Math.min(1, Math.max(0, fadeT)));
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, bgTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bgCanvas);
+    bgReady = true;
+  }
+  function startTransition(img) {
+    if (!img || img === curImg) return;
+    inImg = img; fadeT = 0; transitioning = true;
+  }
+  function nextLoadedSlide() {
+    for (let k = 1; k <= slides.length; k++) {
+      const idx = (slideIdx + k) % slides.length;
+      if (slides[idx].loaded) { slideIdx = idx; return slides[idx].img; }
+    }
+    return null;
+  }
+  function updateBg(dtMs) {
+    if (!bgReady) return;
+    if (transitioning) {
+      fadeT += dtMs / SLIDE_FADE_MS;
+      if (fadeT >= 1) { curImg = inImg; inImg = null; transitioning = false; fadeT = 0; holdAcc = 0; }
+      composeUpload();
+    } else if (usingSlideshow) {
+      holdAcc += dtMs;
+      if (holdAcc >= SLIDE_HOLD_MS) {
+        const nx = nextLoadedSlide();
+        if (nx && nx !== curImg) startTransition(nx); else holdAcc = 0;
+      }
+    }
+  }
+  // 슬라이드 프리로드 (첫 장 로드되면 즉시 표시)
+  BG_SLIDES.forEach(function (s) {
+    const it = { img: new Image(), loaded: false };
+    it.img.crossOrigin = "anonymous";
+    it.img.onload = function () { it.loaded = true; if (!curImg) { curImg = it.img; sizeBgCanvas(); composeUpload(); } };
+    it.img.src = s + "?v=" + ASSET_VER;
+    slides.push(it);
+  });
+  function useCustomBg(srcOrDataUrl) {
+    usingSlideshow = false;              // 슬라이드쇼 멈추고 사용자 배경으로 크로스페이드
+    const img = new Image(); img.crossOrigin = "anonymous";
+    img.onload = function () { if (!curImg) { curImg = img; sizeBgCanvas(); composeUpload(); } else startTransition(img); };
+    img.src = srcOrDataUrl;
   }
 
   bgInput.addEventListener("change", function (e) {
@@ -326,13 +376,10 @@
   let heightData = null;
 
   function updateBgCover() {
-    if (!bgReady) return;
-    const scale = Math.max(canvasW / bgW, canvasH / bgH);
-    const dw = bgW * scale, dh = bgH * scale;
-    const dx = (canvasW - dw) / 2, dy = (canvasH - dh) / 2;
+    // bgCanvas 가 이미 화면비로 cover-fit 되어 있으므로 셰이더 매핑은 identity.
     gl.useProgram(progBg);
-    gl.uniform2f(locBg.uBgScale, canvasW / dw, canvasH / dh);
-    gl.uniform2f(locBg.uBgOffset, -dx / dw, -dy / dh);
+    gl.uniform2f(locBg.uBgScale, 1, 1);
+    gl.uniform2f(locBg.uBgOffset, 0, 0);
   }
 
   function resize() {
@@ -355,7 +402,7 @@
     resizeSceneTex();
     applyDispScale();
     updateBgCover();
-    if (usingDefaultBg) applyDefaultBg();
+    if (curImg) { sizeBgCanvas(); composeUpload(); }   // 새 크기로 배경 재합성
   }
   function applyDispScale() {
     gl.useProgram(progWater);
@@ -789,6 +836,7 @@
       motionAcc += dt; if (motionAcc >= MOTION_MS) { motionAcc = 0; updateMotion(); }
       motionSplashAcc += dt; if (motionSplashAcc >= MOTION_SPLASH_MS) { motionSplashAcc = 0; motionSplashes(); }
     }
+    updateBg(dt);                 // 배경 슬라이드쇼(전환 중에만 텍스처 갱신)
     const fishVertCount = updateFishes(dtSec, tSec);
     renderScene(fishVertCount);
 
