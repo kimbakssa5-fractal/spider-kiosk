@@ -466,8 +466,11 @@
       for (let by = 0; by < MBY; by++) {
         for (let bx = 0; bx < MBX; bx++) {
           const strength = Math.min(1, blocks[by * MBX + bx] / (cellsPerBlock * 70));
-          if (strength > MOTION_BLOCK_T)
-            pts.push({ x: ((bx + 0.5) / MBX) * W, y: ((by + 0.5) / MBY) * H, w: strength, r: MOTION_FLEE_MULT });
+          if (strength > MOTION_BLOCK_T) {
+            // 도망 힘: 마우스(w=1)에 준하도록 높은 바닥값+게인 — 움직임 감지되면 강하게 민다
+            const w = Math.min(1, 0.55 + strength * 2.5);
+            pts.push({ x: ((bx + 0.5) / MBX) * W, y: ((by + 0.5) / MBY) * H, w: w, r: MOTION_FLEE_MULT });
+          }
         }
       }
       motionPoints = pts;
