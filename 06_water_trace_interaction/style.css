@@ -18,8 +18,11 @@ html, body {
 #toolbar {
   position: fixed;
   top: 12px;
+  left: 12px;
   right: 12px;
   display: flex;
+  flex-wrap: wrap;              /* 폭이 좁으면 여러 줄로 — 폰에서 메뉴가 잘리지 않게 */
+  justify-content: flex-end;    /* 데스크톱: 기존처럼 우측 정렬 */
   gap: 8px;
   z-index: 10;
   font-family: sans-serif;
@@ -87,8 +90,7 @@ html, body {
   cursor: default;
 }
 .slider-wrap input[type="range"] {
-  width: 260px;
-  max-width: 42vw;
+  width: 90px;
   accent-color: #9fffbf;
   cursor: pointer;
 }
@@ -239,4 +241,12 @@ html, body {
   opacity: 0.5;                     /* 50% */
   mix-blend-mode: normal;
   filter: none;                     /* 반전 제거 — 실제 카메라 화면 */
+}
+
+/* 좁은 화면(폰): 툴바 버튼이 잘리지 않게 작게+줄바꿈, 겹침 피하려 FPS 숨김 */
+@media (max-width: 760px) {
+  #toolbar { gap: 6px; }
+  .btn { padding: 5px 8px; font-size: 11px; }
+  .slider-wrap input[type="range"] { width: 120px; }
+  #fps { display: none; }
 }
