@@ -51,7 +51,7 @@
   </div>
   <script>
   (function () {
-    var CODE = "1234";              // ← 임시 비밀번호(4자리). 바꾸면 기존 체험자 무효화됨.
+    var CODE = "1412";              // ← 임시 비밀번호(4자리). 바꾸면 기존 체험자 무효화됨.
     var KEY = "koi06_access";        // 통과 기록(입력 비번 저장 → CODE 와 일치해야 통과)
     var gate = document.getElementById("gate");
     if (localStorage.getItem(KEY) === CODE) { gate.remove(); return; }
