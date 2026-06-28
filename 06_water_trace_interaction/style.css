@@ -46,6 +46,19 @@ html, body {
   background: rgba(0, 0, 0, 0.8);
 }
 
+/* 카메라 센싱 민감도 슬라이더 */
+.slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+.slider-wrap input[type="range"] {
+  width: 90px;
+  accent-color: #9fffbf;
+  cursor: pointer;
+}
+
 /* 중앙 터치 유도 */
 #hint {
   position: fixed;

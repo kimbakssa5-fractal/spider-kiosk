@@ -424,8 +424,8 @@
   const MW = 80, MH = 45;              // 모션 샘플 격자
   const MBX = 8, MBY = 5;              // 도망 점 블록 격자
   const MOTION_MS = 66;                // 모션 검사 주기
-  const MOTION_DIFF_T = 12;            // 셀 휘도 변화 임계(민감)
-  const MOTION_BLOCK_T = 0.05;         // 블록 strength 임계(이상이면 도망 점 생성)
+  let MOTION_DIFF_T = 30;             // 셀 휘도 변화 임계(클수록 둔감 — 노이즈/미세광량 무시). 슬라이더로 조절
+  const MOTION_BLOCK_T = 0.08;        // 블록 strength 임계(이상이면 도망 점 생성)
   const MOTION_FLEE_MULT = 1.0;        // 모션 점 도망 반경 배수(마우스와 동일 — 가까울 때만 도망)
   const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
@@ -840,6 +840,17 @@
   const fishMinusBtn = document.getElementById("fishMinusBtn");
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
   if (fishMinusBtn) fishMinusBtn.addEventListener("click", function () { setFishCount(-1); });
+
+  // 카메라 센싱 민감도 슬라이더: 값 0(둔감)~100(예민) → MOTION_DIFF_T 58~8 (클수록 둔감)
+  const sensSlider = document.getElementById("sensSlider");
+  function applySens(v) { MOTION_DIFF_T = Math.round(58 - v * 0.5); }
+  if (sensSlider) {
+    applySens(+sensSlider.value);
+    sensSlider.addEventListener("input", function () {
+      applySens(+this.value);
+      showHud("센싱 민감도  " + this.value + "  (임계 " + MOTION_DIFF_T + ")");
+    });
+  }
 
   // ---------------------------------------------------------------
   // 실시간 미세조정 + HUD
