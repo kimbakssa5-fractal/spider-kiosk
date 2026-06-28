@@ -128,6 +128,9 @@
     uniform sampler2D uScene;
     uniform sampler2D uHeight;
     uniform vec2 uDispUv;
+    uniform float uGlitter;   // 윤슬 강도(0=off)
+    uniform float uTime;      // 반짝임 시간
+    uniform vec2 uHTexel;     // 높이맵 텍셀 크기(1/gridW,1/gridH)
     void main() {
       float h = texture2D(uHeight, vUv).r;        // 0.502 .. 1.0
       vec2 disp = (h - 0.5) * uDispUv;
@@ -139,7 +142,23 @@
       // 물고기는 채도 부스트 → 흰 바탕은 그대로, 빨강/주황/금색 무늬가 선명해짐
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       col = mix(vec3(l), col, 1.0 + fish * 0.9);
-      gl_FragColor = vec4(clamp(col, 0.0, 1.0) * shade, 1.0);
+      vec3 outc = clamp(col, 0.0, 1.0) * shade;
+      // 윤슬: 잔물결 경사(높이맵 기울기)에 비례한 스페큘러 반짝임 — 가산
+      if (uGlitter > 0.0) {
+        float hl = texture2D(uHeight, vUv - vec2(uHTexel.x, 0.0)).r;
+        float hr = texture2D(uHeight, vUv + vec2(uHTexel.x, 0.0)).r;
+        float hu = texture2D(uHeight, vUv - vec2(0.0, uHTexel.y)).r;
+        float hd = texture2D(uHeight, vUv + vec2(0.0, uHTexel.y)).r;
+        vec2 grad = vec2(hr - hl, hd - hu);
+        float g = length(grad);
+        vec3 n = normalize(vec3(-grad * 7.0, 1.0));
+        vec3 Ld = normalize(vec3(0.55, -0.6, 0.55));
+        float spec = pow(max(dot(n, Ld), 0.0), 70.0);
+        float tw = 0.55 + 0.45 * sin((vUv.x * 760.0 + vUv.y * 540.0) + uTime * 6.0);
+        float glint = spec * smoothstep(0.008, 0.05, g) * tw * uGlitter;
+        outc += vec3(glint) * (1.0 - 0.5 * fish);   // 물고기 위는 살짝 약하게
+      }
+      gl_FragColor = vec4(min(outc, 1.0), 1.0);
     }`;
 
   function compile(type, src) {
@@ -185,6 +204,9 @@
     uScene: gl.getUniformLocation(progWater, "uScene"),
     uHeight: gl.getUniformLocation(progWater, "uHeight"),
     uDispUv: gl.getUniformLocation(progWater, "uDispUv"),
+    uGlitter: gl.getUniformLocation(progWater, "uGlitter"),
+    uTime: gl.getUniformLocation(progWater, "uTime"),
+    uHTexel: gl.getUniformLocation(progWater, "uHTexel"),
   };
   gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0);
   gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
@@ -449,6 +471,13 @@
   function applyDispScale() {
     gl.useProgram(progWater);
     gl.uniform2f(locWater.uDispUv, DISP_SCALE / canvasW, DISP_SCALE / canvasH);
+    gl.uniform2f(locWater.uHTexel, 1 / Math.max(1, gridW), 1 / Math.max(1, gridH));
+  }
+  // 윤슬(sun glitter): 잔물결 반짝임. 버튼 on/off + 강도 슬라이더.
+  let GLITTER_ON = true, GLITTER_AMT = 0.5;   // 강도 0~1 (슬라이더)
+  function applyGlitter() {
+    gl.useProgram(progWater);
+    gl.uniform1f(locWater.uGlitter, GLITTER_ON ? GLITTER_AMT * 1.8 : 0.0);
   }
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", resize);
@@ -856,6 +885,7 @@
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvasW, canvasH);
     gl.useProgram(progWater);
+    gl.uniform1f(locWater.uTime, (performance.now() - startT) / 1000);  // 윤슬 반짝임
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     gl.enableVertexAttribArray(locWater.aPos);
     gl.vertexAttribPointer(locWater.aPos, 2, gl.FLOAT, false, 0, 0);
@@ -892,6 +922,7 @@
   }
 
   resize();
+  applyGlitter();
   loadKoi();
   requestAnimationFrame(loop);
 
@@ -928,6 +959,20 @@
   if (camBtn) camBtn.addEventListener("click", toggleCamera);
   const videoBgBtn = document.getElementById("videoBgBtn");
   if (videoBgBtn) videoBgBtn.addEventListener("click", toggleVideoBg);
+  const glitterBtn = document.getElementById("glitterBtn");
+  const glitterSlider = document.getElementById("glitterSlider");
+  function refreshGlitterUI() { if (glitterBtn) glitterBtn.textContent = GLITTER_ON ? "윤슬 ON (Y)" : "윤슬 OFF (Y)"; }
+  function toggleGlitter() { GLITTER_ON = !GLITTER_ON; applyGlitter(); refreshGlitterUI(); showHud("윤슬 " + (GLITTER_ON ? "ON" : "OFF")); }
+  if (glitterBtn) glitterBtn.addEventListener("click", toggleGlitter);
+  if (glitterSlider) {
+    GLITTER_AMT = (+glitterSlider.value) / 100; applyGlitter();
+    glitterSlider.addEventListener("input", function () {
+      GLITTER_AMT = (+this.value) / 100;
+      if (!GLITTER_ON) { GLITTER_ON = true; refreshGlitterUI(); }
+      applyGlitter(); showHud("윤슬 강도  " + this.value);
+    });
+  }
+  refreshGlitterUI();
   const fishPlusBtn = document.getElementById("fishPlusBtn");
   const fishMinusBtn = document.getElementById("fishMinusBtn");
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
@@ -991,6 +1036,7 @@
       case "KeyC": if (e.repeat) return; e.preventDefault(); toggleCamera(); break;
       case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
       case "KeyV": if (e.repeat) return; e.preventDefault(); toggleVideoBg(); break;
+      case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
       case "Digit3": case "Numpad3": e.preventDefault(); adjust("DISP", +1); break;
