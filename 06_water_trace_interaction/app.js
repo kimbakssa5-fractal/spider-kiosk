@@ -836,6 +836,10 @@
   fsBtn.addEventListener("click", toggleFullscreen);
   const camBtn = document.getElementById("camBtn");
   if (camBtn) camBtn.addEventListener("click", toggleCamera);
+  const fishPlusBtn = document.getElementById("fishPlusBtn");
+  const fishMinusBtn = document.getElementById("fishMinusBtn");
+  if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
+  if (fishMinusBtn) fishMinusBtn.addEventListener("click", function () { setFishCount(-1); });
 
   // ---------------------------------------------------------------
   // 실시간 미세조정 + HUD
