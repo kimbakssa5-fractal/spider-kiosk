@@ -24,12 +24,13 @@
   const LATE = 8;                                  // 시뮬레이션 다운스케일
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
-  // 배경 슬라이드쇼: 아래 이미지들을 순차 크로스페이드 재생(물결에 굴절됨).
-  //   교체/추가: assets/bg-01.jpg, bg-02.jpg ... 파일을 바꾸거나 목록에 더하면 됨.
+  // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
+  //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
+  //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
   const ASSET_VER = "6";
-  const BG_SLIDES = ["assets/bg-01.jpg", "assets/bg-02.jpg", "assets/bg-03.jpg"];
-  const SLIDE_HOLD_MS = 8000;          // 각 장면 표시 시간
-  const SLIDE_FADE_MS = 1500;          // 크로스페이드 시간
+  const BG_VER = "1";
+  const SLIDE_HOLD_MS = 7000;          // 각 장면 표시 시간
+  const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
 
   // 키보드로 실시간 미세조정 (1/2 DAMPING, 3/4 DISP_SCALE, 5/6 SPLASH_RADIUS, 7/8 FPS)
   let SPLASH_RADIUS_PX = 18;
@@ -234,6 +235,7 @@
   let curImg = null, inImg = null;       // 현재/들어오는 이미지
   let slideIdx = 0, holdAcc = 0, fadeT = 0, transitioning = false;
   let usingSlideshow = true;             // 수동 배경 교체 시 false (슬라이드쇼 멈춤)
+  let bgVideo = null, videoMode = false; // 동영상 배경(폴더의 manifest.videos)
 
   function sizeBgCanvas() {
     const aspect = canvasW / Math.max(1, canvasH), cap = 1600;
@@ -243,9 +245,12 @@
   }
   function coverDraw(img, alpha) {
     if (!img) return;
+    const iw = img.videoWidth || img.naturalWidth || img.width;
+    const ih = img.videoHeight || img.naturalHeight || img.height;
+    if (!iw || !ih) return;
     const cw = bgCanvas.width, ch = bgCanvas.height;
-    const scale = Math.max(cw / img.width, ch / img.height);
-    const dw = img.width * scale, dh = img.height * scale;
+    const scale = Math.max(cw / iw, ch / ih);
+    const dw = iw * scale, dh = ih * scale;
     bgCtx.globalAlpha = alpha;
     bgCtx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
     bgCtx.globalAlpha = 1;
@@ -272,6 +277,16 @@
     return null;
   }
   function updateBg(dtMs) {
+    // 동영상 배경: 매 프레임 비디오 프레임을 bgCanvas 에 cover-fit → bgTex 업로드(굴절됨)
+    if (videoMode && bgVideo && bgVideo.readyState >= 2 && bgVideo.videoWidth) {
+      if (bgCanvas.width < 2) sizeBgCanvas();
+      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+      coverDraw(bgVideo, 1);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, bgTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bgCanvas);
+      bgReady = true;
+      return;
+    }
     if (!bgReady) return;
     if (transitioning) {
       fadeT += dtMs / SLIDE_FADE_MS;
@@ -285,16 +300,43 @@
       }
     }
   }
-  // 슬라이드 프리로드 (첫 장 로드되면 즉시 표시)
-  BG_SLIDES.forEach(function (s) {
-    const it = { img: new Image(), loaded: false };
-    it.img.crossOrigin = "anonymous";
-    it.img.onload = function () { it.loaded = true; if (!curImg) { curImg = it.img; sizeBgCanvas(); composeUpload(); } };
-    it.img.src = s + "?v=" + ASSET_VER;
-    slides.push(it);
-  });
+  // 순차 프리로드: 한 장씩 이어 로드(부하 분산). 첫 장 로드되면 즉시 표시.
+  function preloadFrom(i) {
+    if (i >= slides.length) return;
+    const it = slides[i];
+    it.img.onload = function () {
+      it.loaded = true;
+      if (!curImg) { curImg = it.img; sizeBgCanvas(); composeUpload(); }
+      preloadFrom(i + 1);
+    };
+    it.img.onerror = function () { preloadFrom(i + 1); };
+    it.img.src = it.src;
+  }
+  // 매니페스트(폴더의 모든 이미지/동영상) 로드
+  let bgManifest = { images: [], videos: [] };
+  fetch("assets/bg-manifest.json?v=" + BG_VER).then(function (r) { return r.json(); }).then(function (m) {
+    bgManifest = m;
+    slides = (m.images || []).map(function (src) {
+      const im = new Image(); im.crossOrigin = "anonymous";
+      return { img: im, loaded: false, src: "assets/" + src + "?v=" + BG_VER };
+    });
+    if (slides.length) preloadFrom(0);
+    if (m.videos && m.videos.length) {
+      bgVideo = document.createElement("video");
+      bgVideo.muted = true; bgVideo.loop = true; bgVideo.playsInline = true; bgVideo.preload = "auto";
+      bgVideo.src = "assets/" + m.videos[0] + "?v=" + BG_VER;
+    }
+  }).catch(function () { /* 매니페스트 없으면 배경 없이도 동작 */ });
+
+  function toggleVideoBg() {
+    if (!bgVideo) { showHud("배경 동영상 없음"); return; }
+    videoMode = !videoMode;
+    if (videoMode) { usingSlideshow = false; bgVideo.play().catch(function () {}); showHud("배경 동영상 ON"); }
+    else { bgVideo.pause(); usingSlideshow = true; holdAcc = 0; showHud("배경 슬라이드쇼"); if (curImg) composeUpload(); }
+  }
   function useCustomBg(srcOrDataUrl) {
     usingSlideshow = false;              // 슬라이드쇼 멈추고 사용자 배경으로 크로스페이드
+    if (videoMode && bgVideo) { videoMode = false; bgVideo.pause(); }
     const img = new Image(); img.crossOrigin = "anonymous";
     img.onload = function () { if (!curImg) { curImg = img; sizeBgCanvas(); composeUpload(); } else startTransition(img); };
     img.src = srcOrDataUrl;
@@ -884,6 +926,8 @@
   fsBtn.addEventListener("click", toggleFullscreen);
   const camBtn = document.getElementById("camBtn");
   if (camBtn) camBtn.addEventListener("click", toggleCamera);
+  const videoBgBtn = document.getElementById("videoBgBtn");
+  if (videoBgBtn) videoBgBtn.addEventListener("click", toggleVideoBg);
   const fishPlusBtn = document.getElementById("fishPlusBtn");
   const fishMinusBtn = document.getElementById("fishMinusBtn");
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
@@ -946,6 +990,7 @@
       case "KeyM": if (e.repeat) return; e.preventDefault(); toggleMenu(); break;
       case "KeyC": if (e.repeat) return; e.preventDefault(); toggleCamera(); break;
       case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
+      case "KeyV": if (e.repeat) return; e.preventDefault(); toggleVideoBg(); break;
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
       case "Digit3": case "Numpad3": e.preventDefault(); adjust("DISP", +1); break;
