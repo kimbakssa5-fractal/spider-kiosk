@@ -1,0 +1,195 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+  cursor: none;
+}
+
+#scene {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#toolbar {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+  font-family: sans-serif;
+  transition: opacity 0.3s;
+}
+
+#toolbar.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.btn {
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* 중앙 터치 유도 */
+#hint {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  pointer-events: none;   /* 터치는 캔버스로 통과 */
+  user-select: none;
+  opacity: 1;
+  transition: opacity 0.6s ease;
+}
+#hint.hidden { opacity: 0; }
+
+#hint .tap {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#hint .hand {
+  width: 50px;
+  height: 50px;
+  fill: #ffffff;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.55));
+  animation: tapbob 2.4s ease-in-out infinite;
+  z-index: 2;
+}
+#hint .ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;                 /* 링(원) 중심 = .tap 중심 = 화면 중심 */
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+  opacity: 0;
+  animation: hintripple 2.4s ease-out infinite;
+}
+#hint .ring:nth-child(2) { animation-delay: 0.8s; }
+#hint .ring:nth-child(3) { animation-delay: 1.6s; }
+
+#hint .hint-text {
+  color: #ffffff;
+  font-family: "Noto Sans KR", "Noto Sans", sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.7), 0 0 26px rgba(0, 0, 0, 0.5);
+  animation: hinttext 2.4s ease-in-out infinite;
+}
+
+@keyframes tapbob {
+  0%, 100% { transform: translateY(8px)  scale(1); }
+  45%      { transform: translateY(19px) scale(0.93); }
+  62%      { transform: translateY(16px) scale(0.98); }
+}
+@keyframes hintripple {
+  0%   { transform: scale(0.35); opacity: 0; }
+  18%  { opacity: 0.8; }
+  100% { transform: scale(3.6);  opacity: 0; }
+}
+@keyframes hinttext {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+#fps {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #9fffbf;
+  font-family: "Noto Sans KR", "Noto Sans", monospace, sans-serif;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  border-radius: 4px;
+  user-select: none;
+  transition: opacity 0.3s;
+}
+
+#fps.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#hud {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 14px 22px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-family: "Noto Sans KR", "Noto Sans", sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border-radius: 8px;
+  white-space: pre;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+
+#hud.show {
+  opacity: 1;
+}
+
+/* 카메라 video: 기본은 우하단 작은 미리보기 (좌우 반전=거울 끔, 모션 매핑과 일치) */
+#camVideo {
+  position: fixed;
+  pointer-events: none;
+  background: #000;
+}
+#camVideo.preview {
+  right: 12px;
+  bottom: 12px;
+  width: 180px;
+  height: 101px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  opacity: 0.85;
+  z-index: 9;
+}
+/* X 키: 카메라를 전체 화면에 darkness 50% 로 투영 (네거티브 반전 없음) */
+#camVideo.xray {
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  z-index: 7;                       /* 물 캔버스 위, 툴바/힌트 아래 */
+  opacity: 0.5;                     /* 50% */
+  mix-blend-mode: normal;
+  filter: none;                     /* 반전 제거 — 실제 카메라 화면 */
+}
