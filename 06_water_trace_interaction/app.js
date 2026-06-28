@@ -143,7 +143,7 @@
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       col = mix(vec3(l), col, 1.0 + fish * 0.9);
       vec3 outc = clamp(col, 0.0, 1.0) * shade;
-      // 윤슬: 잔물결 경사(높이맵 기울기)에 비례한 스페큘러 반짝임 — 가산
+      // 윤슬: 잔물결 경사 기반 스페큘러 × '흩뿌린 점형' 트윙클(미세 셀별 랜덤 위상 펄스+둥근 점)
       if (uGlitter > 0.0) {
         float hl = texture2D(uHeight, vUv - vec2(uHTexel.x, 0.0)).r;
         float hr = texture2D(uHeight, vUv + vec2(uHTexel.x, 0.0)).r;
@@ -153,10 +153,18 @@
         float g = length(grad);
         vec3 n = normalize(vec3(-grad * 7.0, 1.0));
         vec3 Ld = normalize(vec3(0.55, -0.6, 0.55));
-        float spec = pow(max(dot(n, Ld), 0.0), 70.0);
-        float tw = 0.55 + 0.45 * sin((vUv.x * 760.0 + vUv.y * 540.0) + uTime * 6.0);
-        float glint = spec * smoothstep(0.008, 0.05, g) * tw * uGlitter;
-        outc += vec3(glint) * (1.0 - 0.5 * fish);   // 물고기 위는 살짝 약하게
+        float spec = pow(max(dot(n, Ld), 0.0), 60.0);
+        // 미세 셀 격자 → 각 셀 고유 위상으로 짧게 깜빡이는 둥근 점(흩뿌림)
+        vec2 gp = vUv * vec2(460.0, 300.0);
+        vec2 cid = floor(gp);
+        vec2 cf = fract(gp) - 0.5;
+        float r1 = fract(sin(dot(cid, vec2(127.1, 311.7))) * 43758.5453);
+        float r2 = fract(sin(dot(cid, vec2(269.5, 183.3))) * 43758.5453);
+        float pulse = pow(0.5 + 0.5 * sin(uTime * (2.5 + 5.0 * r2) + r1 * 6.2831), 12.0);
+        float dotShape = smoothstep(0.5, 0.06, length(cf));   // 둥근 점
+        float twDot = pulse * dotShape * step(0.5, r1);       // 일부 셀만 → 흩뿌려짐
+        float glint = spec * smoothstep(0.006, 0.045, g) * twDot * uGlitter * 2.6;
+        outc += vec3(glint) * (1.0 - 0.5 * fish);             // 물고기 위는 살짝 약하게
       }
       gl_FragColor = vec4(min(outc, 1.0), 1.0);
     }`;
