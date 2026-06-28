@@ -841,9 +841,10 @@
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
   if (fishMinusBtn) fishMinusBtn.addEventListener("click", function () { setFishCount(-1); });
 
-  // 카메라 센싱 민감도 슬라이더: 값 0(둔감)~100(예민) → MOTION_DIFF_T 58~8 (클수록 둔감)
+  // 카메라 센싱 민감도 슬라이더: 값 0(아주 둔감)~100(예민)
+  //   임계 = 8 + (100-v)*1.1  → v=100→8(예민), v=0→118(큰 움직임만), v=40→74
   const sensSlider = document.getElementById("sensSlider");
-  function applySens(v) { MOTION_DIFF_T = Math.round(58 - v * 0.5); }
+  function applySens(v) { MOTION_DIFF_T = Math.round(8 + (100 - v) * 1.1); }
   if (sensSlider) {
     applySens(+sensSlider.value);
     sensSlider.addEventListener("input", function () {
