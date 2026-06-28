@@ -426,7 +426,7 @@
   const MOTION_MS = 66;                // 모션 검사 주기
   const MOTION_DIFF_T = 12;            // 셀 휘도 변화 임계(민감)
   const MOTION_BLOCK_T = 0.05;         // 블록 strength 임계(이상이면 도망 점 생성)
-  const MOTION_FLEE_MULT = 2.0;        // 모션 점 도망 반경 배수(사람은 넓게)
+  const MOTION_FLEE_MULT = 1.0;        // 모션 점 도망 반경 배수(마우스와 동일 — 가까울 때만 도망)
   const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
   const CAM_MIRROR = false;            // 좌우 반전(거울 끔) — 모션 매핑
@@ -467,8 +467,8 @@
         for (let bx = 0; bx < MBX; bx++) {
           const strength = Math.min(1, blocks[by * MBX + bx] / (cellsPerBlock * 70));
           if (strength > MOTION_BLOCK_T) {
-            // 도망 힘: 마우스(w=1)에 준하도록 높은 바닥값+게인 — 움직임 감지되면 강하게 민다
-            const w = Math.min(1, 0.55 + strength * 2.5);
+            // 도망 힘: 마우스(w=1)에 준하도록 바닥값+게인 (가장자리 미세 움직임은 과하지 않게)
+            const w = Math.min(1, 0.45 + strength * 2.5);
             pts.push({ x: ((bx + 0.5) / MBX) * W, y: ((by + 0.5) / MBY) * H, w: w, r: MOTION_FLEE_MULT });
           }
         }
