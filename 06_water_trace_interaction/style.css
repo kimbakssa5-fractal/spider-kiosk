@@ -72,8 +72,8 @@ html, body {
   justify-content: center;
 }
 #hint .hand {
-  width: 66px;
-  height: 66px;
+  width: 50px;
+  height: 50px;
   fill: #ffffff;
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.55));
   animation: tapbob 2.4s ease-in-out infinite;
@@ -82,10 +82,10 @@ html, body {
 #hint .ring {
   position: absolute;
   left: 50%;
-  top: 58%;
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;
+  top: 50%;                 /* 링(원) 중심 = .tap 중심 = 화면 중심 */
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
   border: 2px solid rgba(255, 255, 255, 0.75);
   border-radius: 50%;
   opacity: 0;
@@ -105,9 +105,9 @@ html, body {
 }
 
 @keyframes tapbob {
-  0%, 100% { transform: translateY(-6px) scale(1); }
-  45%      { transform: translateY(5px)  scale(0.93); }
-  62%      { transform: translateY(2px)  scale(0.98); }
+  0%, 100% { transform: translateY(8px)  scale(1); }
+  45%      { transform: translateY(19px) scale(0.93); }
+  62%      { transform: translateY(16px) scale(0.98); }
 }
 @keyframes hintripple {
   0%   { transform: scale(0.35); opacity: 0; }

@@ -25,7 +25,7 @@
   const KERNEL = [0.5, 1, 0.5, 1, 0, 1, 0.5, 1, 0.5];
   const KERNEL_DIVISOR = 3;
   // 화면 방향별 기본 배경: PC(가로) = 가로형(트리 90° 회전), 폰(세로) = 세로형
-  const ASSET_VER = "5";
+  const ASSET_VER = "6";
   const DEFAULT_BG_LANDSCAPE = "assets/fractal-tree-land.jpg?v=" + ASSET_VER;
   const DEFAULT_BG_PORTRAIT  = "assets/fractal-tree.jpg?v=" + ASSET_VER;
 
@@ -38,7 +38,7 @@
 
   // ---- 황금 잉어 파라미터 ----
   //   fish01 헤엄 사이클(73프레임, 머리=위) 프레임 애니메이션 사용 → 몸이 자연스럽게 일렁임.
-  let FISH_COUNT = 6;                 // 동시에 헤엄치는 잉어 수 (9/0 키로 가감)
+  let FISH_COUNT = 12;                // 동시에 헤엄치는 잉어 수 (9/0 키로 가감, 0~24)
   const FISH_LEN_MIN = 0.22, FISH_LEN_MAX = 0.34;  // 화면 짧은변 대비 몸길이 비율 (크게)
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
@@ -852,7 +852,7 @@
     hudTimer = setTimeout(function () { hud.classList.remove("show"); }, 1400);
   }
   function setFishCount(dir) {
-    FISH_COUNT = clamp(FISH_COUNT + dir, 0, 14);
+    FISH_COUNT = clamp(FISH_COUNT + dir, 0, 24);
     if (koiReady) spawnFishes();
     showHud("FISH  " + FISH_COUNT);
   }
