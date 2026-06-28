@@ -182,12 +182,13 @@
         float glint = spec * smoothstep(0.006, 0.045, g) * twDot * uGlitter * 2.6;
         outc += vec3(glint) * (1.0 - 0.5 * fish);             // 물고기 위는 살짝 약하게
       }
-      // 물 그림자(코스틱): 시간에 따라 일렁이는 그물망 빛 — 잔물결에 약간 일그러짐
+      // caustic(물 그림자): 또렷한 그물망 빛 — 저레벨(푸석한 안개) 잘라내고 선을 날카롭게
       if (uCaustic > 0.0) {
         vec2 cuv = (vUv * uRes) / min(uRes.x, uRes.y);
         cuv = cuv * 1.7 + disp * 3.0;
-        float ca = caustic(cuv, uTime * 0.55 + 23.0);
-        outc += vec3(0.5, 0.74, 1.0) * ca * uCaustic;
+        float ca = caustic(cuv, uTime * 0.5 + 23.0);
+        ca = smoothstep(0.14, 0.80, ca);   // 안개만 제거(그물망 연결 유지)
+        outc += vec3(0.6, 0.83, 1.0) * ca * uCaustic * 1.7;
       }
       gl_FragColor = vec4(min(outc, 1.0), 1.0);
     }`;
@@ -1017,15 +1018,15 @@
 
   const causticBtn = document.getElementById("causticBtn");
   const causticSlider = document.getElementById("causticSlider");
-  function refreshCausticUI() { if (causticBtn) causticBtn.textContent = CAUSTIC_ON ? "물그림자 ON (G)" : "물그림자 OFF (G)"; }
-  function toggleCaustic() { CAUSTIC_ON = !CAUSTIC_ON; applyCaustic(); refreshCausticUI(); showHud("물 그림자 " + (CAUSTIC_ON ? "ON" : "OFF")); }
+  function refreshCausticUI() { if (causticBtn) causticBtn.textContent = CAUSTIC_ON ? "Caustic ON (G)" : "Caustic OFF (G)"; }
+  function toggleCaustic() { CAUSTIC_ON = !CAUSTIC_ON; applyCaustic(); refreshCausticUI(); showHud("Caustic " + (CAUSTIC_ON ? "ON" : "OFF")); }
   if (causticBtn) causticBtn.addEventListener("click", toggleCaustic);
   if (causticSlider) {
     CAUSTIC_AMT = (+causticSlider.value) / 100; applyCaustic();
     causticSlider.addEventListener("input", function () {
       CAUSTIC_AMT = (+this.value) / 100;
       if (!CAUSTIC_ON) { CAUSTIC_ON = true; refreshCausticUI(); }
-      applyCaustic(); showHud("물 그림자 강도  " + this.value);
+      applyCaustic(); showHud("Caustic 강도  " + this.value);
     });
   }
   refreshCausticUI();
