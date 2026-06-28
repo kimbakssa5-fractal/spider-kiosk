@@ -424,8 +424,8 @@
   const MW = 80, MH = 45;              // 모션 샘플 격자
   const MBX = 8, MBY = 5;              // 도망 점 블록 격자
   const MOTION_MS = 66;                // 모션 검사 주기
-  let MOTION_DIFF_T = 30;             // 셀 휘도 변화 임계(클수록 둔감 — 노이즈/미세광량 무시). 슬라이더로 조절
-  const MOTION_BLOCK_T = 0.08;        // 블록 strength 임계(이상이면 도망 점 생성)
+  let MOTION_DIFF_T = 30;             // 셀 휘도 변화 임계(클수록 둔감). 슬라이더로 조절
+  let MOTION_BLOCK_T = 0.4;           // 블록 strength 임계(클수록 둔감 — 큰 움직임만). 슬라이더로 조절
   const MOTION_FLEE_MULT = 1.0;        // 모션 점 도망 반경 배수(마우스와 동일 — 가까울 때만 도망)
   const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
@@ -841,15 +841,19 @@
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
   if (fishMinusBtn) fishMinusBtn.addEventListener("click", function () { setFishCount(-1); });
 
-  // 카메라 센싱 민감도 슬라이더: 값 0(아주 둔감)~100(예민)
-  //   임계 = 8 + (100-v)*1.1  → v=100→8(예민), v=0→118(큰 움직임만), v=40→74
+  // 카메라 센싱 민감도 슬라이더: 값 0(거의 꺼짐)~100(아주 예민). 셀+블록 임계를 함께 조절.
+  //   셀임계 = 8 + (100-v)*1.9   → v100→8, v40→122, v0→198(거대 변화만)
+  //   블록임계 = 0.04 + (100-v)*0.006 → v100→0.04, v40→0.40, v0→0.64 (클수록 큰 영역만)
   const sensSlider = document.getElementById("sensSlider");
-  function applySens(v) { MOTION_DIFF_T = Math.round(8 + (100 - v) * 1.1); }
+  function applySens(v) {
+    MOTION_DIFF_T = Math.round(8 + (100 - v) * 1.9);
+    MOTION_BLOCK_T = Math.round((0.04 + (100 - v) * 0.006) * 1000) / 1000;
+  }
   if (sensSlider) {
     applySens(+sensSlider.value);
     sensSlider.addEventListener("input", function () {
       applySens(+this.value);
-      showHud("센싱 민감도  " + this.value + "  (임계 " + MOTION_DIFF_T + ")");
+      showHud("센싱 민감도  " + this.value + "  (셀 " + MOTION_DIFF_T + " / 블록 " + MOTION_BLOCK_T + ")");
     });
   }
 

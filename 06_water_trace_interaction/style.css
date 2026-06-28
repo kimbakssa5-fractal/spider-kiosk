@@ -87,7 +87,8 @@ html, body {
   cursor: default;
 }
 .slider-wrap input[type="range"] {
-  width: 90px;
+  width: 260px;
+  max-width: 42vw;
   accent-color: #9fffbf;
   cursor: pointer;
 }
