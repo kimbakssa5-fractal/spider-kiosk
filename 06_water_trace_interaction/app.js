@@ -391,25 +391,42 @@
   });
 
   // ---------------------------------------------------------------
-  // 잉어 헤엄 아틀라스 로딩 + 개체 생성
-  //   koi-swim.png: fish01 헤엄 사이클을 셀 그리드로 팩(머리=셀 위쪽).
-  //   meta: {cellW,cellH,cols,rows,count,fps,atlasW,atlasH}
+  // 잉어 헤엄 아틀라스 로딩 + 개체 생성. 그룹 2종(t 키 전환):
+  //   그룹1 = koi-swim-g1 (6색 솔리드), 그룹2 = koi-swim-g2 (얼룩무늬 백업)
+  //   meta: {cellW,cellH,cols,rows,count,fps,atlasW,atlasH,variants}
   // ---------------------------------------------------------------
   let koiAtlas = null, koiReady = false;
   let fishes = [];
+  const KOI_GROUPS = [
+    { base: "koi-swim-g1", label: "1 (6색 솔리드)", meta: null, img: null },
+    { base: "koi-swim-g2", label: "2 (얼룩무늬)", meta: null, img: null },
+  ];
+  let activeGroup = 0;                    // 기본 그룹1
+  function uploadGroup(i) {
+    const G = KOI_GROUPS[i];
+    if (!G.meta || !G.img) return;
+    koiAtlas = G.meta;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, koiTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, G.img);
+    koiReady = true;
+    spawnFishes();
+  }
   function loadKoi() {
-    fetch("assets/koi-swim.json?v=" + ASSET_VER).then(function (r) { return r.json(); }).then(function (meta) {
-      const img = new Image();
-      img.onload = function () {
-        koiAtlas = meta;
-        gl.activeTexture(gl.TEXTURE2);
-        gl.bindTexture(gl.TEXTURE_2D, koiTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-        koiReady = true;
-        spawnFishes();
-      };
-      img.src = "assets/koi-swim.png?v=" + ASSET_VER;
-    }).catch(function () { /* 잉어 없이도 물결은 동작 */ });
+    KOI_GROUPS.forEach(function (G, i) {
+      fetch("assets/" + G.base + ".json?v=" + ASSET_VER).then(function (r) { return r.json(); }).then(function (meta) {
+        const img = new Image();
+        img.onload = function () { G.meta = meta; G.img = img; if (i === activeGroup) uploadGroup(i); };
+        img.src = "assets/" + G.base + ".png?v=" + ASSET_VER;
+      }).catch(function () { /* 한 그룹 실패해도 다른 그룹/물결은 동작 */ });
+    });
+  }
+  function toggleKoiGroup() {
+    const other = activeGroup ^ 1;
+    if (!KOI_GROUPS[other].img) { showHud("그룹 로딩 중…"); return; }
+    activeGroup = other;
+    uploadGroup(activeGroup);
+    showHud("물고기 그룹 " + KOI_GROUPS[activeGroup].label);
   }
 
   function rand(a, b) { return a + Math.random() * (b - a); }
@@ -1060,6 +1077,7 @@
       case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
       case "KeyV": if (e.repeat) return; e.preventDefault(); toggleVideoBg(); break;
       case "KeyW": if (e.repeat) return; e.preventDefault(); toggleCamMonitor(); break;
+      case "KeyT": if (e.repeat) return; e.preventDefault(); toggleKoiGroup(); break;
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
