@@ -131,22 +131,6 @@
     uniform float uGlitter;   // 윤슬 강도(0=off)
     uniform float uTime;      // 반짝임 시간
     uniform vec2 uHTexel;     // 높이맵 텍셀 크기(1/gridW,1/gridH)
-    uniform float uCaustic;   // 물 그림자(코스틱) 강도(0=off)
-    uniform vec2 uRes;        // 캔버스 해상도
-    #define TAU 6.28318530718
-    // 수영장 바닥형 코스틱(밝은 그물망 빛). 5단 반복 근사.
-    float caustic(vec2 uv, float t) {
-      vec2 p = mod(uv * TAU, TAU) - 250.0;
-      vec2 i = p;
-      float c = 1.0, inten = 0.005;
-      for (int n = 0; n < 5; n++) {
-        float tt = t * (1.0 - (3.5 / float(n + 1)));
-        i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
-        c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / inten), p.y / (cos(i.y + tt) / inten)));
-      }
-      c /= 5.0; c = 1.17 - pow(c, 1.4);
-      return pow(abs(c), 8.0);
-    }
     void main() {
       float h = texture2D(uHeight, vUv).r;        // 0.502 .. 1.0
       vec2 disp = (h - 0.5) * uDispUv;
@@ -181,14 +165,6 @@
         float twDot = pulse * dotShape * step(0.5, r1);       // 일부 셀만 → 흩뿌려짐
         float glint = spec * smoothstep(0.006, 0.045, g) * twDot * uGlitter * 2.6;
         outc += vec3(glint) * (1.0 - 0.5 * fish);             // 물고기 위는 살짝 약하게
-      }
-      // caustic(물 그림자): 또렷한 그물망 빛 — 저레벨(푸석한 안개) 잘라내고 선을 날카롭게
-      if (uCaustic > 0.0) {
-        vec2 cuv = (vUv * uRes) / min(uRes.x, uRes.y);
-        cuv = cuv * 1.7 + disp * 3.0;
-        float ca = caustic(cuv, uTime * 0.5 + 23.0);
-        ca = smoothstep(0.14, 0.80, ca);   // 안개만 제거(그물망 연결 유지)
-        outc += vec3(0.6, 0.83, 1.0) * ca * uCaustic * 1.7;
       }
       gl_FragColor = vec4(min(outc, 1.0), 1.0);
     }`;
@@ -239,8 +215,6 @@
     uGlitter: gl.getUniformLocation(progWater, "uGlitter"),
     uTime: gl.getUniformLocation(progWater, "uTime"),
     uHTexel: gl.getUniformLocation(progWater, "uHTexel"),
-    uCaustic: gl.getUniformLocation(progWater, "uCaustic"),
-    uRes: gl.getUniformLocation(progWater, "uRes"),
   };
   gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0);
   gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
@@ -506,19 +480,12 @@
     gl.useProgram(progWater);
     gl.uniform2f(locWater.uDispUv, DISP_SCALE / canvasW, DISP_SCALE / canvasH);
     gl.uniform2f(locWater.uHTexel, 1 / Math.max(1, gridW), 1 / Math.max(1, gridH));
-    gl.uniform2f(locWater.uRes, canvasW, canvasH);
   }
   // 윤슬(sun glitter): 잔물결 반짝임. 버튼 on/off + 강도 슬라이더.
   let GLITTER_ON = true, GLITTER_AMT = 0.5;   // 강도 0~1 (슬라이더)
   function applyGlitter() {
     gl.useProgram(progWater);
     gl.uniform1f(locWater.uGlitter, GLITTER_ON ? GLITTER_AMT * 1.8 : 0.0);
-  }
-  // 물 그림자(코스틱): 그물망 빛. 버튼 on/off + 강도 슬라이더.
-  let CAUSTIC_ON = true, CAUSTIC_AMT = 0.5;   // 강도 0~1
-  function applyCaustic() {
-    gl.useProgram(progWater);
-    gl.uniform1f(locWater.uCaustic, CAUSTIC_ON ? CAUSTIC_AMT * 0.9 : 0.0);
   }
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", resize);
@@ -964,7 +931,6 @@
 
   resize();
   applyGlitter();
-  applyCaustic();
   loadKoi();
   requestAnimationFrame(loop);
 
@@ -976,8 +942,14 @@
     ambient.play().then(function () { soundOn = true; })
                   .catch(function () { soundOn = false; });
   }
+  // 첫 사용자 제스처(처음 켤 때 비번 키패드 탭 포함)에 소리 시작 + 전체화면 진입
   window.addEventListener("pointerdown", function once() {
-    trySound(); window.removeEventListener("pointerdown", once);
+    trySound();
+    if (!document.fullscreenElement) {
+      const rq = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+      if (rq) try { rq.call(document.documentElement); } catch (_) {}
+    }
+    window.removeEventListener("pointerdown", once);
   });
 
   function openBgPicker() { bgInput.click(); }
@@ -1015,21 +987,6 @@
     });
   }
   refreshGlitterUI();
-
-  const causticBtn = document.getElementById("causticBtn");
-  const causticSlider = document.getElementById("causticSlider");
-  function refreshCausticUI() { if (causticBtn) causticBtn.textContent = CAUSTIC_ON ? "Caustic ON (G)" : "Caustic OFF (G)"; }
-  function toggleCaustic() { CAUSTIC_ON = !CAUSTIC_ON; applyCaustic(); refreshCausticUI(); showHud("Caustic " + (CAUSTIC_ON ? "ON" : "OFF")); }
-  if (causticBtn) causticBtn.addEventListener("click", toggleCaustic);
-  if (causticSlider) {
-    CAUSTIC_AMT = (+causticSlider.value) / 100; applyCaustic();
-    causticSlider.addEventListener("input", function () {
-      CAUSTIC_AMT = (+this.value) / 100;
-      if (!CAUSTIC_ON) { CAUSTIC_ON = true; refreshCausticUI(); }
-      applyCaustic(); showHud("Caustic 강도  " + this.value);
-    });
-  }
-  refreshCausticUI();
   const fishPlusBtn = document.getElementById("fishPlusBtn");
   const fishMinusBtn = document.getElementById("fishMinusBtn");
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
@@ -1094,7 +1051,6 @@
       case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
       case "KeyV": if (e.repeat) return; e.preventDefault(); toggleVideoBg(); break;
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
-      case "KeyG": if (e.repeat) return; e.preventDefault(); toggleCaustic(); break;
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
       case "Digit3": case "Numpad3": e.preventDefault(); adjust("DISP", +1); break;

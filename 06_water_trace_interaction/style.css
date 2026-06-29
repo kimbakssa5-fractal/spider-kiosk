@@ -121,10 +121,15 @@ html, body {
   justify-content: center;
 }
 #hint .hand {
+  position: absolute;
+  /* 손끝(SVG ≈ 48%,12.5%)이 .tap 중심(=동심원 중심)에 오도록 배치 */
+  left: calc(50% - 24px);
+  top: calc(50% - 6px);
   width: 50px;
   height: 50px;
   fill: #ffffff;
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.55));
+  transform-origin: 48% 12.5%;   /* 손끝 기준 → 까딱여도 손끝 고정 */
   animation: tapbob 2.4s ease-in-out infinite;
   z-index: 2;
 }
@@ -154,9 +159,9 @@ html, body {
 }
 
 @keyframes tapbob {
-  0%, 100% { transform: translateY(8px)  scale(1); }
-  45%      { transform: translateY(19px) scale(0.93); }
-  62%      { transform: translateY(16px) scale(0.98); }
+  0%, 100% { transform: translateY(0)   scale(1); }
+  45%      { transform: translateY(7px) scale(0.95); }
+  62%      { transform: translateY(4px) scale(0.98); }
 }
 @keyframes hintripple {
   0%   { transform: scale(0.35); opacity: 0; }
