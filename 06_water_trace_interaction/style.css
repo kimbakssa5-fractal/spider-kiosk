@@ -235,6 +235,16 @@ html, body {
   opacity: 0.85;
   z-index: 9;
 }
+/* 모니터링 창 꺼짐: 화면엔 안 보이되 디코딩은 유지(모션 감지용) */
+#camVideo.preview-off {
+  right: 12px;
+  bottom: 12px;
+  width: 180px;
+  height: 101px;
+  object-fit: cover;
+  opacity: 0;
+  z-index: 0;
+}
 /* X 키: 카메라를 전체 화면에 darkness 50% 로 투영 (네거티브 반전 없음) */
 #camVideo.xray {
   left: 0;

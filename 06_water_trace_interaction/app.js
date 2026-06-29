@@ -557,6 +557,7 @@
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
   const CAM_MIRROR = false;            // 좌우 반전(거울 끔) — 모션 매핑
   let camOn = false, xrayOn = false, camStream = null, camVideo = null;
+  let camMonitorOn = false;              // 모니터링 미리보기 창(기본 꺼짐, W 토글)
   let mctx = null, prevLuma = null, motionAcc = 0, motionSplashAcc = 0, motionTotal = 0;
   let motionCells = [];                // 이번 틱에 움직인 미세 셀들 {x,y,d} (MW×MH 좌표) — 물결 발생용
 
@@ -620,7 +621,13 @@
 
   function applyCamClass() {
     if (!camVideo) return;
-    camVideo.className = xrayOn ? "xray" : "preview";
+    // xray > 모니터링창(W) > 숨김(preview-off: opacity0 이지만 디코딩 유지→모션 계속 동작)
+    camVideo.className = xrayOn ? "xray" : (camMonitorOn ? "preview" : "preview-off");
+  }
+  function toggleCamMonitor() {
+    camMonitorOn = !camMonitorOn;
+    applyCamClass();
+    showHud("모니터링 창 " + (camMonitorOn ? "ON" : "OFF") + (camOn ? "" : " (카메라 꺼짐)"));
   }
   function onCamStream(stream, cb) {
     camStream = stream;
@@ -1050,6 +1057,7 @@
       case "KeyC": if (e.repeat) return; e.preventDefault(); toggleCamera(); break;
       case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
       case "KeyV": if (e.repeat) return; e.preventDefault(); toggleVideoBg(); break;
+      case "KeyW": if (e.repeat) return; e.preventDefault(); toggleCamMonitor(); break;
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
