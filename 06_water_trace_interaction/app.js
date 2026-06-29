@@ -966,15 +966,25 @@
     ambient.play().then(function () { soundOn = true; })
                   .catch(function () { soundOn = false; });
   }
-  // 첫 사용자 제스처(처음 켤 때 비번 키패드 탭 포함)에 소리 시작 + 전체화면 진입
+  // 처음 켤 때: 첫 사용자 제스처(비번 키패드 탭/키 포함) 후 1초 뒤 자동으로 F(전체화면) 입력.
+  //   전체화면은 제스처 활성(~5초) 안에서만 허용되므로, 첫 제스처 기준 1초 뒤 합성 F 를 보냄.
+  let autoFsScheduled = false;
+  function scheduleAutoFullscreen() {
+    if (autoFsScheduled) return;
+    autoFsScheduled = true;
+    setTimeout(function () {
+      if (!document.fullscreenElement) window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF" }));
+    }, 1000);
+  }
   window.addEventListener("pointerdown", function once() {
     trySound();
-    if (!document.fullscreenElement) {
-      const rq = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
-      if (rq) try { rq.call(document.documentElement); } catch (_) {}
-    }
+    scheduleAutoFullscreen();
     window.removeEventListener("pointerdown", once);
   });
+  window.addEventListener("keydown", function onceK() {
+    scheduleAutoFullscreen();
+    window.removeEventListener("keydown", onceK);
+  }, true);
 
   function openBgPicker() { bgInput.click(); }
   function toggleSound() {
