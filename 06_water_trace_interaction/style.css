@@ -15,6 +15,17 @@ html, body {
   height: 100vh;
 }
 
+/* 우측 상단 구석 빈곳 핫스팟(보이지 않음) → 클릭 시 메뉴 토글 */
+#menuHotspot {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 130px;
+  height: 110px;
+  z-index: 9;            /* 툴바(10)보다 아래 → 버튼 클릭은 버튼이 먹음 */
+  background: transparent;
+}
+
 #toolbar {
   position: fixed;
   top: 12px;

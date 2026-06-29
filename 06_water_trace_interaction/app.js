@@ -976,6 +976,8 @@
   soundBtn.addEventListener("click", toggleSound);
   hideBtn.addEventListener("click", toggleMenu);
   fsBtn.addEventListener("click", toggleFullscreen);
+  const menuHotspot = document.getElementById("menuHotspot");
+  if (menuHotspot) menuHotspot.addEventListener("click", toggleMenu);  // 우상단 구석 빈곳
   const camBtn = document.getElementById("camBtn");
   if (camBtn) camBtn.addEventListener("click", toggleCamera);
   const videoBgBtn = document.getElementById("videoBgBtn");

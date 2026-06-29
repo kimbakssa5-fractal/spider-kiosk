@@ -4,12 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>물결 Trace</title>
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   <canvas id="scene"></canvas>
 
-  <div id="fps">FPS --</div>
+  <!-- 우측 상단 구석 빈곳: 누르면 메뉴 토글 -->
+  <div id="menuHotspot" title="메뉴"></div>
+
+  <div id="fps" class="hidden">FPS --</div>
 
   <!-- 중앙 터치 유도 (잔잔히 물결치며 터치 유도) -->
   <div id="hint">
@@ -21,7 +24,7 @@
     </div>
   </div>
 
-  <div id="toolbar">
+  <div id="toolbar" class="hidden">
     <label class="btn" for="bgInput">Background image (B)</label>
     <input type="file" id="bgInput" accept="image/*" hidden>
     <button id="soundBtn" class="btn">Sound (S)</button>
@@ -91,6 +94,6 @@
   })();
   </script>
 
-  <script src="app.js?v=33"></script>
+  <script src="app.js?v=34"></script>
 </body>
 </html>
