@@ -133,14 +133,14 @@ html, body {
 }
 #hint .hand {
   position: absolute;
-  /* 손끝(SVG ≈ 48%,12.5%)이 .tap 중심(=동심원 중심)에 오도록 배치 */
-  left: calc(50% - 24px);
+  /* 손끝(원)이 .tap 중심(=동심원 중심)에 정확히 오도록 배치 */
+  left: calc(50% - 22px);
   top: calc(50% - 6px);
   width: 50px;
   height: 50px;
   fill: #ffffff;
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.55));
-  transform-origin: 48% 12.5%;   /* 손끝 기준 → 까딱여도 손끝 고정 */
+  transform-origin: 48% 16%;     /* 손끝(원) 기준 → 펄스해도 손끝은 동심원 중심에 고정 */
   animation: tapbob 2.4s ease-in-out infinite;
   z-index: 2;
 }
@@ -170,9 +170,10 @@ html, body {
 }
 
 @keyframes tapbob {
-  0%, 100% { transform: translateY(0)   scale(1); }
-  45%      { transform: translateY(7px) scale(0.95); }
-  62%      { transform: translateY(4px) scale(0.98); }
+  /* 손끝(transform-origin) 고정 스케일 펄스 — 손끝은 동심원 중심에 머묾 */
+  0%, 100% { transform: scale(1); }
+  45%      { transform: scale(0.88); }
+  62%      { transform: scale(0.96); }
 }
 @keyframes hintripple {
   0%   { transform: scale(0.35); opacity: 0; }
