@@ -45,6 +45,15 @@ html, body {
   white-space: nowrap;
 }
 #vkbd button:active { background: rgba(255, 255, 255, 0.3); }
+/* 자판 끄기 버튼: 전체 폭, 눈에 띄게 */
+#vkbd button.vk-close {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  background: rgba(255, 80, 80, 0.28);
+  border-color: rgba(255, 130, 130, 0.6);
+  font-weight: 600;
+}
+#vkbd button.vk-close:active { background: rgba(255, 80, 80, 0.5); }
 @media (max-width: 760px) {
   #vkbd { grid-template-columns: repeat(5, 1fr); }
   #vkbd button { font-size: 11px; padding: 8px 4px; }

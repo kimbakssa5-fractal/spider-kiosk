@@ -1026,6 +1026,11 @@
     ["KeyY", "윤슬 Y"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
   ];
+  function closeVkbd() {
+    if (!vkbd || vkbd.classList.contains("hidden")) return;
+    vkbd.classList.add("hidden");
+    showHud("가상 키보드 숨김");
+  }
   if (vkbd) {
     VKEYS.forEach(function (k) {
       const b = document.createElement("button");
@@ -1033,6 +1038,12 @@
       b.addEventListener("click", function () { window.dispatchEvent(new KeyboardEvent("keydown", { code: k[0], bubbles: true })); });
       vkbd.appendChild(b);
     });
+    // 자판 끄기 버튼 (터치로 닫기) — 눈에 띄게
+    const cb = document.createElement("button");
+    cb.textContent = "✕ 자판 끄기 (K)";
+    cb.className = "vk-close";
+    cb.addEventListener("click", closeVkbd);
+    vkbd.appendChild(cb);
   }
   function toggleVkbd() {
     if (!vkbd) return;
