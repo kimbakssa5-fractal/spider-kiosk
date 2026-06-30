@@ -71,7 +71,7 @@
   /* 슬라이더 (다크 트랙 + 흰 손잡이) */
   input[type=range] {
     -webkit-appearance:none; appearance:none;
-    width:140px; height:4px; border-radius:2px;
+    width:clamp(280px, 42vw, 620px); height:4px; border-radius:2px;
     background:var(--track); outline:none; cursor:pointer;
   }
   input[type=range]::-webkit-slider-thumb {
@@ -135,8 +135,9 @@
   #toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
 
   @media (max-width:640px){
-    input[type=range]{ width:104px; }
+    input[type=range]{ width:78vw; }
     .menu .title{ font-size:15px; }
+    .ctrl-grp{ flex-wrap:wrap; justify-content:center; }
   }
 </style>
 </head>
