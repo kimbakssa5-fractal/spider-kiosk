@@ -196,6 +196,18 @@
       <span class="val" id="trimV">0%</span>
     </span>
 
+    <!-- 팬(트리밍 위치 이동) -->
+    <span class="ctrl-grp">
+      <span class="lab">팬 X</span>
+      <input type="range" id="panX" min="-100" max="100" step="1" value="0">
+      <span class="val" id="panXV">0</span>
+    </span>
+    <span class="ctrl-grp">
+      <span class="lab">팬 Y</span>
+      <input type="range" id="panY" min="-100" max="100" step="1" value="0">
+      <span class="val" id="panYV">0</span>
+    </span>
+
     <!-- 저장 해상도 -->
     <span class="ctrl-grp">
       <span class="lab">PNG 해상도</span>
@@ -234,6 +246,8 @@
     dotSize: 18,          // 원본 픽셀 기준 셀 크기
     gap: 0.86,            // 도트 지름 비율(셀 대비)
     trim: 0,              // 0~0.25 가장자리 크롭 비율
+    panX: 0,             // -1~1 : 트리밍 여유 안에서 좌우 이동
+    panY: 0,             // -1~1 : 트리밍 여유 안에서 상하 이동
     res: 1,               // PNG 저장 배율
     grid: null            // { cols, rows, colors:Uint8ClampedArray }
   };
@@ -253,8 +267,10 @@
     if (!state.img) { state.grid = null; return; }
     const iw = state.img.naturalWidth, ih = state.img.naturalHeight;
     const inset = state.trim;
-    const rx = iw * inset, ry = ih * inset;
-    const rw = iw - rx*2, rh = ih - ry*2;             // 트리밍 후 영역
+    const rw = iw * (1 - inset*2), rh = ih * (1 - inset*2);   // 트리밍 후 영역 크기
+    // 잘라낸 여유(iw*inset*2) 안에서 팬으로 크롭 위치를 좌우/상하 이동 (가운데=0)
+    const rx = iw * inset * (1 + state.panX);
+    const ry = ih * inset * (1 + state.panY);
     // 부분(잘린) 도트가 생기지 않도록 floor + 가운데 정렬
     const cols = Math.max(1, Math.floor(rw / state.dotSize));
     const rows = Math.max(1, Math.floor(rh / state.dotSize));
@@ -365,6 +381,12 @@
   });
   $('trim').addEventListener('input', e => {
     state.trim = +e.target.value/100; $('trimV').textContent = e.target.value + '%'; resample();
+  });
+  $('panX').addEventListener('input', e => {
+    state.panX = +e.target.value/100; $('panXV').textContent = e.target.value; resample();
+  });
+  $('panY').addEventListener('input', e => {
+    state.panY = +e.target.value/100; $('panYV').textContent = e.target.value; resample();
   });
   function segPick(segId, attr, apply){
     const seg = $(segId);
