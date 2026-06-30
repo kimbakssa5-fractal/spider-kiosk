@@ -94,9 +94,10 @@
     uniform sampler2D uBg;
     uniform vec2 uBgScale;
     uniform vec2 uBgOffset;
+    uniform float uBgBright;   // 배경 밝기(d/b 키, 기본 1.0)
     void main() {
       vec2 imgUv = vUv * uBgScale + uBgOffset;
-      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb, 0.0);
+      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb * uBgBright, 0.0);
     }`;
 
   // ② 잉어 패스: 클립공간 정점 + 아틀라스 UV, 알파 블렌딩으로 scene 위 합성.
@@ -216,6 +217,7 @@
     uBg: gl.getUniformLocation(progBg, "uBg"),
     uBgScale: gl.getUniformLocation(progBg, "uBgScale"),
     uBgOffset: gl.getUniformLocation(progBg, "uBgOffset"),
+    uBgBright: gl.getUniformLocation(progBg, "uBgBright"),
   };
   const locFish = {
     aClip: gl.getAttribLocation(progFish, "aClip"),
@@ -231,7 +233,7 @@
     uTime: gl.getUniformLocation(progWater, "uTime"),
     uHTexel: gl.getUniformLocation(progWater, "uHTexel"),
   };
-  gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0);
+  gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0); gl.uniform1f(locBg.uBgBright, 1.0);
   gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
   gl.useProgram(progWater); gl.uniform1i(locWater.uScene, 3); gl.uniform1i(locWater.uHeight, 1);
 
@@ -1022,7 +1024,7 @@
   const vkbd = document.getElementById("vkbd");
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
-    ["KeyB", "배경 B"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
+    ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
     ["KeyY", "윤슬 Y"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
@@ -1119,6 +1121,14 @@
     }
   }
 
+  // 배경 밝기(d=어둡게 / b=밝게, 10%씩). 1.0=원본
+  let BG_BRIGHT = 1.0;
+  function setBgBright(dir) {
+    BG_BRIGHT = clamp(Math.round((BG_BRIGHT + dir * 0.1) * 100) / 100, 0.1, 2.0);
+    gl.useProgram(progBg); gl.uniform1f(locBg.uBgBright, BG_BRIGHT);
+    showHud("배경 밝기  " + Math.round(BG_BRIGHT * 100) + "%");
+  }
+
   // 배경 슬라이드쇼 전환 간격(▲/▼): 기본 0초, ±1초
   function setSlideHold(dir) {
     SLIDE_HOLD_MS = clamp(SLIDE_HOLD_MS + dir * 1000, 0, 60000);
@@ -1132,7 +1142,8 @@
     switch (e.code) {
       case "ArrowUp": if (e.repeat) return; e.preventDefault(); setSlideHold(+1); break;
       case "ArrowDown": if (e.repeat) return; e.preventDefault(); setSlideHold(-1); break;
-      case "KeyB": if (e.repeat) return; e.preventDefault(); openBgPicker(); break;
+      case "KeyB": e.preventDefault(); setBgBright(+1); break;   // 배경 밝게 +10%
+      case "KeyD": e.preventDefault(); setBgBright(-1); break;   // 배경 어둡게 -10%
       case "KeyS": if (e.repeat) return; e.preventDefault(); toggleSound(); break;
       case "KeyF": if (e.repeat) return; e.preventDefault(); toggleFullscreen(); break;
       case "KeyM": if (e.repeat) return; e.preventDefault(); toggleMenu(); break;
