@@ -15,6 +15,41 @@ html, body {
   height: 100vh;
 }
 
+/* 가상 키보드 패널 (K 토글) */
+#vkbd {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 11;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  max-width: 96vw;
+  font-family: "Noto Sans KR", "Noto Sans", sans-serif;
+}
+#vkbd.hidden { display: none; }
+#vkbd button {
+  padding: 9px 6px;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+#vkbd button:active { background: rgba(255, 255, 255, 0.3); }
+@media (max-width: 760px) {
+  #vkbd { grid-template-columns: repeat(5, 1fr); }
+  #vkbd button { font-size: 11px; padding: 8px 4px; }
+}
+
 /* 우측 상단 구석 빈곳 핫스팟(보이지 않음) → 클릭 시 메뉴 토글 */
 #menuHotspot {
   position: fixed;
@@ -122,6 +157,7 @@ html, body {
   transition: opacity 0.6s ease;
 }
 #hint.hidden { opacity: 0; }
+#hint.icon-off { display: none; }   /* I 키: 손 아이콘 숨김 */
 
 #hint .tap {
   position: relative;

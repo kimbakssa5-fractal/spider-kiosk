@@ -154,16 +154,16 @@
         vec3 n = normalize(vec3(-grad * 7.0, 1.0));
         vec3 Ld = normalize(vec3(0.55, -0.6, 0.55));
         float spec = pow(max(dot(n, Ld), 0.0), 60.0);
-        // 미세 셀 격자 → 각 셀 고유 위상으로 짧게 깜빡이는 둥근 점(흩뿌림)
-        vec2 gp = vUv * vec2(460.0, 300.0);
+        // 미세 셀 격자 → 각 셀 고유 위상으로 짧게 깜빡이는 둥근 점(더 촘촘·풍부)
+        vec2 gp = vUv * vec2(560.0, 370.0);                   // 셀 밀도↑
         vec2 cid = floor(gp);
         vec2 cf = fract(gp) - 0.5;
         float r1 = fract(sin(dot(cid, vec2(127.1, 311.7))) * 43758.5453);
         float r2 = fract(sin(dot(cid, vec2(269.5, 183.3))) * 43758.5453);
-        float pulse = pow(0.5 + 0.5 * sin(uTime * (2.5 + 5.0 * r2) + r1 * 6.2831), 12.0);
+        float pulse = pow(0.5 + 0.5 * sin(uTime * (2.5 + 5.0 * r2) + r1 * 6.2831), 8.0);  // 더 오래/많이 반짝
         float dotShape = smoothstep(0.5, 0.06, length(cf));   // 둥근 점
-        float twDot = pulse * dotShape * step(0.5, r1);       // 일부 셀만 → 흩뿌려짐
-        float glint = spec * smoothstep(0.006, 0.045, g) * twDot * uGlitter * 2.6;
+        float twDot = pulse * dotShape * step(0.28, r1);      // 더 많은 셀 점등(흩뿌림 풍부)
+        float glint = spec * smoothstep(0.004, 0.035, g) * twDot * uGlitter * 3.4;  // 더 넓은 영역·강하게
         outc += vec3(glint) * (1.0 - 0.5 * fish);             // 물고기 위는 살짝 약하게
       }
       gl_FragColor = vec4(min(outc, 1.0), 1.0);
@@ -966,25 +966,16 @@
     ambient.play().then(function () { soundOn = true; })
                   .catch(function () { soundOn = false; });
   }
-  // 처음 켤 때: 첫 사용자 제스처(비번 키패드 탭/키 포함) 후 1초 뒤 자동으로 F(전체화면) 입력.
-  //   전체화면은 제스처 활성(~5초) 안에서만 허용되므로, 첫 제스처 기준 1초 뒤 합성 F 를 보냄.
-  let autoFsScheduled = false;
-  function scheduleAutoFullscreen() {
-    if (autoFsScheduled) return;
-    autoFsScheduled = true;
-    setTimeout(function () {
-      if (!document.fullscreenElement) window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF" }));
-    }, 1000);
-  }
+  // 첫 사용자 제스처에 소리 시작 + 전체화면 진입(동기 호출이라야 허용됨).
+  //   처음 켤 땐 비번 통과 시점에 전체화면(index 게이트에서 처리). 여기선 재방문(게이트 없음) 대비.
   window.addEventListener("pointerdown", function once() {
     trySound();
-    scheduleAutoFullscreen();
+    if (!document.fullscreenElement) {
+      const rq = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+      if (rq) try { rq.call(document.documentElement); } catch (_) {}
+    }
     window.removeEventListener("pointerdown", once);
   });
-  window.addEventListener("keydown", function onceK() {
-    scheduleAutoFullscreen();
-    window.removeEventListener("keydown", onceK);
-  }, true);
 
   function openBgPicker() { bgInput.click(); }
   function toggleSound() {
@@ -1009,6 +1000,32 @@
   if (camBtn) camBtn.addEventListener("click", toggleCamera);
   const videoBgBtn = document.getElementById("videoBgBtn");
   if (videoBgBtn) videoBgBtn.addEventListener("click", toggleVideoBg);
+  const groupBtn = document.getElementById("groupBtn");
+  if (groupBtn) groupBtn.addEventListener("click", toggleKoiGroup);
+
+  // 가상 키보드: 버튼이 키 입력(keydown)을 동기 발생 → 모든 단축키를 터치로(전체화면도 동작)
+  const vkbd = document.getElementById("vkbd");
+  const kbdBtn = document.getElementById("kbdBtn");
+  const VKEYS = [
+    ["KeyB", "배경 B"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
+    ["KeyY", "윤슬 Y"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
+    ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
+  ];
+  if (vkbd) {
+    VKEYS.forEach(function (k) {
+      const b = document.createElement("button");
+      b.textContent = k[1];
+      b.addEventListener("click", function () { window.dispatchEvent(new KeyboardEvent("keydown", { code: k[0], bubbles: true })); });
+      vkbd.appendChild(b);
+    });
+  }
+  function toggleVkbd() {
+    if (!vkbd) return;
+    const open = !vkbd.classList.toggle("hidden");
+    showHud("가상 키보드 " + (open ? "표시" : "숨김"));
+  }
+  if (kbdBtn) kbdBtn.addEventListener("click", toggleVkbd);
+
   const glitterBtn = document.getElementById("glitterBtn");
   const glitterSlider = document.getElementById("glitterSlider");
   function refreshGlitterUI() { if (glitterBtn) glitterBtn.textContent = GLITTER_ON ? "윤슬 ON (Y)" : "윤슬 OFF (Y)"; }
@@ -1089,6 +1106,8 @@
       case "KeyW": if (e.repeat) return; e.preventDefault(); toggleCamMonitor(); break;
       case "KeyT": if (e.repeat) return; e.preventDefault(); toggleKoiGroup(); break;
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
+      case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
+      case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
       case "Digit3": case "Numpad3": e.preventDefault(); adjust("DISP", +1); break;
@@ -1109,6 +1128,14 @@
   const IDLE_MS = 7000;
   const ATTRACT_MS = 1150;
   let attractOn = false, attractTimer = null, idleTimer = null;
+
+  // I 키: 중앙 손가락 아이콘(힌트) 숨김 토글
+  let hintIconHidden = false;
+  function toggleHintIcon() {
+    hintIconHidden = !hintIconHidden;
+    if (hint) hint.classList.toggle("icon-off", hintIconHidden);
+    showHud("손 아이콘 " + (hintIconHidden ? "숨김" : "표시"));
+  }
 
   function attractStart() {
     if (attractOn) return;
