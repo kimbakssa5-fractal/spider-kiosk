@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>도트 모자이크</title>
+<title>Dot Mosaic</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -41,8 +41,8 @@
   .topbar {
     flex:0 0 auto; position:relative; z-index:10;
     background:linear-gradient(180deg, #0a0a0a 0%, #161616 62%, #1c1c1c 100%);
-    padding:20px 14px 18px;
-    display:flex; flex-direction:column; align-items:center; gap:14px;
+    padding:12px 14px 12px;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
     box-shadow:0 6px 22px rgba(0,0,0,.18);
   }
   .menu { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:0; max-width:98vw; }
@@ -62,7 +62,7 @@
   /* 컨트롤 행 */
   .controls {
     display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
-    gap:10px 18px; max-width:98vw;
+    gap:5px 16px; max-width:98vw;
   }
   .ctrl-grp { display:inline-flex; align-items:center; gap:8px; }
   .lab { color:#bdbdbd; font-size:13px; white-space:nowrap; }
@@ -147,74 +147,74 @@
 <!-- ═══ 상단 컨트롤 ═══ -->
 <div class="topbar">
   <div class="menu">
-    <span class="title">도트 모자이크</span>
+    <span class="title">Dot Mosaic</span>
     <span class="menu-sep">|</span>
-    <button class="bar-btn primary" id="btnLoad">🖼 이미지 불러오기</button>
+    <button class="bar-btn primary" id="btnLoad">🖼 Load Image</button>
     <span class="menu-sep">|</span>
-    <button class="bar-btn" id="btnPng" disabled>⬇ PNG 저장</button>
-    <button class="bar-btn" id="btnSvg" disabled>⬇ SVG(벡터) 저장</button>
+    <button class="bar-btn" id="btnPng" disabled>⬇ Save PNG</button>
+    <button class="bar-btn" id="btnSvg" disabled>⬇ Save SVG (Vector)</button>
   </div>
 
   <div class="controls" id="controls" style="opacity:.4; pointer-events:none">
-    <!-- 도트 크기 -->
+    <!-- Dot size -->
     <span class="ctrl-grp">
-      <span class="lab">도트 크기</span>
+      <span class="lab">Dot Size</span>
       <input type="range" id="dotSize" min="4" max="80" step="1" value="18">
       <span class="val" id="dotSizeV">18px</span>
     </span>
 
-    <!-- 배경색 -->
+    <!-- Background -->
     <span class="ctrl-grp">
-      <span class="lab">배경</span>
+      <span class="lab">Background</span>
       <span class="seg" id="bgSeg">
-        <button data-bg="#000000" class="on">검정</button>
-        <button data-bg="#808080">회색</button>
-        <button data-bg="#ffffff">흰색</button>
+        <button data-bg="#000000" class="on">Black</button>
+        <button data-bg="#808080">Gray</button>
+        <button data-bg="#ffffff">White</button>
       </span>
     </span>
 
-    <!-- 도트 모양 -->
+    <!-- Dot shape -->
     <span class="ctrl-grp">
-      <span class="lab">모양</span>
+      <span class="lab">Shape</span>
       <span class="seg" id="shapeSeg">
-        <button data-shape="circle" class="on">● 원형</button>
-        <button data-shape="square">■ 사각</button>
+        <button data-shape="circle" class="on">● Circle</button>
+        <button data-shape="square">■ Square</button>
       </span>
     </span>
 
-    <!-- 도트 채움(여백) -->
+    <!-- Dot fill -->
     <span class="ctrl-grp">
-      <span class="lab">채움</span>
+      <span class="lab">Fill</span>
       <input type="range" id="gap" min="35" max="100" step="1" value="86">
       <span class="val" id="gapV">86%</span>
     </span>
 
-    <!-- 트리밍 -->
+    <!-- Trim -->
     <span class="ctrl-grp">
-      <span class="lab">트리밍</span>
+      <span class="lab">Trim</span>
       <input type="range" id="trim" min="0" max="25" step="1" value="0">
       <span class="val" id="trimV">0%</span>
     </span>
 
-    <!-- 팬(트리밍 위치 이동) -->
+    <!-- Pan (move trim window) -->
     <span class="ctrl-grp">
-      <span class="lab">팬 X</span>
+      <span class="lab">Pan X</span>
       <input type="range" id="panX" min="-100" max="100" step="1" value="0">
       <span class="val" id="panXV">0</span>
     </span>
     <span class="ctrl-grp">
-      <span class="lab">팬 Y</span>
+      <span class="lab">Pan Y</span>
       <input type="range" id="panY" min="-100" max="100" step="1" value="0">
       <span class="val" id="panYV">0</span>
     </span>
 
-    <!-- 저장 해상도 -->
+    <!-- Save resolution -->
     <span class="ctrl-grp">
-      <span class="lab">PNG 해상도</span>
+      <span class="lab">PNG Res</span>
       <span class="seg" id="resSeg">
-        <button data-res="1" class="on">표준 1×</button>
-        <button data-res="2">고화질 2×</button>
-        <button data-res="4">초고화질 4×</button>
+        <button data-res="1" class="on">Standard 1×</button>
+        <button data-res="2">HD 2×</button>
+        <button data-res="4">Ultra 4×</button>
       </span>
     </span>
   </div>
@@ -224,9 +224,9 @@
 <div class="stage" id="stage">
   <canvas id="view"></canvas>
   <div id="drop">
-    <div class="big">이미지를 불러오세요</div>
-    <div class="sub">사진을 점(도트)으로 재구성합니다.<br>아래 버튼을 누르거나, 이미지를 이 영역에 끌어다 놓으세요.</div>
-    <button class="btn" id="btnLoad2">🖼 이미지 불러오기</button>
+    <div class="big">Load an image</div>
+    <div class="sub">Reconstruct a photo as a grid of dots.<br>Click the button below, or drag &amp; drop an image here.</div>
+    <button class="btn" id="btnLoad2">🖼 Load Image</button>
   </div>
 </div>
 
@@ -334,7 +334,7 @@
 
   // ─── 이미지 로드 ───
   function loadFile(file){
-    if (!file || !file.type.startsWith('image/')){ toast('이미지 파일이 아닙니다'); return; }
+    if (!file || !file.type.startsWith('image/')){ toast('Not an image file'); return; }
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
@@ -345,9 +345,9 @@
       $('controls').style.pointerEvents = 'auto';
       $('btnPng').disabled = false; $('btnSvg').disabled = false;
       resample();
-      toast(img.naturalWidth + '×' + img.naturalHeight + ' 이미지 불러옴');
+      toast(img.naturalWidth + '×' + img.naturalHeight + ' image loaded');
     };
-    img.onerror = () => { URL.revokeObjectURL(url); toast('이미지를 열 수 없습니다'); };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Could not open image'); };
     img.src = url;
   }
 
@@ -420,7 +420,7 @@
       a.download = `dotmosaic_${tstamp()}_${dim.W}x${dim.H}.png`;
       a.href = URL.createObjectURL(blob);
       a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
-      toast(`PNG 저장됨 · ${dim.W}×${dim.H}`);
+      toast(`PNG saved · ${dim.W}×${dim.H}`);
     }, 'image/png');
   });
 
@@ -453,7 +453,7 @@
     a.download = `dotmosaic_${tstamp()}.svg`;
     a.href = URL.createObjectURL(blob);
     a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
-    toast(`SVG(벡터) 저장됨 · ${g.cols*g.rows.toLocaleString?.()|| g.cols*g.rows} 도트`);
+    toast(`SVG (vector) saved · ${g.cols*g.rows} dots`);
   });
 })();
 </script>
