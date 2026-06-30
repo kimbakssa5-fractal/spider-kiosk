@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>도트 모자이크</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ─── 디자인 토큰 : 조용한 갤러리(02 포토 방명록과 동일 계열) ─── */
+  :root {
+    --ink:     #1a1a1a;
+    --muted:   #9a9a9a;
+    --line:    #e4e4e4;
+    --accent:  #fd0136;
+    --accent-d:#d80030;
+    --track:   #313131;
+    --sans: 'Noto Sans KR', 'Noto Sans', system-ui, sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body {
+    width:100%; height:100%;
+    background:#fff; color:var(--ink); font-family:var(--sans);
+    overflow:hidden; user-select:none; -webkit-user-select:none;
+  }
+
+  /* 상단 중앙 빨강 삼각 탭 (시그니처) */
+  #tabMarker {
+    position:fixed; top:0; left:50%; transform:translateX(-50%);
+    width:0; height:0;
+    border-left:26px solid transparent; border-right:26px solid transparent;
+    border-top:30px solid var(--accent);
+    z-index:60; pointer-events:none;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));
+  }
+
+  body { display:flex; flex-direction:column; }
+
+  /* ─── 상단 다크 헤더 + | 메뉴 + 컨트롤 ─── */
+  .topbar {
+    flex:0 0 auto; position:relative; z-index:10;
+    background:linear-gradient(180deg, #0a0a0a 0%, #161616 62%, #1c1c1c 100%);
+    padding:20px 14px 18px;
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+    box-shadow:0 6px 22px rgba(0,0,0,.18);
+  }
+  .menu { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:0; max-width:98vw; }
+  .menu .title { color:#fff; font-size:17px; font-weight:800; letter-spacing:.02em; padding:6px 12px; }
+  .menu-sep { color:#4a4a4a; font-size:13px; padding:0 1px; align-self:center; }
+
+  .bar-btn {
+    font-family:inherit; font-size:15px; font-weight:600;
+    background:none; border:none; color:#e9e9e9;
+    padding:6px 12px; cursor:pointer; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .bar-btn:active { opacity:.55; }
+  .bar-btn:disabled { opacity:.3; cursor:default; }
+  .bar-btn.primary { color:var(--accent); font-weight:800; }
+
+  /* 컨트롤 행 */
+  .controls {
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
+    gap:10px 18px; max-width:98vw;
+  }
+  .ctrl-grp { display:inline-flex; align-items:center; gap:8px; }
+  .lab { color:#bdbdbd; font-size:13px; white-space:nowrap; }
+  .val { color:#fff; font-size:13px; font-weight:700; min-width:42px; text-align:right; font-variant-numeric:tabular-nums; }
+
+  /* 슬라이더 (다크 트랙 + 흰 손잡이) */
+  input[type=range] {
+    -webkit-appearance:none; appearance:none;
+    width:140px; height:4px; border-radius:2px;
+    background:var(--track); outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+    background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width:18px; height:18px; border:none; border-radius:50%; background:#fff; cursor:pointer;
+  }
+
+  /* 세그먼트(배경색 · 모양 · 해상도) */
+  .seg { display:inline-flex; border:1px solid #3a3a3a; border-radius:8px; overflow:hidden; }
+  .seg button {
+    font-family:inherit; font-size:13px; font-weight:600;
+    background:#1f1f1f; border:none; color:#cfcfcf; cursor:pointer;
+    padding:7px 11px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
+    border-left:1px solid #3a3a3a;
+  }
+  .seg button:first-child { border-left:none; }
+  .seg button.on { background:var(--accent); color:#fff; }
+  .seg button:active { opacity:.7; }
+  .dotpv { width:14px; height:14px; border-radius:50%; border:1px solid #777; }
+
+  /* ─── 작업영역 ─── */
+  .stage {
+    flex:1 1 auto; position:relative; min-height:0;
+    display:flex; align-items:center; justify-content:center;
+    background:
+      linear-gradient(45deg, #f4f4f4 25%, transparent 25%, transparent 75%, #f4f4f4 75%) 0 0/28px 28px,
+      linear-gradient(45deg, #f4f4f4 25%, #fbfbfb 25%, #fbfbfb 75%, #f4f4f4 75%) 14px 14px/28px 28px;
+    overflow:hidden;
+  }
+  #view { display:none; box-shadow:0 10px 40px rgba(0,0,0,.22); image-rendering:auto; }
+  #view.show { display:block; }
+
+  /* 드롭 안내 */
+  #drop {
+    position:absolute; inset:24px; border:2px dashed #c8c8c8; border-radius:16px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+    color:var(--muted); text-align:center; padding:24px; transition:border-color .15s, background .15s;
+  }
+  #drop.hide { display:none; }
+  #drop.over { border-color:var(--accent); background:rgba(253,1,54,.04); }
+  #drop .big { font-size:20px; font-weight:700; color:#666; }
+  #drop .sub { font-size:14px; line-height:1.7; }
+  .btn {
+    font-family:inherit; font-size:16px; font-weight:700;
+    border:1px solid var(--accent); background:var(--accent); color:#fff;
+    padding:14px 30px; border-radius:9px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px;
+    transition:transform .08s ease, background .15s ease;
+  }
+  .btn:active { transform:scale(.97); background:var(--accent-d); }
+
+  /* 토스트 */
+  #toast {
+    position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+    background:rgba(20,20,20,.94); color:#fff; padding:12px 20px; border-radius:10px;
+    font-size:14px; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:200;
+  }
+  #toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  @media (max-width:640px){
+    input[type=range]{ width:104px; }
+    .menu .title{ font-size:15px; }
+  }
+</style>
+</head>
+<body>
+<div id="tabMarker"></div>
+
+<!-- ═══ 상단 컨트롤 ═══ -->
+<div class="topbar">
+  <div class="menu">
+    <span class="title">도트 모자이크</span>
+    <span class="menu-sep">|</span>
+    <button class="bar-btn primary" id="btnLoad">🖼 이미지 불러오기</button>
+    <span class="menu-sep">|</span>
+    <button class="bar-btn" id="btnPng" disabled>⬇ PNG 저장</button>
+    <button class="bar-btn" id="btnSvg" disabled>⬇ SVG(벡터) 저장</button>
+  </div>
+
+  <div class="controls" id="controls" style="opacity:.4; pointer-events:none">
+    <!-- 도트 크기 -->
+    <span class="ctrl-grp">
+      <span class="lab">도트 크기</span>
+      <input type="range" id="dotSize" min="4" max="80" step="1" value="18">
+      <span class="val" id="dotSizeV">18px</span>
+    </span>
+
+    <!-- 배경색 -->
+    <span class="ctrl-grp">
+      <span class="lab">배경</span>
+      <span class="seg" id="bgSeg">
+        <button data-bg="#000000" class="on">검정</button>
+        <button data-bg="#808080">회색</button>
+        <button data-bg="#ffffff">흰색</button>
+      </span>
+    </span>
+
+    <!-- 도트 모양 -->
+    <span class="ctrl-grp">
+      <span class="lab">모양</span>
+      <span class="seg" id="shapeSeg">
+        <button data-shape="circle" class="on">● 원형</button>
+        <button data-shape="square">■ 사각</button>
+      </span>
+    </span>
+
+    <!-- 도트 채움(여백) -->
+    <span class="ctrl-grp">
+      <span class="lab">채움</span>
+      <input type="range" id="gap" min="35" max="100" step="1" value="86">
+      <span class="val" id="gapV">86%</span>
+    </span>
+
+    <!-- 트리밍 -->
+    <span class="ctrl-grp">
+      <span class="lab">트리밍</span>
+      <input type="range" id="trim" min="0" max="25" step="1" value="0">
+      <span class="val" id="trimV">0%</span>
+    </span>
+
+    <!-- 저장 해상도 -->
+    <span class="ctrl-grp">
+      <span class="lab">PNG 해상도</span>
+      <span class="seg" id="resSeg">
+        <button data-res="1" class="on">표준 1×</button>
+        <button data-res="2">고화질 2×</button>
+        <button data-res="4">초고화질 4×</button>
+      </span>
+    </span>
+  </div>
+</div>
+
+<!-- ═══ 작업영역 ═══ -->
+<div class="stage" id="stage">
+  <canvas id="view"></canvas>
+  <div id="drop">
+    <div class="big">이미지를 불러오세요</div>
+    <div class="sub">사진을 점(도트)으로 재구성합니다.<br>아래 버튼을 누르거나, 이미지를 이 영역에 끌어다 놓으세요.</div>
+    <button class="btn" id="btnLoad2">🖼 이미지 불러오기</button>
+  </div>
+</div>
+
+<input type="file" id="file" accept="image/*" style="display:none">
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+
+  // ─── 상태 ───
+  const state = {
+    img: null,            // 원본 Image
+    bg: '#000000',
+    shape: 'circle',
+    dotSize: 18,          // 원본 픽셀 기준 셀 크기
+    gap: 0.86,            // 도트 지름 비율(셀 대비)
+    trim: 0,              // 0~0.25 가장자리 크롭 비율
+    res: 1,               // PNG 저장 배율
+    grid: null            // { cols, rows, colors:Uint8ClampedArray }
+  };
+
+  const view = $('view'), vctx = view.getContext('2d');
+  const stage = $('stage');
+  const sampler = document.createElement('canvas');   // 평균색 추출용 작은 캔버스
+  const sctx = sampler.getContext('2d', { willReadFrequently:true });
+
+  function toast(msg){
+    const t = $('toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('on'), 1900);
+  }
+
+  // ─── 그리드 샘플링 : 원본을 cols×rows 로 축소 → 각 픽셀이 셀의 평균색 ───
+  function sampleGrid(){
+    if (!state.img) { state.grid = null; return; }
+    const iw = state.img.naturalWidth, ih = state.img.naturalHeight;
+    const inset = state.trim;
+    const rx = iw * inset, ry = ih * inset;
+    const rw = iw - rx*2, rh = ih - ry*2;             // 트리밍 후 영역
+    // 부분(잘린) 도트가 생기지 않도록 floor + 가운데 정렬
+    const cols = Math.max(1, Math.floor(rw / state.dotSize));
+    const rows = Math.max(1, Math.floor(rh / state.dotSize));
+    sampler.width = cols; sampler.height = rows;
+    sctx.clearRect(0,0,cols,rows);
+    sctx.imageSmoothingEnabled = true;
+    // 셀 크기로 정확히 나눠떨어지는 가운데 영역만 사용 → 가장자리 자투리 제거
+    const useW = cols * state.dotSize, useH = rows * state.dotSize;
+    const sx = rx + (rw - useW)/2, sy = ry + (rh - useH)/2;
+    sctx.drawImage(state.img, sx, sy, useW, useH, 0, 0, cols, rows);
+    const colors = sctx.getImageData(0,0,cols,rows).data;
+    state.grid = { cols, rows, colors };
+  }
+
+  // ─── 모자이크 그리기 ───
+  function drawMosaic(ctx, cell){
+    const g = state.grid; if (!g) return;
+    const W = g.cols * cell, H = g.rows * cell;
+    ctx.canvas.width = W; ctx.canvas.height = H;
+    ctx.fillStyle = state.bg; ctx.fillRect(0,0,W,H);
+    const r = cell/2 * state.gap;
+    const d = state.colors; // alias
+    const c = g.colors;
+    for (let y=0; y<g.rows; y++){
+      for (let x=0; x<g.cols; x++){
+        const i = (y*g.cols + x)*4;
+        if (c[i+3] === 0) continue;                   // 투명 영역 건너뜀
+        ctx.fillStyle = 'rgb('+c[i]+','+c[i+1]+','+c[i+2]+')';
+        const cx = x*cell + cell/2, cy = y*cell + cell/2;
+        if (state.shape === 'square'){
+          const s = r*2; ctx.fillRect(cx-r, cy-r, s, s);
+        } else {
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+        }
+      }
+    }
+    return { W, H };
+  }
+
+  // ─── 미리보기 렌더 (스테이지에 맞춰 + 기기 해상도(DPR) 반영) ───
+  function renderPreview(){
+    if (!state.grid){ view.classList.remove('show'); return; }
+    const g = state.grid;
+    const pad = 28;
+    const sw = stage.clientWidth - pad, sh = stage.clientHeight - pad;
+    // 그리드 비율을 유지하며 스테이지에 맞는 표시 셀 크기 계산
+    const fit = Math.min(sw / g.cols, sh / g.rows);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cell = Math.max(1, fit * dpr);
+    drawMosaic(vctx, cell);
+    // CSS 표시 크기(논리 픽셀)
+    view.style.width  = (g.cols * fit) + 'px';
+    view.style.height = (g.rows * fit) + 'px';
+    view.classList.add('show');
+  }
+
+  // 샘플링이 필요한 변경(도트크기·트리밍) → 재샘플 후 렌더
+  function resample(){ sampleGrid(); renderPreview(); }
+  // 그리기만 바뀌는 변경(배경·모양·채움) → 렌더만
+  function redraw(){ renderPreview(); }
+
+  // ─── 이미지 로드 ───
+  function loadFile(file){
+    if (!file || !file.type.startsWith('image/')){ toast('이미지 파일이 아닙니다'); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      state.img = img;
+      $('drop').classList.add('hide');
+      $('controls').style.opacity = '1';
+      $('controls').style.pointerEvents = 'auto';
+      $('btnPng').disabled = false; $('btnSvg').disabled = false;
+      resample();
+      toast(img.naturalWidth + '×' + img.naturalHeight + ' 이미지 불러옴');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('이미지를 열 수 없습니다'); };
+    img.src = url;
+  }
+
+  $('file').addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); e.target.value=''; });
+  const pick = () => $('file').click();
+  $('btnLoad').addEventListener('click', pick);
+  $('btnLoad2').addEventListener('click', pick);
+
+  // 드래그&드롭
+  ['dragenter','dragover'].forEach(ev => stage.addEventListener(ev, e => {
+    e.preventDefault(); if (!state.img) $('drop').classList.add('over');
+  }));
+  ['dragleave','drop'].forEach(ev => stage.addEventListener(ev, e => {
+    e.preventDefault(); $('drop').classList.remove('over');
+  }));
+  stage.addEventListener('drop', e => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) loadFile(f);
+  });
+  // 붙여넣기
+  window.addEventListener('paste', e => {
+    const items = e.clipboardData && e.clipboardData.items; if (!items) return;
+    for (const it of items){ if (it.type.startsWith('image/')){ loadFile(it.getAsFile()); break; } }
+  });
+
+  // ─── 컨트롤 바인딩 ───
+  $('dotSize').addEventListener('input', e => {
+    state.dotSize = +e.target.value; $('dotSizeV').textContent = state.dotSize + 'px'; resample();
+  });
+  $('gap').addEventListener('input', e => {
+    state.gap = +e.target.value/100; $('gapV').textContent = e.target.value + '%'; redraw();
+  });
+  $('trim').addEventListener('input', e => {
+    state.trim = +e.target.value/100; $('trimV').textContent = e.target.value + '%'; resample();
+  });
+  function segPick(segId, attr, apply){
+    const seg = $(segId);
+    seg.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on'); apply(b.dataset[attr]);
+    });
+  }
+  segPick('bgSeg','bg',     v => { state.bg = v; redraw(); });
+  segPick('shapeSeg','shape', v => { state.shape = v; redraw(); });
+  segPick('resSeg','res',   v => { state.res = +v; });
+
+  // 리사이즈 시 미리보기 재배치
+  let rzT; window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(renderPreview, 120); });
+
+  // ─── 저장 : PNG (해상도 지정) ───
+  function tstamp(){
+    const p = n => String(n).padStart(2,'0'), t = new Date();
+    return `${t.getFullYear()}${p(t.getMonth()+1)}${p(t.getDate())}_${p(t.getHours())}${p(t.getMinutes())}${p(t.getSeconds())}`;
+  }
+  $('btnPng').addEventListener('click', () => {
+    if (!state.grid) return;
+    const out = document.createElement('canvas');
+    const octx = out.getContext('2d');
+    // 1× = 원본 도트 크기로 렌더(≈ 원본 해상도). 2×/4× = 확대 저장.
+    const cell = state.dotSize * state.res;
+    const dim = drawMosaic(octx, cell);
+    out.toBlob(blob => {
+      const a = document.createElement('a');
+      a.download = `dotmosaic_${tstamp()}_${dim.W}x${dim.H}.png`;
+      a.href = URL.createObjectURL(blob);
+      a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+      toast(`PNG 저장됨 · ${dim.W}×${dim.H}`);
+    }, 'image/png');
+  });
+
+  // ─── 저장 : SVG (벡터 · 확대해도 깨지지 않음, 일러스트레이터에서 .ai 로 저장 가능) ───
+  $('btnSvg').addEventListener('click', () => {
+    const g = state.grid; if (!g) return;
+    const cell = state.dotSize;                  // 단위 셀(벡터라 절대 크기는 의미상 기준일 뿐)
+    const W = g.cols*cell, H = g.rows*cell, r = +(cell/2*state.gap).toFixed(2);
+    const c = g.colors;
+    const parts = [];
+    parts.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+    parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`);
+    parts.push(`<rect width="${W}" height="${H}" fill="${state.bg}"/>`);
+    for (let y=0; y<g.rows; y++){
+      for (let x=0; x<g.cols; x++){
+        const i = (y*g.cols + x)*4;
+        if (c[i+3] === 0) continue;
+        const fill = `#${((1<<24) + (c[i]<<16) + (c[i+1]<<8) + c[i+2]).toString(16).slice(1)}`;
+        const cx = x*cell + cell/2, cy = y*cell + cell/2;
+        if (state.shape === 'square'){
+          parts.push(`<rect x="${cx-r}" y="${cy-r}" width="${r*2}" height="${r*2}" fill="${fill}"/>`);
+        } else {
+          parts.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"/>`);
+        }
+      }
+    }
+    parts.push(`</svg>`);
+    const blob = new Blob([parts.join('\n')], { type:'image/svg+xml' });
+    const a = document.createElement('a');
+    a.download = `dotmosaic_${tstamp()}.svg`;
+    a.href = URL.createObjectURL(blob);
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+    toast(`SVG(벡터) 저장됨 · ${g.cols*g.rows.toLocaleString?.()|| g.cols*g.rows} 도트`);
+  });
+})();
+</script>
+</body>
+</html>
