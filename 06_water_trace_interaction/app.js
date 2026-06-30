@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "8";
+  const ASSET_VER = "9";
   const BG_VER = "1";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
@@ -337,7 +337,7 @@
       fadeT += dtMs / SLIDE_FADE_MS;
       if (fadeT >= 1) { curImg = inImg; inImg = null; transitioning = false; fadeT = 0; holdAcc = 0; }
       composeUpload();
-    } else if (usingSlideshow) {
+    } else if (usingSlideshow && SLIDE_HOLD_MS > 0) {   // 0초면 정지(pause)
       holdAcc += dtMs;
       if (holdAcc >= SLIDE_HOLD_MS) {
         const nx = nextLoadedSlide();
@@ -1122,7 +1122,8 @@
   // 배경 슬라이드쇼 전환 간격(▲/▼): 기본 0초, ±1초
   function setSlideHold(dir) {
     SLIDE_HOLD_MS = clamp(SLIDE_HOLD_MS + dir * 1000, 0, 60000);
-    showHud("배경 전환 간격  " + (SLIDE_HOLD_MS / 1000) + "초");
+    holdAcc = 0;
+    showHud(SLIDE_HOLD_MS > 0 ? ("배경 전환 간격  " + (SLIDE_HOLD_MS / 1000) + "초") : "배경 슬라이드 정지 (0초)");
   }
 
   // 키보드 — 물리 키 기준(e.code). 토글 B/S/F/M · 미세조정 1~8 · 잉어수 0(▲)/9(▼) · 배경간격 ↑/↓
