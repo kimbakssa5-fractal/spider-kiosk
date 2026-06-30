@@ -29,7 +29,7 @@
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
   const ASSET_VER = "8";
   const BG_VER = "1";
-  const SLIDE_HOLD_MS = 7000;          // 각 장면 표시 시간
+  let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
 
   // 키보드로 실시간 미세조정 (1/2 DAMPING, 3/4 DISP_SCALE, 5/6 SPLASH_RADIUS, 7/8 FPS)
@@ -1025,6 +1025,7 @@
     ["KeyB", "배경 B"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
     ["KeyY", "윤슬 Y"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
+    ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
   ];
   function closeVkbd() {
     if (!vkbd || vkbd.classList.contains("hidden")) return;
@@ -1118,10 +1119,18 @@
     }
   }
 
-  // 키보드 — 물리 키 기준(e.code). 토글 B/S/F/M · 미세조정 1~8 · 잉어수 0(▲)/9(▼)
+  // 배경 슬라이드쇼 전환 간격(▲/▼): 기본 0초, ±1초
+  function setSlideHold(dir) {
+    SLIDE_HOLD_MS = clamp(SLIDE_HOLD_MS + dir * 1000, 0, 60000);
+    showHud("배경 전환 간격  " + (SLIDE_HOLD_MS / 1000) + "초");
+  }
+
+  // 키보드 — 물리 키 기준(e.code). 토글 B/S/F/M · 미세조정 1~8 · 잉어수 0(▲)/9(▼) · 배경간격 ↑/↓
   window.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     switch (e.code) {
+      case "ArrowUp": if (e.repeat) return; e.preventDefault(); setSlideHold(+1); break;
+      case "ArrowDown": if (e.repeat) return; e.preventDefault(); setSlideHold(-1); break;
       case "KeyB": if (e.repeat) return; e.preventDefault(); openBgPicker(); break;
       case "KeyS": if (e.repeat) return; e.preventDefault(); toggleSound(); break;
       case "KeyF": if (e.repeat) return; e.preventDefault(); toggleFullscreen(); break;
