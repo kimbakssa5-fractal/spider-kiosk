@@ -153,25 +153,32 @@
         float g = length(grad);
         vec3 n = normalize(vec3(-grad * 7.0, 1.0));
         vec3 Ld = normalize(vec3(0.55, -0.6, 0.55));
-        float spec = pow(max(dot(n, Ld), 0.0), 48.0);        // 약간 넓은 하이라이트
-        float slope = smoothstep(0.0028, 0.032, g);           // 잔물결에도 더 잘 점등
-        // 흩뿌린 점형을 유지하며 풍성하게 — 2중 격자(큰 점 + 더 촘촘한 작은 점)
-        // 레이어 A: 굵은 점, 더 많은 셀 점등
-        vec2 gpA = vUv * vec2(640.0, 420.0);
+        float spec = pow(max(dot(n, Ld), 0.0), 40.0);        // 더 넓은 하이라이트
+        float slope = smoothstep(0.0022, 0.030, g);           // 더 잔잔한 물결에도 점등
+        // 흩뿌린 점형 유지하며 더 풍성하게 — 3중 격자(굵은 점+작은 점+미세 점)
+        // 레이어 A: 굵은 점, 셀 대부분 점등
+        vec2 gpA = vUv * vec2(720.0, 470.0);
         vec2 cidA = floor(gpA); vec2 cfA = fract(gpA) - 0.5;
         float aR1 = fract(sin(dot(cidA, vec2(127.1, 311.7))) * 43758.5453);
         float aR2 = fract(sin(dot(cidA, vec2(269.5, 183.3))) * 43758.5453);
-        float aPulse = pow(0.5 + 0.5 * sin(uTime * (2.5 + 5.0 * aR2) + aR1 * 6.2831), 7.0);
-        float aTw = aPulse * smoothstep(0.5, 0.06, length(cfA)) * step(0.16, aR1);  // 약 84% 셀
-        // 레이어 B: 더 촘촘한 작은 점, 다른 위상/속도 → 반짝임 디테일 추가
-        vec2 gpB = vUv * vec2(1040.0, 690.0);
+        float aPulse = pow(0.5 + 0.5 * sin(uTime * (2.5 + 5.0 * aR2) + aR1 * 6.2831), 6.0);
+        float aTw = aPulse * smoothstep(0.5, 0.06, length(cfA)) * step(0.10, aR1);  // 약 90% 셀
+        // 레이어 B: 더 촘촘한 작은 점
+        vec2 gpB = vUv * vec2(1120.0, 740.0);
         vec2 cidB = floor(gpB); vec2 cfB = fract(gpB) - 0.5;
         float bR1 = fract(sin(dot(cidB, vec2(74.7, 219.3))) * 27183.123);
         float bR2 = fract(sin(dot(cidB, vec2(311.3, 127.9))) * 27183.123);
-        float bPulse = pow(0.5 + 0.5 * sin(uTime * (3.6 + 6.0 * bR2) + bR1 * 6.2831), 9.0);
-        float bTw = bPulse * smoothstep(0.45, 0.05, length(cfB)) * step(0.34, bR1);
-        float twDot = aTw + bTw * 0.85;
-        float glint = spec * slope * twDot * uGlitter * 3.0;  // 두 레이어 합 → 더 풍부
+        float bPulse = pow(0.5 + 0.5 * sin(uTime * (3.6 + 6.0 * bR2) + bR1 * 6.2831), 8.0);
+        float bTw = bPulse * smoothstep(0.45, 0.05, length(cfB)) * step(0.24, bR1);
+        // 레이어 C: 미세한 반짝 가루(아주 촘촘·빠름) → 풍성한 디테일
+        vec2 gpC = vUv * vec2(1680.0, 1110.0);
+        vec2 cidC = floor(gpC); vec2 cfC = fract(gpC) - 0.5;
+        float cR1 = fract(sin(dot(cidC, vec2(201.5, 88.7))) * 15731.743);
+        float cR2 = fract(sin(dot(cidC, vec2(96.3, 271.1))) * 15731.743);
+        float cPulse = pow(0.5 + 0.5 * sin(uTime * (4.8 + 7.0 * cR2) + cR1 * 6.2831), 10.0);
+        float cTw = cPulse * smoothstep(0.42, 0.04, length(cfC)) * step(0.42, cR1);
+        float twDot = aTw + bTw * 0.85 + cTw * 0.7;
+        float glint = spec * slope * twDot * uGlitter * 2.9;  // 세 레이어 합 → 더욱 풍부
         outc += vec3(glint) * (1.0 - 0.5 * fish);             // 물고기 위는 살짝 약하게
       }
       gl_FragColor = vec4(min(outc, 1.0), 1.0);
