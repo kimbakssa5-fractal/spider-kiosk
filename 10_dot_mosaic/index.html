@@ -66,7 +66,18 @@
   }
   .ctrl-grp { display:inline-flex; align-items:center; gap:8px; }
   .lab { color:#bdbdbd; font-size:13px; white-space:nowrap; }
-  .val { color:#fff; font-size:13px; font-weight:700; min-width:42px; text-align:right; font-variant-numeric:tabular-nums; }
+  /* 숫자 직접입력 칸 */
+  .num {
+    width:58px; background:#1f1f1f; border:1px solid #3a3a3a; color:#fff;
+    font-family:inherit; font-size:13px; font-weight:700; border-radius:6px;
+    padding:5px 6px; text-align:center; -moz-appearance:textfield; outline:none;
+  }
+  .num:focus { border-color:var(--accent); }
+  .num::-webkit-outer-spin-button, .num::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .unit { color:#9a9a9a; font-size:12px; }
+
+  /* 모바일에서만 보이는 컨트롤 토글 */
+  .toggleCtrl { display:none; }
 
   /* 슬라이더 (다크 트랙 + 흰 손잡이) */
   input[type=range] {
@@ -135,9 +146,14 @@
   #toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
 
   @media (max-width:640px){
-    input[type=range]{ width:78vw; }
+    input[type=range]{ width:72vw; }
     .menu .title{ font-size:15px; }
     .ctrl-grp{ flex-wrap:wrap; justify-content:center; }
+    .toggleCtrl{ display:inline-flex; }
+    .topbar{ padding:8px 10px; gap:6px; }
+    /* 펼쳐도 화면을 다 덮지 않도록 높이 제한 + 내부 스크롤 → 편집 이미지 영역 확보 */
+    .controls{ max-height:44vh; overflow-y:auto; overflow-x:hidden; width:100%; padding:4px 2px; }
+    body.collapsed .controls{ display:none; }   /* 접으면 메뉴 한 줄만 → 이미지 거의 전체 */
   }
 </style>
 </head>
@@ -153,6 +169,8 @@
     <span class="menu-sep">|</span>
     <button class="bar-btn" id="btnPng" disabled>⬇ Save PNG</button>
     <button class="bar-btn" id="btnSvg" disabled>⬇ Save SVG (Vector)</button>
+    <span class="menu-sep">|</span>
+    <button class="bar-btn toggleCtrl" id="btnToggle">⚙ Controls ▾</button>
   </div>
 
   <div class="controls" id="controls" style="opacity:.4; pointer-events:none">
@@ -160,7 +178,7 @@
     <span class="ctrl-grp">
       <span class="lab">Dot Size</span>
       <input type="range" id="dotSize" min="4" max="80" step="1" value="18">
-      <span class="val" id="dotSizeV">18px</span>
+      <input type="number" class="num" id="dotSizeN" min="4" max="80" step="1" value="18"><span class="unit">px</span>
     </span>
 
     <!-- Background -->
@@ -186,26 +204,26 @@
     <span class="ctrl-grp">
       <span class="lab">Fill</span>
       <input type="range" id="gap" min="35" max="100" step="1" value="86">
-      <span class="val" id="gapV">86%</span>
+      <input type="number" class="num" id="gapN" min="35" max="100" step="1" value="86"><span class="unit">%</span>
     </span>
 
     <!-- Trim -->
     <span class="ctrl-grp">
       <span class="lab">Trim</span>
       <input type="range" id="trim" min="0" max="25" step="1" value="0">
-      <span class="val" id="trimV">0%</span>
+      <input type="number" class="num" id="trimN" min="0" max="25" step="1" value="0"><span class="unit">%</span>
     </span>
 
     <!-- Pan (move trim window) -->
     <span class="ctrl-grp">
       <span class="lab">Pan X</span>
       <input type="range" id="panX" min="-100" max="100" step="1" value="0">
-      <span class="val" id="panXV">0</span>
+      <input type="number" class="num" id="panXN" min="-100" max="100" step="1" value="0">
     </span>
     <span class="ctrl-grp">
       <span class="lab">Pan Y</span>
       <input type="range" id="panY" min="-100" max="100" step="1" value="0">
-      <span class="val" id="panYV">0</span>
+      <input type="number" class="num" id="panYN" min="-100" max="100" step="1" value="0">
     </span>
 
     <!-- Save resolution -->
@@ -373,21 +391,39 @@
   });
 
   // ─── 컨트롤 바인딩 ───
-  $('dotSize').addEventListener('input', e => {
-    state.dotSize = +e.target.value; $('dotSizeV').textContent = state.dotSize + 'px'; resample();
-  });
-  $('gap').addEventListener('input', e => {
-    state.gap = +e.target.value/100; $('gapV').textContent = e.target.value + '%'; redraw();
-  });
-  $('trim').addEventListener('input', e => {
-    state.trim = +e.target.value/100; $('trimV').textContent = e.target.value + '%'; resample();
-  });
-  $('panX').addEventListener('input', e => {
-    state.panX = +e.target.value/100; $('panXV').textContent = e.target.value; resample();
-  });
-  $('panY').addEventListener('input', e => {
-    state.panY = +e.target.value/100; $('panYV').textContent = e.target.value; resample();
-  });
+  // 슬라이더 ↔ 숫자입력 동기화 (둘 다로 값 조절 가능)
+  function linkRange(id, apply){
+    const r = $(id), n = $(id+'N');
+    const lo = +r.min, hi = +r.max;
+    const clamp = v => Math.min(hi, Math.max(lo, v));
+    r.addEventListener('input', () => { n.value = r.value; apply(+r.value); });
+    n.addEventListener('input', () => {
+      const v = parseFloat(n.value);
+      if (isNaN(v) || v < lo || v > hi) return;   // 타이핑 도중 범위 밖이면 대기
+      r.value = v; apply(v);
+    });
+    n.addEventListener('change', () => {          // 입력 확정 시 범위로 보정
+      let v = parseFloat(n.value);
+      if (isNaN(v)) v = +r.value;
+      v = clamp(Math.round(v));
+      n.value = v; r.value = v; apply(v);
+    });
+  }
+  linkRange('dotSize', v => { state.dotSize = v; resample(); });
+  linkRange('gap',     v => { state.gap = v/100; redraw(); });
+  linkRange('trim',    v => { state.trim = v/100; resample(); });
+  linkRange('panX',    v => { state.panX = v/100; resample(); });
+  linkRange('panY',    v => { state.panY = v/100; resample(); });
+
+  // 모바일: 컨트롤 접기/펼치기 (메뉴가 화면을 다 덮지 않도록)
+  const btnToggle = $('btnToggle');
+  function setCollapsed(c){
+    document.body.classList.toggle('collapsed', c);
+    btnToggle.textContent = c ? '⚙ Controls ▾' : '⚙ Hide ▴';
+    setTimeout(renderPreview, 60);   // 스테이지 크기 변동 후 다시 맞춤
+  }
+  btnToggle.addEventListener('click', () => setCollapsed(!document.body.classList.contains('collapsed')));
+  if (window.matchMedia('(max-width:640px)').matches) setCollapsed(true);
   function segPick(segId, attr, apply){
     const seg = $(segId);
     seg.addEventListener('click', e => {
