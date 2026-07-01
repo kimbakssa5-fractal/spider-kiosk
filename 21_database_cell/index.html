@@ -65,10 +65,10 @@
   #overlay.on #backdrop{opacity:1;}
 
   .detail{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    gap:38px;padding:5vh 6vw;}
-  .stage{position:relative;flex:0 1 auto;max-width:60vw;max-height:88vh;display:flex;
+    gap:38px;padding:4vh 6vw 132px;}
+  .stage{position:relative;flex:0 1 auto;max-width:60vw;max-height:78vh;display:flex;
     align-items:center;justify-content:center;}
-  #bigImg{max-width:60vw;max-height:88vh;border-radius:8px;object-fit:contain;
+  #bigImg{max-width:60vw;max-height:78vh;border-radius:8px;object-fit:contain;
     background:#fff;box-shadow:0 30px 90px rgba(0,0,0,.7);}
   .stage.zoom{position:fixed;inset:0;max-width:none;z-index:60;background:rgba(0,0,0,.92);cursor:grab;}
   .stage.zoom #bigImg{max-width:100vw;max-height:100vh;border-radius:0;box-shadow:none;
@@ -82,10 +82,10 @@
   .panel h2{font-size:30px;font-weight:700;line-height:1.25;margin:10px 0 6px;word-break:keep-all;}
   .panel .idx{font-size:13px;color:var(--muted);margin-bottom:18px;}
   .panel .desc{font-size:15px;line-height:1.75;color:#c7ceda;font-weight:300;
-    max-height:34vh;overflow:auto;white-space:pre-wrap;word-break:keep-all;padding-right:6px;}
+    max-height:30vh;overflow:auto;white-space:pre-wrap;word-break:keep-all;padding-right:6px;}
   .panel .desc.empty{color:#5b636f;font-style:italic;}
 
-  .actions{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap;}
+  .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;}
   .act{display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border-radius:40px;
     background:rgba(255,255,255,.07);border:1px solid var(--line);color:#eef2f7;
     font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;transition:.18s;}
@@ -96,17 +96,25 @@
   .act.like.liked .ic{color:var(--heart);}
   .act .cnt{font-variant-numeric:tabular-nums;}
 
-  /* prev / next / close */
-  .nav{position:absolute;top:50%;transform:translateY(-50%);z-index:55;
-    width:58px;height:58px;border-radius:50%;border:1px solid var(--line);
-    background:rgba(20,22,26,.55);color:#fff;font-size:24px;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;transition:.18s;backdrop-filter:blur(4px);}
-  .nav:hover{background:rgba(40,44,52,.8);border-color:rgba(255,255,255,.3);}
-  #prev{left:26px;} #next{right:26px;}
-  #close{position:absolute;top:24px;right:26px;z-index:55;width:46px;height:46px;border-radius:50%;
-    border:1px solid var(--line);background:rgba(20,22,26,.55);color:#fff;font-size:22px;
-    cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.18s;}
-  #close:hover{background:rgba(40,44,52,.85);transform:rotate(90deg);}
+  /* ── 하단 터치 조작 바 (키 작은 어린이 배려: 모든 조작을 화면 맨 아래로) ── */
+  .touchbar{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(10px);
+    z-index:65;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center;
+    max-width:94vw;padding:11px 16px;border-radius:70px;
+    background:rgba(18,20,25,.9);border:1px solid var(--line);
+    box-shadow:0 12px 40px rgba(0,0,0,.55);opacity:0;transition:opacity .4s .08s, transform .4s;}
+  #overlay.on .touchbar{opacity:1;transform:translateX(-50%) translateY(0);}
+  .nav{width:56px;height:56px;flex:0 0 auto;border-radius:50%;border:1px solid var(--line);
+    background:rgba(255,255,255,.06);color:#fff;font-size:26px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:.18s;}
+  .nav:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);}
+  .nav:active{transform:scale(.94);}
+  .bar-sep{width:1px;height:34px;background:var(--line);flex:0 0 auto;}
+  #close{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:40px;
+    border:1px solid rgba(255,120,140,.4);background:rgba(255,77,109,.16);color:#ffe1e7;
+    font-family:inherit;font-size:16px;font-weight:700;cursor:pointer;transition:.18s;flex:0 0 auto;}
+  #close .ic{font-size:17px;line-height:1;}
+  #close:hover{background:rgba(255,77,109,.28);border-color:rgba(255,120,140,.7);}
+  #close:active{transform:scale(.95);}
 
   /* ─── 관리자 편집 ─── */
   #admin-badge{position:fixed;top:26px;left:34px;z-index:8;display:none;
@@ -152,11 +160,14 @@
   #err{max-width:520px;text-align:center;font-size:14px;line-height:1.7;color:#9aa2ad;padding:0 20px;}
 
   @media (max-width:820px){
-    .detail{flex-direction:column;gap:16px;padding:3vh 4vw;}
-    #bigImg{max-width:92vw;max-height:52vh;} .stage{max-width:92vw;}
+    .detail{flex-direction:column;gap:14px;padding:3vh 4vw 120px;}
+    #bigImg{max-width:92vw;max-height:46vh;} .stage{max-width:92vw;max-height:46vh;}
     .panel{flex:0 0 auto;max-width:92vw;width:92vw;}
-    .panel h2{font-size:23px;} .brand{font-size:17px;top:16px;right:18px;}
-    #prev{left:8px}#next{right:8px}.nav{width:46px;height:46px;font-size:20px;}
+    .panel h2{font-size:23px;} .panel .desc{max-height:20vh;}
+    .brand{font-size:17px;top:16px;right:18px;}
+    .touchbar{gap:8px;bottom:16px;padding:9px 12px;}
+    .nav{width:48px;height:48px;font-size:22px;}
+    .act{padding:10px 13px;font-size:13px;} #close{padding:11px 16px;font-size:14px;}
   }
 </style>
 </head>
@@ -173,9 +184,6 @@
   <!-- 확대 상세 -->
   <div id="overlay">
     <div id="backdrop"></div>
-    <button class="nav" id="prev" aria-label="이전">‹</button>
-    <button class="nav" id="next" aria-label="다음">›</button>
-    <button id="close" aria-label="닫기">✕</button>
     <div class="detail">
       <div class="stage" id="stage"><img id="bigImg" alt=""></div>
       <div class="panel" id="panel">
@@ -183,12 +191,6 @@
         <h2 id="pTitle"></h2>
         <div class="idx" id="pIdx"></div>
         <div class="desc" id="pDesc"></div>
-        <div class="actions">
-          <button class="act like" id="bLike"><span class="ic">♥</span><span class="cnt" id="likeCnt">0</span></button>
-          <button class="act" id="bShare"><span class="ic">↗</span> 공유</button>
-          <button class="act" id="bZoom"><span class="ic">⤢</span> 확대</button>
-          <button class="act" id="bEdit" style="display:none"><span class="ic">✎</span> 편집</button>
-        </div>
         <!-- 관리자 편집 폼 -->
         <div class="edit" id="editForm">
           <label>제목</label>
@@ -204,6 +206,19 @@
           <div class="exp" id="eExport">모든 정보 info.json 내보내기</div>
         </div>
       </div>
+    </div>
+    <!-- 하단 터치 조작 바 : 이전 · 좋아요/공유/확대/편집 · 다음 · 닫기 -->
+    <div class="touchbar">
+      <button class="nav" id="prev" aria-label="이전">‹</button>
+      <div class="actions">
+        <button class="act like" id="bLike"><span class="ic">♥</span><span class="cnt" id="likeCnt">0</span></button>
+        <button class="act" id="bShare"><span class="ic">↗</span> 공유</button>
+        <button class="act" id="bZoom"><span class="ic">⤢</span> 확대</button>
+        <button class="act" id="bEdit" style="display:none"><span class="ic">✎</span> 편집</button>
+      </div>
+      <button class="nav" id="next" aria-label="다음">›</button>
+      <span class="bar-sep"></span>
+      <button id="close" aria-label="닫기"><span class="ic">✕</span> 닫기</button>
     </div>
   </div>
 
@@ -429,7 +444,11 @@ function flipIn(fromEl){
 function closePhoto(){
   const ov = $('#overlay'); const img = $('#bigImg'); const fromEl = state.fromEl;
   $('#stage').classList.remove('zoom'); resetZoom();
-  const done = () => { ov.classList.remove('on'); flow.paused = false; };
+  let closed = false;
+  const done = () => {                       // 애니메이션 성공/실패와 무관하게 반드시 닫힘 보장
+    if(closed) return; closed = true;
+    ov.classList.remove('on'); flow.paused = false; $('#panel').style='';
+  };
   if(fromEl){
     const first = fromEl.getBoundingClientRect();
     const last = img.getBoundingClientRect();
@@ -440,7 +459,8 @@ function closePhoto(){
       const a = img.animate(
         [{transform:'none'},{transformOrigin:'top left',transform:`translate(${dx}px,${dy}px) scale(${sx},${sy})`,opacity:.4}],
         {duration:340, easing:'cubic-bezier(.4,0,.2,1)'});
-      a.onfinish = () => { done(); $('#panel').style=''; };
+      a.onfinish = done; a.oncancel = done;
+      setTimeout(done, 380);                 // 탭 비활성/렌더러 지연 시 onfinish 미발생 대비 안전망
       return;
     }
   }
