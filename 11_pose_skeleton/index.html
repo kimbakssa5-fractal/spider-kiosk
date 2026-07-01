@@ -320,8 +320,9 @@ function poseFrame(lm){
   else { hmx=smx; hmy=smy+shoulder*1.4; }
   const torso=Math.hypot(hmx-smx,hmy-smy);
   const scale=Math.max(torso, shoulder*1.1);        // 회전에 강한 크기 기준
-  const ang=Math.atan2(ly-ry,lx-rx);                // 몸 기울기
-  const ax=smx+(hmx-smx)*0.22, ay=smy+(hmy-smy)*0.22; // 부착점: 등 위쪽
+  // 기울기: 어깨선이 아니라 '척추(어깨중앙→엉덩이중앙)' 기준 → 옆으로 돌아도 안 무너짐
+  const ang=Math.atan2(smx-hmx, hmy-smy);           // 정면=0, 몸 기울면 그만큼
+  const ax=smx+(hmx-smx)*0.18, ay=smy+(hmy-smy)*0.18; // 부착점: 등 위쪽
   return {ax,ay,scale,ang,shoulder};
 }
 function emitParticles(lm){
@@ -386,7 +387,7 @@ function drawWings(lm){
 function wingBlit(scale,mirror,flap){
   const dw=scale*WING_K, dh=dw*wingImg.height/wingImg.width;
   const axp=WING_AX*dw, ayp=WING_AY*dh;
-  const rot=(13*Math.PI/180)+flap;
+  const rot=(30*Math.PI/180)+flap;   // 어깨 위로 아치지게 벌림
   ctx.save();
   ctx.rotate(mirror? -rot : rot);
   ctx.scale(mirror? -1 : 1, 1);             // scale이 안쪽(먼저 적용)=뒤집고 나서 회전
