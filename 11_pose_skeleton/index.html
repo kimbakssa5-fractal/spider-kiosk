@@ -341,7 +341,9 @@ function poseFrame(lm){
   const ang=Math.atan2(smx-hmx, hmy-smy);           // 정면=0, 몸 기울면 그만큼
   const ax=smx+(hmx-smx)*0.18, ay=smy+(hmy-smy)*0.18; // 부착점: 등 위쪽
   const zL=(L.z==null?0:L.z), zR=(R.z==null?0:R.z);   // 어깨 깊이(음수=카메라쪽)
-  return {ax,ay,scale,ang,shoulder,frontal,zL,zR};
+  const nose=lm[0]; const nx=(nose?nose.x*w:smx);
+  const faceLeft = nx < smx-2;                        // 얼굴이 화면 왼쪽 → 등은 오른쪽
+  return {ax,ay,scale,ang,shoulder,frontal,zL,zR,faceLeft};
 }
 function emitParticles(lm){
   const F=poseFrame(lm); if(!F||F.scale<10) return;
@@ -376,26 +378,42 @@ function stepParticles(){
 const wingImg=new Image(); let wingReady=false;
 wingImg.onload=()=>{ wingReady=true; };
 wingImg.src='wing_white.png';
+// 머그샷 참고: 옆으로 틀면 쓰는 '프로필(측면)' 날개
+const wingProf=new Image(); let profReady=false;
+wingProf.onload=()=>{ profReady=true; };
+wingProf.src='wing_profile.png';
+const PROF_AX=0.454, PROF_AY=0.06, PROF_K=0.9;
 
+let wingMode='spread';   // 'spread'(정면/후면) ↔ 'profile'(측면), 히스테리시스
 function drawWings(lm){
   const L=lm[11], R=lm[12];
   if(!L||!R || (L.visibility!=null && L.visibility<0.3 && R.visibility<0.3)) return;
   const F=poseFrame(lm); if(!F || F.scale<10) return;
   const flap=Math.sin(performance.now()/260)*0.11;   // ±약6° 펄럭임
+  // 얼마나 틀었나(정면도)로 모드 전환 — 깜빡임 방지 히스테리시스
+  if(F.frontal < 0.34) wingMode='profile';
+  else if(F.frontal > 0.52) wingMode='spread';
 
   ctx.save();
   ctx.translate(F.ax,F.ay);                 // 등 위쪽 부착점
   ctx.rotate(F.ang);                        // 몸 기울기
-  ctx.scale(F.frontal,1);                   // yaw: 몸을 틀면 날개도 가로로 압축(따라 회전)
-  if(wingReady){
+  if(wingMode==='profile' && profReady){
+    // 측면: 한쪽 날개가 등 뒤로 드리움 (머그샷 PROFILE)
+    const dw=F.scale*PROF_K, dh=dw*wingProf.height/wingProf.width;
+    const axp=PROF_AX*dw, ayp=PROF_AY*dh;
+    ctx.shadowColor='rgba(140,225,255,0.5)'; ctx.shadowBlur=F.scale*0.2;
+    ctx.rotate(flap*0.4);                   // 살랑임
+    if(!F.faceLeft) ctx.scale(-1,1);        // 얼굴이 오른쪽이면 좌우반전(등이 왼쪽)
+    ctx.drawImage(wingProf, -axp, -ayp, dw, dh);
+  } else if(wingReady){
+    ctx.scale(F.frontal,1);                 // yaw: 살짝 틀면 가로 압축
     ctx.shadowColor='rgba(140,225,255,0.5)';
     ctx.shadowBlur=F.scale*0.2;
-    // 카메라에 가까운 어깨의 날개를 크게+나중에(위에) 그림 → 회전 원근감
-    const rightNear = F.zR < F.zL;          // 오른어깨가 더 가까움
+    const rightNear = F.zR < F.zL;          // 가까운 어깨 날개를 크게+위에 → 원근감
     const near=1.12, far=0.9;
     if(rightNear){
-      wingBlit(F.scale*far ,false,flap);    // 왼(먼) 먼저
-      wingBlit(F.scale*near,true ,flap);    // 오른(가까움) 위에
+      wingBlit(F.scale*far ,false,flap);
+      wingBlit(F.scale*near,true ,flap);
     }else{
       wingBlit(F.scale*far ,true ,flap);
       wingBlit(F.scale*near,false,flap);
