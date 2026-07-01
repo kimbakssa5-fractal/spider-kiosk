@@ -310,15 +310,22 @@ function getCss(v){ return cssCache[v] ?? (cssCache[v]=getComputedStyle(document
 
 /* ── 파티클(불씨/빛가루) ── 어깨·날개 주변에서 피어올라 발광 */
 let particles=[];
-// 카메라를 정면으로 보는가? 어깨 좌우 순서로 판별(랜드마크는 원본영상 좌표).
-// 실측: 정면일 때 lm11.x - lm12.x < 0, 뒤돌면 > 0. (옆모습 깜빡임 방지 히스테리시스)
+// 카메라를 정면으로 보는가? '코 깊이(nose.z)'로 판별 — 좌우반전과 무관해 견고.
+// 실측: 정면일 때 코가 어깨보다 앞(nose.z < 어깨평균z). 코 미검출 시 어깨x부호로 폴백.
+// (히스테리시스로 옆모습 깜빡임 방지)
 let faceState=true;
 function facingFront(lm){
-  const L=lm[11], R=lm[12];
+  const L=lm[11], R=lm[12], N=lm[0];
   if(!L||!R) return faceState;
-  const d=L.x-R.x;
-  if(d< -0.02) faceState=true;       // 정면 → 날개 등 뒤
-  else if(d> 0.02) faceState=false;  // 후면 → 날개 앞
+  const sz=(L.z+R.z)/2;
+  if(N && N.z!=null){
+    if(N.z < sz-0.03) faceState=true;        // 코가 앞 → 정면
+    else if(N.z > sz+0.03) faceState=false;  // 코가 뒤 → 후면
+  }else{
+    const d=L.x-R.x;                          // 폴백(이 환경: 정면 d>0)
+    if(d> 0.03) faceState=true;
+    else if(d< -0.03) faceState=false;
+  }
   return faceState;
 }
 // 어깨(11·12)+엉덩이(23·24)로 안정적인 부착점/크기 계산.
