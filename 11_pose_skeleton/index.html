@@ -335,10 +335,13 @@ function poseFrame(lm){
   else { hmx=smx; hmy=smy+shoulder*1.4; }
   const torso=Math.hypot(hmx-smx,hmy-smy);
   const scale=Math.max(torso, shoulder*1.1);        // 회전에 강한 크기 기준
+  // 정면도(yaw): 어깨폭/몸통. 정면=1, 옆으로 틀수록 0 → 날개 가로 압축
+  const frontal=Math.min(1,Math.max(0.12, shoulder/(0.62*(torso||1))));
   // 기울기: 어깨선이 아니라 '척추(어깨중앙→엉덩이중앙)' 기준 → 옆으로 돌아도 안 무너짐
   const ang=Math.atan2(smx-hmx, hmy-smy);           // 정면=0, 몸 기울면 그만큼
   const ax=smx+(hmx-smx)*0.18, ay=smy+(hmy-smy)*0.18; // 부착점: 등 위쪽
-  return {ax,ay,scale,ang,shoulder};
+  const zL=(L.z==null?0:L.z), zR=(R.z==null?0:R.z);   // 어깨 깊이(음수=카메라쪽)
+  return {ax,ay,scale,ang,shoulder,frontal,zL,zR};
 }
 function emitParticles(lm){
   const F=poseFrame(lm); if(!F||F.scale<10) return;
@@ -383,11 +386,20 @@ function drawWings(lm){
   ctx.save();
   ctx.translate(F.ax,F.ay);                 // 등 위쪽 부착점
   ctx.rotate(F.ang);                        // 몸 기울기
+  ctx.scale(F.frontal,1);                   // yaw: 몸을 틀면 날개도 가로로 압축(따라 회전)
   if(wingReady){
     ctx.shadowColor='rgba(140,225,255,0.5)';
     ctx.shadowBlur=F.scale*0.2;
-    wingBlit(F.scale,false,flap);           // 왼쪽 날개(원본)
-    wingBlit(F.scale,true ,flap);           // 오른쪽 날개(좌우반전)
+    // 카메라에 가까운 어깨의 날개를 크게+나중에(위에) 그림 → 회전 원근감
+    const rightNear = F.zR < F.zL;          // 오른어깨가 더 가까움
+    const near=1.12, far=0.9;
+    if(rightNear){
+      wingBlit(F.scale*far ,false,flap);    // 왼(먼) 먼저
+      wingBlit(F.scale*near,true ,flap);    // 오른(가까움) 위에
+    }else{
+      wingBlit(F.scale*far ,true ,flap);
+      wingBlit(F.scale*near,false,flap);
+    }
   }else{
     ctx.shadowColor='rgba(120,220,255,0.55)';
     ctx.shadowBlur=F.scale*0.3;
