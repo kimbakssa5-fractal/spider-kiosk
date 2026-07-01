@@ -292,7 +292,8 @@ function loop(){
           drawUtils.drawLandmarks(lm,
             {color:getCss('--joint'),fillColor:getCss('--joint'),radius:5,lineWidth:1});
         }
-      setStatus(res.landmarks.length>0?`인식 중 · ${res.landmarks.length}명`:'사람을 찾는 중',res.landmarks.length>0);
+      const dir = lms.length? (front[0]?'정면':'후면') : '';
+      setStatus(res.landmarks.length>0?`인식 중 · ${dir}`:'사람을 찾는 중',res.landmarks.length>0);
     }
   }
   // fps
