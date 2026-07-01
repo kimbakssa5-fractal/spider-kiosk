@@ -27,8 +27,8 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "8";
-  const BG_VER = "1";
+  const ASSET_VER = "10";
+  const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
 
@@ -94,9 +94,10 @@
     uniform sampler2D uBg;
     uniform vec2 uBgScale;
     uniform vec2 uBgOffset;
+    uniform float uBgBright;   // 배경 밝기(d/b 키, 기본 1.0)
     void main() {
       vec2 imgUv = vUv * uBgScale + uBgOffset;
-      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb, 0.0);
+      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb * uBgBright, 0.0);
     }`;
 
   // ② 잉어 패스: 클립공간 정점 + 아틀라스 UV, 알파 블렌딩으로 scene 위 합성.
@@ -216,6 +217,7 @@
     uBg: gl.getUniformLocation(progBg, "uBg"),
     uBgScale: gl.getUniformLocation(progBg, "uBgScale"),
     uBgOffset: gl.getUniformLocation(progBg, "uBgOffset"),
+    uBgBright: gl.getUniformLocation(progBg, "uBgBright"),
   };
   const locFish = {
     aClip: gl.getAttribLocation(progFish, "aClip"),
@@ -231,7 +233,7 @@
     uTime: gl.getUniformLocation(progWater, "uTime"),
     uHTexel: gl.getUniformLocation(progWater, "uHTexel"),
   };
-  gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0);
+  gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0); gl.uniform1f(locBg.uBgBright, 1.0);
   gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
   gl.useProgram(progWater); gl.uniform1i(locWater.uScene, 3); gl.uniform1i(locWater.uHeight, 1);
 
@@ -337,7 +339,7 @@
       fadeT += dtMs / SLIDE_FADE_MS;
       if (fadeT >= 1) { curImg = inImg; inImg = null; transitioning = false; fadeT = 0; holdAcc = 0; }
       composeUpload();
-    } else if (usingSlideshow) {
+    } else if (usingSlideshow && SLIDE_HOLD_MS > 0) {   // 0초면 정지(pause)
       holdAcc += dtMs;
       if (holdAcc >= SLIDE_HOLD_MS) {
         const nx = nextLoadedSlide();
@@ -416,7 +418,7 @@
     { base: "koi-swim-g1", label: "1 (6색 솔리드)", meta: null, img: null },
     { base: "koi-swim-g2", label: "2 (얼룩무늬)", meta: null, img: null },
   ];
-  let activeGroup = 0;                    // 기본 그룹1
+  let activeGroup = 1;                    // 기본 그룹2(얼룩무늬)
   function uploadGroup(i) {
     const G = KOI_GROUPS[i];
     if (!G.meta || !G.img) return;
@@ -587,7 +589,7 @@
   const MOTION_FLEE_MULT = 1.0;        // 모션 점 도망 반경 배수(마우스와 동일 — 가까울 때만 도망)
   const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
-  const CAM_MIRROR = false;            // 좌우 반전(거울 끔) — 모션 매핑
+  let camFlip = false;                 // 카메라 좌우반전(a 키) — 화면표시+모션매핑 함께 뒤집음
   let camOn = false, xrayOn = false, camStream = null, camVideo = null;
   let camMonitorOn = false;              // 모니터링 미리보기 창(기본 꺼짐, W 토글)
   let mctx = null, prevLuma = null, motionAcc = 0, motionSplashAcc = 0, motionTotal = 0;
@@ -595,7 +597,7 @@
 
   function updateMotion() {
     if (!camOn || !camVideo || camVideo.readyState < 2 || !camVideo.videoWidth) return;
-    if (CAM_MIRROR) { mctx.save(); mctx.scale(-1, 1); mctx.drawImage(camVideo, -MW, 0, MW, MH); mctx.restore(); }
+    if (camFlip) { mctx.save(); mctx.scale(-1, 1); mctx.drawImage(camVideo, -MW, 0, MW, MH); mctx.restore(); }
     else mctx.drawImage(camVideo, 0, 0, MW, MH);
     const data = mctx.getImageData(0, 0, MW, MH).data;
     const luma = new Float32Array(MW * MH);
@@ -654,7 +656,7 @@
   function applyCamClass() {
     if (!camVideo) return;
     // xray > 모니터링창(W) > 숨김(preview-off: opacity0 이지만 디코딩 유지→모션 계속 동작)
-    camVideo.className = xrayOn ? "xray" : (camMonitorOn ? "preview" : "preview-off");
+    camVideo.className = (xrayOn ? "xray" : (camMonitorOn ? "preview" : "preview-off")) + (camFlip ? " flip" : "");
   }
   function toggleCamMonitor() {
     camMonitorOn = !camMonitorOn;
@@ -726,6 +728,10 @@
   function toggleXray() {
     if (!camOn) { startCamera(function () { xrayOn = true; applyCamClass(); showHud("X-RAY on"); }); return; }
     xrayOn = !xrayOn; applyCamClass(); showHud(xrayOn ? "X-RAY on" : "X-RAY off");
+  }
+  function toggleCamFlip() {
+    camFlip = !camFlip; applyCamClass();
+    showHud("카메라 좌우반전 " + (camFlip ? "ON" : "OFF"));
   }
 
   // ---------------------------------------------------------------
@@ -1022,7 +1028,7 @@
   const vkbd = document.getElementById("vkbd");
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
-    ["KeyB", "배경 B"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
+    ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
     ["KeyY", "윤슬 Y"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
@@ -1119,10 +1125,19 @@
     }
   }
 
+  // 배경 밝기(d=어둡게 / b=밝게, 10%씩). 1.0=원본
+  let BG_BRIGHT = 1.0;
+  function setBgBright(dir) {
+    BG_BRIGHT = clamp(Math.round((BG_BRIGHT + dir * 0.1) * 100) / 100, 0.1, 2.0);
+    gl.useProgram(progBg); gl.uniform1f(locBg.uBgBright, BG_BRIGHT);
+    showHud("배경 밝기  " + Math.round(BG_BRIGHT * 100) + "%");
+  }
+
   // 배경 슬라이드쇼 전환 간격(▲/▼): 기본 0초, ±1초
   function setSlideHold(dir) {
     SLIDE_HOLD_MS = clamp(SLIDE_HOLD_MS + dir * 1000, 0, 60000);
-    showHud("배경 전환 간격  " + (SLIDE_HOLD_MS / 1000) + "초");
+    holdAcc = 0;
+    showHud(SLIDE_HOLD_MS > 0 ? ("배경 전환 간격  " + (SLIDE_HOLD_MS / 1000) + "초") : "배경 슬라이드 정지 (0초)");
   }
 
   // 키보드 — 물리 키 기준(e.code). 토글 B/S/F/M · 미세조정 1~8 · 잉어수 0(▲)/9(▼) · 배경간격 ↑/↓
@@ -1131,12 +1146,14 @@
     switch (e.code) {
       case "ArrowUp": if (e.repeat) return; e.preventDefault(); setSlideHold(+1); break;
       case "ArrowDown": if (e.repeat) return; e.preventDefault(); setSlideHold(-1); break;
-      case "KeyB": if (e.repeat) return; e.preventDefault(); openBgPicker(); break;
+      case "KeyB": e.preventDefault(); setBgBright(+1); break;   // 배경 밝게 +10%
+      case "KeyD": e.preventDefault(); setBgBright(-1); break;   // 배경 어둡게 -10%
       case "KeyS": if (e.repeat) return; e.preventDefault(); toggleSound(); break;
       case "KeyF": if (e.repeat) return; e.preventDefault(); toggleFullscreen(); break;
       case "KeyM": if (e.repeat) return; e.preventDefault(); toggleMenu(); break;
       case "KeyC": if (e.repeat) return; e.preventDefault(); toggleCamera(); break;
       case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
+      case "KeyA": if (e.repeat) return; e.preventDefault(); toggleCamFlip(); break;
       case "KeyV": if (e.repeat) return; e.preventDefault(); toggleVideoBg(); break;
       case "KeyW": if (e.repeat) return; e.preventDefault(); toggleCamMonitor(); break;
       case "KeyT": if (e.repeat) return; e.preventDefault(); toggleKoiGroup(); break;

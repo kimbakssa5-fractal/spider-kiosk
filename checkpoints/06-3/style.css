@@ -314,6 +314,8 @@ html, body {
   mix-blend-mode: normal;
   filter: none;                     /* 반전 제거 — 실제 카메라 화면 */
 }
+/* A 키: 카메라 좌우반전(거울) — preview/xray 모두 적용 */
+#camVideo.flip { transform: scaleX(-1); }
 
 /* 좁은 화면(폰): 툴바 버튼이 잘리지 않게 작게+줄바꿈, 겹침 피하려 FPS 숨김 */
 @media (max-width: 760px) {
