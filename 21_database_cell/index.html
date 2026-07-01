@@ -21,6 +21,8 @@
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
     font-family:var(--sans);color:#fff;user-select:none;-webkit-user-select:none;}
+  /* 터치 키오스크: 마우스 커서 숨김(회전 디스플레이의 짜부러진 손가락 커서 등 숨김) */
+  body.hide-cursor, body.hide-cursor *{cursor:none !important;}
 
   /* ─── 벽(Wall) : 세로 터치스크린 위를 흐르는 사진 필드 (3240×1920 = 1080×1920 ×3) ─── */
   #wall{position:fixed;inset:0;overflow:hidden;background:
@@ -738,6 +740,16 @@ $('#fsBtn').addEventListener('click', toggleFS);
 requestFS();
 ['pointerdown','touchstart','keydown','click'].forEach(ev =>
   window.addEventListener(ev, requestFS, {once:true, capture:true}));
+
+/* 마우스 커서 숨김 — 키오스크(?kiosk=1)는 항상 숨김, 그 외엔 4초 무동작 시 숨김.
+   (회전 디스플레이에서 하드웨어 손가락/화살표 커서가 세로로 짜부러져 보이는 현상 대응) */
+(function(){
+  const kiosk = new URLSearchParams(location.search).get('kiosk') === '1';
+  const hide = () => document.body.classList.add('hide-cursor');
+  if(kiosk){ hide(); return; }
+  let t; const show = () => { document.body.classList.remove('hide-cursor'); clearTimeout(t); t=setTimeout(hide, 4000); };
+  show(); addEventListener('mousemove', show, {passive:true});
+})();
 
 boot();
 </script>
