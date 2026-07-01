@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pose Skeleton — 실시간 골격 인식</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e14;
+    --panel:rgba(20,26,36,.72);
+    --line:#00e5ff;
+    --joint:#ff2d78;
+    --accent:#00e5ff;
+    --text:#e8eef5;
+    --muted:#8a99ab;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Noto Sans KR',sans-serif;
+    background:radial-gradient(1200px 800px at 50% -10%,#12202e 0%,var(--bg) 60%);
+    color:var(--text);
+    min-height:100dvh;
+    display:flex;flex-direction:column;align-items:center;
+    overflow-x:hidden;
+  }
+  header{
+    text-align:center;padding:22px 16px 8px;
+  }
+  header h1{font-weight:700;font-size:clamp(20px,4vw,30px);letter-spacing:-.5px}
+  header h1 span{color:var(--accent)}
+  header p{color:var(--muted);font-weight:300;font-size:14px;margin-top:6px}
+
+  .stage{
+    position:relative;width:min(94vw,900px);aspect-ratio:16/10;
+    margin:14px 0;border-radius:16px;overflow:hidden;
+    background:#05080d;box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.05) inset;
+  }
+  video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  video{transform:scaleX(-1)}          /* 거울 모드 */
+  canvas{transform:scaleX(-1)}
+  .overlay{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:16px;text-align:center;padding:24px;
+    background:rgba(5,8,13,.82);backdrop-filter:blur(4px);z-index:5;transition:opacity .4s;
+  }
+  .overlay.hidden{opacity:0;pointer-events:none}
+  .spinner{width:42px;height:42px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .badge{
+    position:absolute;top:12px;left:12px;z-index:6;display:flex;gap:8px;align-items:center;
+    background:var(--panel);backdrop-filter:blur(8px);padding:7px 12px;border-radius:999px;font-size:12px;font-weight:500;
+    border:1px solid rgba(255,255,255,.08);
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#ff4040}
+  .dot.live{background:#28e07a;box-shadow:0 0 10px #28e07a}
+  .fps{position:absolute;top:12px;right:12px;z-index:6;background:var(--panel);backdrop-filter:blur(8px);
+    padding:7px 12px;border-radius:999px;font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;border:1px solid rgba(255,255,255,.08)}
+
+  .controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:8px}
+  button{
+    font-family:inherit;font-weight:500;font-size:14px;color:var(--text);
+    background:var(--panel);border:1px solid rgba(255,255,255,.12);
+    padding:11px 20px;border-radius:12px;cursor:pointer;transition:.18s;backdrop-filter:blur(8px);
+  }
+  button:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+  button.primary{background:var(--accent);color:#05080d;border-color:var(--accent);font-weight:700}
+  button.primary:hover{filter:brightness(1.1);color:#05080d}
+  button:disabled{opacity:.4;cursor:not-allowed;transform:none;border-color:rgba(255,255,255,.12);color:var(--text)}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);padding:8px 4px}
+  .toggle input{width:38px;height:20px;appearance:none;background:#2a3442;border-radius:999px;position:relative;cursor:pointer;transition:.2s}
+  .toggle input:checked{background:var(--accent)}
+  .toggle input::after{content:"";position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:2px;left:2px;transition:.2s}
+  .toggle input:checked::after{left:20px}
+
+  footer{color:var(--muted);font-size:12px;font-weight:300;padding:10px 16px 26px;text-align:center;line-height:1.7}
+  code{background:rgba(255,255,255,.08);padding:1px 6px;border-radius:5px;font-size:11px}
+</style>
+</head>
+<body>
+  <header>
+    <h1><span>●</span> 실시간 골격 인식 <span>Skeleton</span></h1>
+    <p>웹캠 한 대로 사람의 관절 33개를 실시간 추적합니다 · MediaPipe Pose</p>
+  </header>
+
+  <div class="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="badge"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></div>
+    <div class="fps" id="fps">-- FPS</div>
+    <div class="overlay" id="overlay">
+      <div class="spinner" id="spinner" style="display:none"></div>
+      <div id="overlayMsg" style="max-width:420px;line-height:1.7">
+        <strong style="font-size:18px">웹캠으로 골격을 인식합니다</strong><br>
+        <span style="color:var(--muted);font-weight:300;font-size:14px">아래 <b>시작</b> 버튼을 누르고 카메라 사용을 허용하세요.<br>전신이 화면에 들어올수록 정확합니다.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="startBtn">▶ 시작</button>
+    <button id="stopBtn" disabled>■ 정지</button>
+    <label class="toggle"><input type="checkbox" id="mirrorChk" checked>거울 모드</label>
+    <label class="toggle"><input type="checkbox" id="videoChk" checked>영상 표시</label>
+  </div>
+
+  <footer>
+    모든 처리는 <b>브라우저 안에서</b> 실행됩니다 — 영상은 서버로 전송되지 않습니다.<br>
+    붉은 점 = 관절 · 파란 선 = 뼈대 &nbsp;|&nbsp; 권장 브라우저: Chrome / Edge
+  </footer>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver, DrawingUtils }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const video   = document.getElementById('video');
+const canvas  = document.getElementById('canvas');
+const ctx     = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const spinner = document.getElementById('spinner');
+const omsg    = document.getElementById('overlayMsg');
+const startBtn= document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const mirrorChk=document.getElementById('mirrorChk');
+const videoChk =document.getElementById('videoChk');
+const statusDot=document.getElementById('statusDot');
+const statusText=document.getElementById('statusText');
+const fpsEl   =document.getElementById('fps');
+
+let poseLandmarker=null, drawUtils=null, running=false, stream=null, raf=null;
+let lastVideoTime=-1, lastT=performance.now(), frames=0, fps=0;
+
+function setOverlay(html,showSpin){ omsg.innerHTML=html; spinner.style.display=showSpin?'block':'none'; overlay.classList.remove('hidden'); }
+function hideOverlay(){ overlay.classList.add('hidden'); }
+function setStatus(text,live){ statusText.textContent=text; statusDot.classList.toggle('live',!!live); }
+
+async function loadModel(){
+  setOverlay('AI 모델을 불러오는 중…<br><span style="color:var(--muted);font-weight:300;font-size:13px">최초 1회만 로드됩니다 (수 초 소요)</span>',true);
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision,{
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+      delegate:"GPU"
+    },
+    runningMode:"VIDEO",
+    numPoses:2,
+    minPoseDetectionConfidence:0.5,
+    minPosePresenceConfidence:0.5,
+    minTrackingConfidence:0.5
+  });
+  drawUtils = new DrawingUtils(ctx);
+}
+
+async function start(){
+  startBtn.disabled=true;
+  try{
+    if(!poseLandmarker) await loadModel();
+    setOverlay('카메라를 켜는 중…',true);
+    stream = await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720,facingMode:"user"},audio:false});
+    video.srcObject=stream;
+    await video.play();
+    canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+    running=true;
+    stopBtn.disabled=false;
+    setStatus('인식 중',true);
+    hideOverlay();
+    loop();
+  }catch(e){
+    console.error(e);
+    let msg = e.name==='NotAllowedError'
+      ? '카메라 접근이 거부되었습니다.<br><span style="color:var(--muted);font-weight:300;font-size:13px">브라우저 주소창의 카메라 아이콘에서 허용해 주세요.</span>'
+      : '카메라를 열 수 없습니다.<br><span style="color:var(--muted);font-weight:300;font-size:13px">'+e.message+'</span>';
+    setOverlay(msg,false);
+    setStatus('오류'); startBtn.disabled=false;
+  }
+}
+
+function stop(){
+  running=false;
+  if(raf) cancelAnimationFrame(raf);
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  video.srcObject=null;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  startBtn.disabled=false; stopBtn.disabled=true;
+  setStatus('정지'); fpsEl.textContent='-- FPS';
+  setOverlay('정지되었습니다. 다시 <b>시작</b>을 눌러 재개하세요.',false);
+}
+
+function loop(){
+  if(!running) return;
+  const now=performance.now();
+  if(video.currentTime!==lastVideoTime){
+    lastVideoTime=video.currentTime;
+    const res=poseLandmarker.detectForVideo(video,now);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if(res.landmarks){
+      for(const lm of res.landmarks){
+        drawUtils.drawConnectors(lm,PoseLandmarker.POSE_CONNECTIONS,
+          {color:getCss('--line'),lineWidth:4});
+        drawUtils.drawLandmarks(lm,
+          {color:getCss('--joint'),fillColor:getCss('--joint'),radius:5,lineWidth:1});
+      }
+      setStatus(res.landmarks.length>0?`인식 중 · ${res.landmarks.length}명`:'사람을 찾는 중',res.landmarks.length>0);
+    }
+  }
+  // fps
+  frames++;
+  if(now-lastT>=500){ fps=Math.round(frames*1000/(now-lastT)); frames=0; lastT=now; fpsEl.textContent=fps+' FPS'; }
+  raf=requestAnimationFrame(loop);
+}
+
+const cssCache={};
+function getCss(v){ return cssCache[v] ?? (cssCache[v]=getComputedStyle(document.documentElement).getPropertyValue(v).trim()); }
+
+mirrorChk.addEventListener('change',()=>{
+  const t = mirrorChk.checked?'scaleX(-1)':'none';
+  video.style.transform=t; canvas.style.transform=t;
+});
+videoChk.addEventListener('change',()=>{ video.style.opacity=videoChk.checked?'1':'0'; });
+
+startBtn.addEventListener('click',start);
+stopBtn.addEventListener('click',stop);
+</script>
+</body>
+</html>
