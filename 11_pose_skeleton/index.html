@@ -273,18 +273,22 @@ function loop(){
       const lms=res.landmarks;
       const decorate = wingsChk.checked || particleChk.checked;
       const front = lms.map(facingFront);   // 각 사람이 카메라를 보는가(정면)
+      const arms  = lms.map(armRaise);      // 팔 든 정도
+      // 날갯짓 위상 진행(팔 들면 빨라짐)
+      const nowT=performance.now(), dt=Math.min(0.05,(nowT-flapLast)/1000); flapLast=nowT;
+      flapPhase += dt*(2.2 + (arms.length?Math.max(...arms):0)*5.5);
       // ① 정면인 사람의 날개 → 사람보다 뒤(등 뒤)
-      if(wingsChk.checked) for(let i=0;i<lms.length;i++) if(front[i]) drawWings(lms[i]);
-      if(particleChk.checked) for(const lm of lms) emitParticles(lm);
-      stepParticles();
+      if(wingsChk.checked) for(let i=0;i<lms.length;i++) if(front[i]) drawWings(lms[i],i,arms[i]);
       // ② 인물(전경)을 마스크로 잘라 위에 덮음
       if(decorate){
         const person=buildPersonLayer(res.segmentationMasks,w,h);
         if(person) ctx.drawImage(person,0,0,w,h);
       }
       // ③ 뒤돌아선 사람의 날개 → 사람보다 앞(등이 카메라를 향하므로)
-      if(wingsChk.checked) for(let i=0;i<lms.length;i++) if(!front[i]) drawWings(lms[i]);
-      // ④ 골격 (맨 앞)
+      if(wingsChk.checked) for(let i=0;i<lms.length;i++) if(!front[i]) drawWings(lms[i],i,arms[i]);
+      // ④ 입자(맨 위에 곱게 흩날림)
+      stepParticles();
+      // ⑤ 골격 (맨 앞)
       if(skelChk.checked)
         for(const lm of res.landmarks){
           drawUtils.drawConnectors(lm,PoseLandmarker.POSE_CONNECTIONS,
@@ -352,35 +356,41 @@ function poseFrame(lm){
   const faceLeft = nx < smx-2;                        // 얼굴이 화면 왼쪽 → 등은 오른쪽
   return {ax,ay,scale,ang,shoulder,frontal,zL,zR,faceLeft};
 }
-function emitParticles(lm){
-  const F=poseFrame(lm); if(!F||F.scale<10) return;
-  const s=F.scale, ca=Math.cos(F.ang), sa=Math.sin(F.ang);
-  const count=Math.min(3,Math.max(1,Math.round(s/90)));
-  for(let i=0;i<count;i++){
-    const side=Math.random()<0.5?-1:1, t=Math.random();
-    const ox=side*(0.25+t*0.95)*s;                          // 좌우로 날개 폭만큼
-    const oy=(0.1-t*0.5)*s+(Math.random()-0.5)*0.2*s;
-    const px=F.ax+ox*ca-oy*sa, py=F.ay+ox*sa+oy*ca;
-    const warm=Math.random()<0.55;
-    particles.push({x:px,y:py,vx:(Math.random()-0.5)*0.5+side*0.12,vy:-0.4-Math.random()*1.1,
-      life:1,decay:0.010+Math.random()*0.014,size:(0.6+Math.random()*1.5)*(s/300),warm});
+// 곱고 많은 미세 입자: 날개 끝에서 '펄럭임 벡터(관성)'로 흩날리고 중력에 낙하
+const GRAV=0.05;                 // 중력 가속
+const P_MAX=2800;
+// 날개 끝 world좌표(vx,vy=끝의 순간속도)에서 입자 방출
+function emitTip(x,y,vx,vy,n,scale){
+  const inertia=0.55;            // 펄럭임 방향 관성 상속
+  for(let k=0;k<n;k++){
+    if(particles.length>=P_MAX) break;
+    const jx=(Math.random()-0.5), jy=(Math.random()-0.5);
+    particles.push({
+      x:x+jx*scale*0.05, y:y+jy*scale*0.05,
+      vx:vx*inertia + jx*0.8,
+      vy:vy*inertia + jy*0.8 - 0.15,     // 살짝 떠올랐다 떨어짐
+      life:1, decay:0.006+Math.random()*0.012,
+      size:0.4+Math.random()*1.5,
+      warm: Math.random()<0.45
+    });
   }
-  if(particles.length>320) particles.splice(0,particles.length-320);
+  if(particles.length>P_MAX) particles.splice(0,particles.length-P_MAX);
 }
 function stepParticles(){
   if(!particles.length) return;
   ctx.save(); ctx.globalCompositeOperation='lighter';
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i];
-    p.x+=p.vx; p.y+=p.vy; p.vy-=0.008; p.vx*=0.985; p.life-=p.decay;
+    p.vy += GRAV*(0.4+(1-p.life)*0.9);   // 중력(시간 지날수록 더 낙하)
+    p.vx *= 0.99; p.vy *= 0.996;
+    p.x += p.vx; p.y += p.vy; p.life -= p.decay;
     if(p.life<=0){ particles.splice(i,1); continue; }
-    const a=Math.min(0.75,p.life*0.85), r=p.size*(1.1+(1-p.life)*1.3);
-    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.5);
-    if(p.warm){ g.addColorStop(0,`rgba(255,225,150,${a})`); g.addColorStop(.4,`rgba(255,140,40,${a*.4})`); g.addColorStop(1,'rgba(255,70,0,0)'); }
-    else      { g.addColorStop(0,`rgba(215,245,255,${a})`); g.addColorStop(.4,`rgba(110,210,255,${a*.4})`); g.addColorStop(1,'rgba(70,170,255,0)'); }
-    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,r*2.5,0,7); ctx.fill();
+    const a=Math.min(0.55,p.life*0.7), r=p.size*(0.8+p.life*0.6);
+    ctx.globalAlpha=a;
+    ctx.fillStyle = p.warm ? '#ffe9bf' : '#e6f5ff';
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,6.2832); ctx.fill();
   }
-  ctx.restore();
+  ctx.globalAlpha=1; ctx.restore();
 }
 // 그린스크린 머그샷에서 뽑은 3각도 날개(각 이미지에 좌우 한 쌍 포함)
 function loadWing(src,ax,ay){ const im=new Image(); const o={im,ax,ay,ready:false}; im.onload=()=>o.ready=true; im.src=src; return o; }
@@ -389,12 +399,29 @@ const WREAR  =loadWing('wing_rear.png',    0.5, 0.195);  // 후면 펼침
 const WPROF  =loadWing('wing_profile.png', 0.5, 0.02);   // 측면 드리움
 const SET_K=2.5;   // 이미지(=날개 한 쌍) 폭 = 몸통 × SET_K
 
-function drawSet(o,F,mirror,squash,flap){
+let flapPhase=0, flapLast=performance.now();
+const prevTips={};   // 사람별 날개끝 이전 위치(속도 계산용)
+
+// 팔을 든 정도 0~1 (손목·팔꿈치가 어깨보다 위로 올라갈수록 ↑)
+function armRaise(lm){
+  const L=lm[11],R=lm[12]; if(!L||!R) return 0;
+  const sy=(L.y+R.y)/2, Hl=lm[23],Hr=lm[24];
+  const H=Math.max(0.12,(Hl&&Hr)?Math.abs((Hl.y+Hr.y)/2 - sy):0.3);
+  let e=0,c=0;
+  for(const w of [lm[15],lm[16],lm[13],lm[14]]) if(w&&(w.visibility==null||w.visibility>0.3)){ e+=(sy-w.y); c++; }
+  if(!c) return 0;
+  return Math.max(0,Math.min(1,(e/c)/(H*0.9)));
+}
+
+// 날개 이미지 + 펄럭임(beat) 반영
+function drawSet(o,F,mirror,squash,beat,amp){
   if(!o.ready) return false;
-  const dw=F.scale*SET_K*squash, dh=F.scale*SET_K*o.im.height/o.im.width;
+  const spreadOsc=1+beat*amp*0.14;                 // 위로 칠 때 벌어짐
+  const dw=F.scale*SET_K*squash*spreadOsc;
+  const dh=F.scale*SET_K*o.im.height/o.im.width*(1-beat*amp*0.06);
   ctx.save();
   ctx.shadowColor='rgba(140,225,255,0.45)'; ctx.shadowBlur=F.scale*0.18;
-  ctx.rotate(flap*0.12);                       // 은은한 살랑임
+  ctx.rotate(beat*amp*0.10);                       // 날갯짓 회전
   if(mirror) ctx.scale(-1,1);
   ctx.drawImage(o.im, -o.ax*dw, -o.ay*dh, dw, dh);
   ctx.restore();
@@ -402,12 +429,12 @@ function drawSet(o,F,mirror,squash,flap){
 }
 
 let wingMode='front';   // 'front' ↔ 'rear' ↔ 'profile' (히스테리시스)
-function drawWings(lm){
+function drawWings(lm, idx, arm){
   const L=lm[11], R=lm[12];
   if(!L||!R || (L.visibility!=null && L.visibility<0.3 && R.visibility<0.3)) return;
   const F=poseFrame(lm); if(!F || F.scale<10) return;
-  const flap=Math.sin(performance.now()/260);
-  // 각도로 모드 결정: 많이 틀면 profile, 아니면 정면/후면
+  const beat=Math.sin(flapPhase);
+  const amp=0.32 + arm*1.2;                 // 팔 들면 펄럭 진폭 ↑
   if(F.frontal < 0.32) wingMode='profile';
   else if(F.frontal > 0.5) wingMode = facingFront(lm) ? 'front' : 'rear';
 
@@ -415,20 +442,32 @@ function drawWings(lm){
   ctx.translate(F.ax,F.ay);                 // 등 위쪽 부착점
   ctx.rotate(F.ang);                        // 몸 기울기
   let ok;
-  if(wingMode==='profile'){
-    ok=drawSet(WPROF,F, !F.faceLeft, 1, flap);   // 측면(얼굴방향 따라 반전)
-  }else if(wingMode==='rear'){
-    ok=drawSet(WREAR,F, false, Math.max(F.frontal,0.35), flap);
-  }else{
-    ok=drawSet(WFRONT,F, false, Math.max(F.frontal,0.35), flap);
-  }
-  if(!ok){   // 이미지 로딩 전 폴백(벡터)
+  if(wingMode==='profile')      ok=drawSet(WPROF,F, !F.faceLeft, 1, beat, amp);
+  else if(wingMode==='rear')    ok=drawSet(WREAR,F, false, Math.max(F.frontal,0.35), beat, amp);
+  else                          ok=drawSet(WFRONT,F, false, Math.max(F.frontal,0.35), beat, amp);
+  if(!ok){
     ctx.shadowColor='rgba(120,220,255,0.55)'; ctx.shadowBlur=F.scale*0.3;
     const f=(Math.sin(performance.now()/230)+1)/2;
-    drawOneWing(F.scale*1.9,F.scale,f, 1);
-    drawOneWing(F.scale*1.9,F.scale,f,-1);
+    drawOneWing(F.scale*1.9,F.scale,f, 1); drawOneWing(F.scale*1.9,F.scale,f,-1);
   }
   ctx.restore();
+
+  // ── 날개 끝 world좌표 + 순간속도 → 입자 방출 ──
+  if(!particleChk.checked) return;
+  const spread=F.scale*SET_K, ca=Math.cos(F.ang), sa=Math.sin(F.ang);
+  const outB=spread*0.44*(1+beat*amp*0.20);        // 끝이 벌어졌다 좁아짐
+  const downB=spread*0.66*(1-beat*amp*0.14);       // 위로 칠 때 끝이 올라옴
+  const toC=(lx,ly)=>({x:F.ax+lx*ca-ly*sa, y:F.ay+lx*sa+ly*ca});
+  const tips = (wingMode==='profile')
+    ? [ toC((F.faceLeft?1:-1)*outB*0.5, downB*1.05) ]
+    : [ toC(-outB,downB), toC(+outB,downB) ];
+  const prev=prevTips[idx]||tips.map(t=>({x:t.x,y:t.y}));
+  const emitN=Math.round(5 + arm*18);              // 팔 들면 더 많이(곱고 다량)
+  for(let t=0;t<tips.length;t++){
+    const p=prev[t]||tips[t];
+    emitTip(tips[t].x, tips[t].y, tips[t].x-p.x, tips[t].y-p.y, emitN, F.scale);
+  }
+  prevTips[idx]=tips.map(t=>({x:t.x,y:t.y}));
 }
 
 function drawOneWing(span,shoulder,flap,dir){
