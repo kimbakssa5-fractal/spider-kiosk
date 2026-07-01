@@ -156,12 +156,42 @@ async function loadModel(){
   drawUtils = new DrawingUtils(ctx);
 }
 
+async function openCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    throw new DOMException('이 브라우저/환경에서는 카메라 API를 쓸 수 없습니다 (HTTPS 필요).','NotSupportedError');
+  // 해상도를 점점 낮춰 재시도 — OverconstrainedError 대비
+  const tries=[
+    {video:{width:{ideal:1280},height:{ideal:720},facingMode:'user'},audio:false},
+    {video:{width:{ideal:640},height:{ideal:480}},audio:false},
+    {video:true,audio:false}
+  ];
+  let lastErr=null;
+  for(const c of tries){
+    try{ return await navigator.mediaDevices.getUserMedia(c); }
+    catch(e){ lastErr=e; if(e.name==='NotAllowedError'||e.name==='NotFoundError'||e.name==='NotReadableError'||e.name==='SecurityError') throw e; }
+  }
+  throw lastErr;
+}
+
+function cameraErrorMsg(e){
+  const sub=s=>'<br><span style="color:var(--muted);font-weight:300;font-size:13px">'+s+'</span>';
+  switch(e.name){
+    case 'NotAllowedError': return '카메라 접근이 <b>차단</b>되어 있습니다.'+sub('주소창의 🔒/카메라 아이콘 → 카메라 <b>허용</b> 후 다시 시작.<br>Windows: 설정 → 개인정보 → 카메라 → "앱이 카메라 액세스" 켜기.');
+    case 'NotFoundError':  return '연결된 <b>카메라를 찾지 못했습니다.</b>'+sub('웹캠이 연결/활성화돼 있는지 확인해 주세요.');
+    case 'NotReadableError': return '<b>다른 앱이 카메라를 사용 중</b>입니다.'+sub('Zoom · Teams · 카메라 앱 · 다른 탭 등을 모두 끄고 다시 시작해 주세요. (가장 흔한 원인)');
+    case 'OverconstrainedError': return '카메라가 요청 설정을 지원하지 않습니다.'+sub('해상도를 낮춰 재시도했지만 실패했습니다: '+(e.constraint||''));
+    case 'SecurityError':
+    case 'NotSupportedError': return '보안 컨텍스트가 아니라 카메라를 못 엽니다.'+sub('https:// 또는 localhost 에서 열어야 합니다.');
+    default: return '카메라를 열 수 없습니다.'+sub('['+(e.name||'Error')+'] '+(e.message||''));
+  }
+}
+
 async function start(){
   startBtn.disabled=true;
   try{
     if(!poseLandmarker) await loadModel();
     setOverlay('카메라를 켜는 중…',true);
-    stream = await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720,facingMode:"user"},audio:false});
+    stream = await openCamera();
     video.srcObject=stream;
     await video.play();
     canvas.width=video.videoWidth; canvas.height=video.videoHeight;
@@ -172,10 +202,8 @@ async function start(){
     loop();
   }catch(e){
     console.error(e);
-    let msg = e.name==='NotAllowedError'
-      ? '카메라 접근이 거부되었습니다.<br><span style="color:var(--muted);font-weight:300;font-size:13px">브라우저 주소창의 카메라 아이콘에서 허용해 주세요.</span>'
-      : '카메라를 열 수 없습니다.<br><span style="color:var(--muted);font-weight:300;font-size:13px">'+e.message+'</span>';
-    setOverlay(msg,false);
+    setOverlay(cameraErrorMsg(e)+'<br><br><button id="retryBtn" style="font-family:inherit;font-weight:600;font-size:13px;color:#05080d;background:var(--accent);border:none;padding:9px 18px;border-radius:10px;cursor:pointer">다시 시도</button>',false);
+    document.getElementById('retryBtn')?.addEventListener('click',start);
     setStatus('오류'); startBtn.disabled=false;
   }
 }
