@@ -270,17 +270,21 @@ function loop(){
     const w=canvas.width, h=canvas.height;
     ctx.clearRect(0,0,w,h);
     if(res.landmarks){
+      const lms=res.landmarks;
       const decorate = wingsChk.checked || particleChk.checked;
-      // ① 날개 + 파티클 (사람보다 뒤 레이어)
-      for(const lm of res.landmarks){ if(wingsChk.checked) drawWings(lm); }
-      if(particleChk.checked) for(const lm of res.landmarks) emitParticles(lm);
+      const front = lms.map(facingFront);   // 각 사람이 카메라를 보는가(정면)
+      // ① 정면인 사람의 날개 → 사람보다 뒤(등 뒤)
+      if(wingsChk.checked) for(let i=0;i<lms.length;i++) if(front[i]) drawWings(lms[i]);
+      if(particleChk.checked) for(const lm of lms) emitParticles(lm);
       stepParticles();
-      // ② 인물(전경)을 마스크로 잘라 위에 덮음 → 날개가 등 뒤로
+      // ② 인물(전경)을 마스크로 잘라 위에 덮음
       if(decorate){
         const person=buildPersonLayer(res.segmentationMasks,w,h);
         if(person) ctx.drawImage(person,0,0,w,h);
       }
-      // ③ 골격 (맨 앞)
+      // ③ 뒤돌아선 사람의 날개 → 사람보다 앞(등이 카메라를 향하므로)
+      if(wingsChk.checked) for(let i=0;i<lms.length;i++) if(!front[i]) drawWings(lms[i]);
+      // ④ 골격 (맨 앞)
       if(skelChk.checked)
         for(const lm of res.landmarks){
           drawUtils.drawConnectors(lm,PoseLandmarker.POSE_CONNECTIONS,
@@ -307,6 +311,17 @@ const WING_AX=0.985, WING_AY=0.458, WING_K=1.55;  // 부착점(뿌리) + 크기(
 
 /* ── 파티클(불씨/빛가루) ── 어깨·날개 주변에서 피어올라 발광 */
 let particles=[];
+// 카메라를 정면으로 보는가? 어깨 좌우 순서로 판별(랜드마크는 원본영상 좌표).
+// 실측: 정면일 때 lm11.x - lm12.x < 0, 뒤돌면 > 0. (옆모습 깜빡임 방지 히스테리시스)
+let faceState=true;
+function facingFront(lm){
+  const L=lm[11], R=lm[12];
+  if(!L||!R) return faceState;
+  const d=L.x-R.x;
+  if(d< -0.02) faceState=true;       // 정면 → 날개 등 뒤
+  else if(d> 0.02) faceState=false;  // 후면 → 날개 앞
+  return faceState;
+}
 // 어깨(11·12)+엉덩이(23·24)로 안정적인 부착점/크기 계산.
 // 크기 기준을 몸통 길이로 → 몸을 좌우로 틀어도 날개가 붕괴하지 않음.
 function poseFrame(lm){
