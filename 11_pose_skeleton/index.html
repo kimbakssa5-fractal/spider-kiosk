@@ -140,6 +140,41 @@ const fpsEl   =document.getElementById('fps');
 let poseLandmarker=null, drawUtils=null, running=false, stream=null, raf=null;
 let lastVideoTime=-1, lastT=performance.now(), frames=0, fps=0;
 
+// 오프스크린: 인물(전경) 분리용
+const personCv=document.createElement('canvas'), personCtx=personCv.getContext('2d');
+const maskCv  =document.createElement('canvas'), maskCtx  =maskCv.getContext('2d');
+let maskId=null;
+// 세그멘테이션 마스크들 → 인물만 남긴 레이어 만들기(등 뒤 합성용)
+function buildPersonLayer(masks,w,h){
+  if(!masks||!masks.length) return null;
+  const m0=masks[0], mw=m0.width, mh=m0.height;
+  if(!maskId || maskId.width!==mw || maskId.height!==mh){
+    maskCv.width=mw; maskCv.height=mh; maskId=maskCtx.createImageData(mw,mh);
+  }
+  const d=maskId.data;
+  // 여러 명이면 마스크 합집합(최댓값)
+  let acc=masks[0].getAsFloat32Array();
+  const tmp=[];
+  for(let k=1;k<masks.length;k++) tmp.push(masks[k].getAsFloat32Array());
+  for(let i=0;i<acc.length;i++){
+    let v=acc[i];
+    for(let k=0;k<tmp.length;k++) if(tmp[k][i]>v) v=tmp[k][i];
+    // 0.35~0.65 구간만 부드럽게(배경 배어나옴 방지 + 가장자리 앤티앨리어싱)
+    let a=(v-0.35)/0.30; a=a<0?0:a>1?1:a;
+    d[i*4+3]=(a*255)|0;
+  }
+  maskCtx.putImageData(maskId,0,0);
+  // 인물 = 현재 영상 ∩ 마스크
+  if(personCv.width!==w||personCv.height!==h){ personCv.width=w; personCv.height=h; }
+  personCtx.globalCompositeOperation='source-over';
+  personCtx.clearRect(0,0,w,h);
+  personCtx.drawImage(video,0,0,w,h);
+  personCtx.globalCompositeOperation='destination-in';
+  personCtx.drawImage(maskCv,0,0,w,h);
+  personCtx.globalCompositeOperation='source-over';
+  return personCv;
+}
+
 function setOverlay(html,showSpin){ omsg.innerHTML=html; spinner.style.display=showSpin?'block':'none'; overlay.classList.remove('hidden'); }
 function hideOverlay(){ overlay.classList.add('hidden'); }
 function setStatus(text,live){ statusText.textContent=text; statusDot.classList.toggle('live',!!live); }
@@ -157,7 +192,8 @@ async function loadModel(){
     numPoses:2,
     minPoseDetectionConfidence:0.5,
     minPosePresenceConfidence:0.5,
-    minTrackingConfidence:0.5
+    minTrackingConfidence:0.5,
+    outputSegmentationMasks:true          // 인물 분할(날개를 등 뒤로 합성)
   });
   drawUtils = new DrawingUtils(ctx);
 }
@@ -231,15 +267,21 @@ function loop(){
   if(video.currentTime!==lastVideoTime){
     lastVideoTime=video.currentTime;
     const res=poseLandmarker.detectForVideo(video,now);
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const w=canvas.width, h=canvas.height;
+    ctx.clearRect(0,0,w,h);
     if(res.landmarks){
-      for(const lm of res.landmarks){                 // ① 날개(뒤 레이어)
-        if(wingsChk.checked) drawWings(lm);
+      const decorate = wingsChk.checked || particleChk.checked;
+      // ① 날개 + 파티클 (사람보다 뒤 레이어)
+      for(const lm of res.landmarks){ if(wingsChk.checked) drawWings(lm); }
+      if(particleChk.checked) for(const lm of res.landmarks) emitParticles(lm);
+      stepParticles();
+      // ② 인물(전경)을 마스크로 잘라 위에 덮음 → 날개가 등 뒤로
+      if(decorate){
+        const person=buildPersonLayer(res.segmentationMasks,w,h);
+        if(person) ctx.drawImage(person,0,0,w,h);
       }
-      if(particleChk.checked)                          // ② 파티클 방출
-        for(const lm of res.landmarks) emitParticles(lm);
-      stepParticles();                                 // 파티클 갱신+발광(꺼도 잔여 소멸)
-      if(skelChk.checked)                              // ③ 골격(앞 레이어)
+      // ③ 골격 (맨 앞)
+      if(skelChk.checked)
         for(const lm of res.landmarks){
           drawUtils.drawConnectors(lm,PoseLandmarker.POSE_CONNECTIONS,
             {color:getCss('--line'),lineWidth:4});
