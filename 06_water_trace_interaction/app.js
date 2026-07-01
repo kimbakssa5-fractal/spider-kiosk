@@ -589,7 +589,7 @@
   const MOTION_FLEE_MULT = 1.0;        // 모션 점 도망 반경 배수(마우스와 동일 — 가까울 때만 도망)
   const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
-  const CAM_MIRROR = false;            // 좌우 반전(거울 끔) — 모션 매핑
+  let camFlip = false;                 // 카메라 좌우반전(a 키) — 화면표시+모션매핑 함께 뒤집음
   let camOn = false, xrayOn = false, camStream = null, camVideo = null;
   let camMonitorOn = false;              // 모니터링 미리보기 창(기본 꺼짐, W 토글)
   let mctx = null, prevLuma = null, motionAcc = 0, motionSplashAcc = 0, motionTotal = 0;
@@ -597,7 +597,7 @@
 
   function updateMotion() {
     if (!camOn || !camVideo || camVideo.readyState < 2 || !camVideo.videoWidth) return;
-    if (CAM_MIRROR) { mctx.save(); mctx.scale(-1, 1); mctx.drawImage(camVideo, -MW, 0, MW, MH); mctx.restore(); }
+    if (camFlip) { mctx.save(); mctx.scale(-1, 1); mctx.drawImage(camVideo, -MW, 0, MW, MH); mctx.restore(); }
     else mctx.drawImage(camVideo, 0, 0, MW, MH);
     const data = mctx.getImageData(0, 0, MW, MH).data;
     const luma = new Float32Array(MW * MH);
@@ -656,7 +656,7 @@
   function applyCamClass() {
     if (!camVideo) return;
     // xray > 모니터링창(W) > 숨김(preview-off: opacity0 이지만 디코딩 유지→모션 계속 동작)
-    camVideo.className = xrayOn ? "xray" : (camMonitorOn ? "preview" : "preview-off");
+    camVideo.className = (xrayOn ? "xray" : (camMonitorOn ? "preview" : "preview-off")) + (camFlip ? " flip" : "");
   }
   function toggleCamMonitor() {
     camMonitorOn = !camMonitorOn;
@@ -728,6 +728,10 @@
   function toggleXray() {
     if (!camOn) { startCamera(function () { xrayOn = true; applyCamClass(); showHud("X-RAY on"); }); return; }
     xrayOn = !xrayOn; applyCamClass(); showHud(xrayOn ? "X-RAY on" : "X-RAY off");
+  }
+  function toggleCamFlip() {
+    camFlip = !camFlip; applyCamClass();
+    showHud("카메라 좌우반전 " + (camFlip ? "ON" : "OFF"));
   }
 
   // ---------------------------------------------------------------
@@ -1024,7 +1028,7 @@
   const vkbd = document.getElementById("vkbd");
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
-    ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
+    ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
     ["KeyY", "윤슬 Y"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
@@ -1149,6 +1153,7 @@
       case "KeyM": if (e.repeat) return; e.preventDefault(); toggleMenu(); break;
       case "KeyC": if (e.repeat) return; e.preventDefault(); toggleCamera(); break;
       case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
+      case "KeyA": if (e.repeat) return; e.preventDefault(); toggleCamFlip(); break;
       case "KeyV": if (e.repeat) return; e.preventDefault(); toggleVideoBg(); break;
       case "KeyW": if (e.repeat) return; e.preventDefault(); toggleCamMonitor(); break;
       case "KeyT": if (e.repeat) return; e.preventDefault(); toggleKoiGroup(); break;
