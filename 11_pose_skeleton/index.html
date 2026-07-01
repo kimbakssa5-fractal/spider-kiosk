@@ -303,28 +303,39 @@ function getCss(v){ return cssCache[v] ?? (cssCache[v]=getComputedStyle(document
 /* ── 자동 날개 장착 ──────────────────────────────────────────────
    실제 날개 이미지(wing_white.png)를 어깨(11=왼,12=오른)에 맞춰
    부착·회전·펄럭이며 그린다. 로딩 전에는 벡터 날개로 폴백. */
-const WING_AX=0.985, WING_AY=0.458, WING_K=1.65;  // 부착점(뿌리) + 크기(어깨너비 배수)
+const WING_AX=0.985, WING_AY=0.458, WING_K=1.55;  // 부착점(뿌리) + 크기(몸통길이 배수)
 
 /* ── 파티클(불씨/빛가루) ── 어깨·날개 주변에서 피어올라 발광 */
 let particles=[];
-function poseAnchor(lm){
-  const w=canvas.width,h=canvas.height, L=lm[11],R=lm[12];
+// 어깨(11·12)+엉덩이(23·24)로 안정적인 부착점/크기 계산.
+// 크기 기준을 몸통 길이로 → 몸을 좌우로 틀어도 날개가 붕괴하지 않음.
+function poseFrame(lm){
+  const w=canvas.width,h=canvas.height, L=lm[11],R=lm[12],Hl=lm[23],Hr=lm[24];
   if(!L||!R) return null;
   const lx=L.x*w,ly=L.y*h,rx=R.x*w,ry=R.y*h;
-  return {cx:(lx+rx)/2,cy:(ly+ry)/2,shoulder:Math.hypot(lx-rx,ly-ry),ang:Math.atan2(ly-ry,lx-rx)};
+  const smx=(lx+rx)/2, smy=(ly+ry)/2;               // 어깨 중앙
+  const shoulder=Math.hypot(lx-rx,ly-ry);
+  let hmx,hmy;
+  if(Hl&&Hr){ hmx=(Hl.x+Hr.x)/2*w; hmy=(Hl.y+Hr.y)/2*h; }
+  else { hmx=smx; hmy=smy+shoulder*1.4; }
+  const torso=Math.hypot(hmx-smx,hmy-smy);
+  const scale=Math.max(torso, shoulder*1.1);        // 회전에 강한 크기 기준
+  const ang=Math.atan2(ly-ry,lx-rx);                // 몸 기울기
+  const ax=smx+(hmx-smx)*0.22, ay=smy+(hmy-smy)*0.22; // 부착점: 등 위쪽
+  return {ax,ay,scale,ang,shoulder};
 }
 function emitParticles(lm){
-  const A=poseAnchor(lm); if(!A||A.shoulder<8) return;
-  const s=A.shoulder, ca=Math.cos(A.ang), sa=Math.sin(A.ang);
-  const count=Math.min(3,Math.max(1,Math.round(s/80)));
+  const F=poseFrame(lm); if(!F||F.scale<10) return;
+  const s=F.scale, ca=Math.cos(F.ang), sa=Math.sin(F.ang);
+  const count=Math.min(3,Math.max(1,Math.round(s/90)));
   for(let i=0;i<count;i++){
     const side=Math.random()<0.5?-1:1, t=Math.random();
-    const ox=side*(0.25+t*1.0)*s;                          // 좌우로 날개 폭만큼
-    const oy=(0.15-t*0.45)*s+(Math.random()-0.5)*0.25*s;   // 어깨~윗쪽
-    const px=A.cx+ox*ca-oy*sa, py=A.cy+ox*sa+oy*ca+s*0.35;
+    const ox=side*(0.25+t*0.95)*s;                          // 좌우로 날개 폭만큼
+    const oy=(0.1-t*0.5)*s+(Math.random()-0.5)*0.2*s;
+    const px=F.ax+ox*ca-oy*sa, py=F.ay+ox*sa+oy*ca;
     const warm=Math.random()<0.55;
     particles.push({x:px,y:py,vx:(Math.random()-0.5)*0.5+side*0.12,vy:-0.4-Math.random()*1.1,
-      life:1,decay:0.010+Math.random()*0.014,size:(0.6+Math.random()*1.5)*(s/220),warm});
+      life:1,decay:0.010+Math.random()*0.014,size:(0.6+Math.random()*1.5)*(s/300),warm});
   }
   if(particles.length>320) particles.splice(0,particles.length-320);
 }
@@ -348,38 +359,32 @@ wingImg.onload=()=>{ wingReady=true; };
 wingImg.src='wing_white.png';
 
 function drawWings(lm){
-  const w=canvas.width, h=canvas.height;
-  const L=lm[11], R=lm[12];                 // 어깨
-  if(!L||!R || (L.visibility!=null && L.visibility<0.35 && R.visibility<0.35)) return;
-  const lx=L.x*w, ly=L.y*h, rx=R.x*w, ry=R.y*h;
-  const cx=(lx+rx)/2, cy=(ly+ry)/2;         // 어깨 중앙(등 위쪽)
-  const shoulder=Math.hypot(lx-rx,ly-ry);
-  if(shoulder<8) return;
-  const ang=Math.atan2(ly-ry,lx-rx);        // 몸 기울기
+  const L=lm[11], R=lm[12];
+  if(!L||!R || (L.visibility!=null && L.visibility<0.3 && R.visibility<0.3)) return;
+  const F=poseFrame(lm); if(!F || F.scale<10) return;
   const flap=Math.sin(performance.now()/260)*0.11;   // ±약6° 펄럭임
 
   ctx.save();
-  ctx.translate(cx,cy);
-  ctx.rotate(ang);
-  ctx.translate(0, shoulder*0.35);          // 등 중앙(어깨선보다 아래)에 부착 → 머리 덜 가림
+  ctx.translate(F.ax,F.ay);                 // 등 위쪽 부착점
+  ctx.rotate(F.ang);                        // 몸 기울기
   if(wingReady){
     ctx.shadowColor='rgba(140,225,255,0.5)';
-    ctx.shadowBlur=shoulder*0.25;
-    wingBlit(shoulder,false,flap);          // 왼쪽 날개(원본)
-    wingBlit(shoulder,true ,flap);          // 오른쪽 날개(좌우반전)
+    ctx.shadowBlur=F.scale*0.2;
+    wingBlit(F.scale,false,flap);           // 왼쪽 날개(원본)
+    wingBlit(F.scale,true ,flap);           // 오른쪽 날개(좌우반전)
   }else{
     ctx.shadowColor='rgba(120,220,255,0.55)';
-    ctx.shadowBlur=shoulder*0.35;
+    ctx.shadowBlur=F.scale*0.3;
     const f=(Math.sin(performance.now()/230)+1)/2;
-    drawOneWing(shoulder*2.7,shoulder,f, 1);
-    drawOneWing(shoulder*2.7,shoulder,f,-1);
+    drawOneWing(F.scale*1.9,F.scale,f, 1);
+    drawOneWing(F.scale*1.9,F.scale,f,-1);
   }
   ctx.restore();
 }
 
-// 이미지 날개 한 장: 부착점을 원점에 두고 ±15° 벌려 그림
-function wingBlit(shoulder,mirror,flap){
-  const dw=shoulder*WING_K, dh=dw*wingImg.height/wingImg.width;
+// 이미지 날개 한 장: 부착점을 원점에 두고 ±13° 벌려 그림
+function wingBlit(scale,mirror,flap){
+  const dw=scale*WING_K, dh=dw*wingImg.height/wingImg.width;
   const axp=WING_AX*dw, ayp=WING_AY*dh;
   const rot=(13*Math.PI/180)+flap;
   ctx.save();
