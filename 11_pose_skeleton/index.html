@@ -307,7 +307,6 @@ function getCss(v){ return cssCache[v] ?? (cssCache[v]=getComputedStyle(document
 /* ── 자동 날개 장착 ──────────────────────────────────────────────
    실제 날개 이미지(wing_white.png)를 어깨(11=왼,12=오른)에 맞춰
    부착·회전·펄럭이며 그린다. 로딩 전에는 벡터 날개로 폴백. */
-const WING_AX=0.985, WING_AY=0.458, WING_K=1.55;  // 부착점(뿌리) + 크기(몸통길이 배수)
 
 /* ── 파티클(불씨/빛가루) ── 어깨·날개 주변에서 피어올라 발광 */
 let particles=[];
@@ -375,68 +374,52 @@ function stepParticles(){
   }
   ctx.restore();
 }
-const wingImg=new Image(); let wingReady=false;
-wingImg.onload=()=>{ wingReady=true; };
-wingImg.src='wing_white.png';
-// 머그샷 참고: 옆으로 틀면 쓰는 '프로필(측면)' 날개
-const wingProf=new Image(); let profReady=false;
-wingProf.onload=()=>{ profReady=true; };
-wingProf.src='wing_profile.png';
-const PROF_AX=0.454, PROF_AY=0.06, PROF_K=0.9;
+// 그린스크린 머그샷에서 뽑은 3각도 날개(각 이미지에 좌우 한 쌍 포함)
+function loadWing(src,ax,ay){ const im=new Image(); const o={im,ax,ay,ready:false}; im.onload=()=>o.ready=true; im.src=src; return o; }
+const WFRONT =loadWing('wing_front.png',   0.5, 0.202);  // 정면 펼침
+const WREAR  =loadWing('wing_rear.png',    0.5, 0.195);  // 후면 펼침
+const WPROF  =loadWing('wing_profile.png', 0.5, 0.02);   // 측면 드리움
+const SET_K=2.5;   // 이미지(=날개 한 쌍) 폭 = 몸통 × SET_K
 
-let wingMode='spread';   // 'spread'(정면/후면) ↔ 'profile'(측면), 히스테리시스
+function drawSet(o,F,mirror,squash,flap){
+  if(!o.ready) return false;
+  const dw=F.scale*SET_K*squash, dh=F.scale*SET_K*o.im.height/o.im.width;
+  ctx.save();
+  ctx.shadowColor='rgba(140,225,255,0.45)'; ctx.shadowBlur=F.scale*0.18;
+  ctx.rotate(flap*0.12);                       // 은은한 살랑임
+  if(mirror) ctx.scale(-1,1);
+  ctx.drawImage(o.im, -o.ax*dw, -o.ay*dh, dw, dh);
+  ctx.restore();
+  return true;
+}
+
+let wingMode='front';   // 'front' ↔ 'rear' ↔ 'profile' (히스테리시스)
 function drawWings(lm){
   const L=lm[11], R=lm[12];
   if(!L||!R || (L.visibility!=null && L.visibility<0.3 && R.visibility<0.3)) return;
   const F=poseFrame(lm); if(!F || F.scale<10) return;
-  const flap=Math.sin(performance.now()/260)*0.11;   // ±약6° 펄럭임
-  // 얼마나 틀었나(정면도)로 모드 전환 — 깜빡임 방지 히스테리시스
-  if(F.frontal < 0.34) wingMode='profile';
-  else if(F.frontal > 0.52) wingMode='spread';
+  const flap=Math.sin(performance.now()/260);
+  // 각도로 모드 결정: 많이 틀면 profile, 아니면 정면/후면
+  if(F.frontal < 0.32) wingMode='profile';
+  else if(F.frontal > 0.5) wingMode = facingFront(lm) ? 'front' : 'rear';
 
   ctx.save();
   ctx.translate(F.ax,F.ay);                 // 등 위쪽 부착점
   ctx.rotate(F.ang);                        // 몸 기울기
-  if(wingMode==='profile' && profReady){
-    // 측면: 한쪽 날개가 등 뒤로 드리움 (머그샷 PROFILE)
-    const dw=F.scale*PROF_K, dh=dw*wingProf.height/wingProf.width;
-    const axp=PROF_AX*dw, ayp=PROF_AY*dh;
-    ctx.shadowColor='rgba(140,225,255,0.5)'; ctx.shadowBlur=F.scale*0.2;
-    ctx.rotate(flap*0.4);                   // 살랑임
-    if(!F.faceLeft) ctx.scale(-1,1);        // 얼굴이 오른쪽이면 좌우반전(등이 왼쪽)
-    ctx.drawImage(wingProf, -axp, -ayp, dw, dh);
-  } else if(wingReady){
-    ctx.scale(F.frontal,1);                 // yaw: 살짝 틀면 가로 압축
-    ctx.shadowColor='rgba(140,225,255,0.5)';
-    ctx.shadowBlur=F.scale*0.2;
-    const rightNear = F.zR < F.zL;          // 가까운 어깨 날개를 크게+위에 → 원근감
-    const near=1.12, far=0.9;
-    if(rightNear){
-      wingBlit(F.scale*far ,false,flap);
-      wingBlit(F.scale*near,true ,flap);
-    }else{
-      wingBlit(F.scale*far ,true ,flap);
-      wingBlit(F.scale*near,false,flap);
-    }
+  let ok;
+  if(wingMode==='profile'){
+    ok=drawSet(WPROF,F, !F.faceLeft, 1, flap);   // 측면(얼굴방향 따라 반전)
+  }else if(wingMode==='rear'){
+    ok=drawSet(WREAR,F, false, Math.max(F.frontal,0.35), flap);
   }else{
-    ctx.shadowColor='rgba(120,220,255,0.55)';
-    ctx.shadowBlur=F.scale*0.3;
+    ok=drawSet(WFRONT,F, false, Math.max(F.frontal,0.35), flap);
+  }
+  if(!ok){   // 이미지 로딩 전 폴백(벡터)
+    ctx.shadowColor='rgba(120,220,255,0.55)'; ctx.shadowBlur=F.scale*0.3;
     const f=(Math.sin(performance.now()/230)+1)/2;
     drawOneWing(F.scale*1.9,F.scale,f, 1);
     drawOneWing(F.scale*1.9,F.scale,f,-1);
   }
-  ctx.restore();
-}
-
-// 이미지 날개 한 장: 부착점을 원점에 두고 ±13° 벌려 그림
-function wingBlit(scale,mirror,flap){
-  const dw=scale*WING_K, dh=dw*wingImg.height/wingImg.width;
-  const axp=WING_AX*dw, ayp=WING_AY*dh;
-  const rot=(30*Math.PI/180)+flap;   // 어깨 위로 아치지게 벌림
-  ctx.save();
-  ctx.rotate(mirror? -rot : rot);
-  ctx.scale(mirror? -1 : 1, 1);             // scale이 안쪽(먼저 적용)=뒤집고 나서 회전
-  ctx.drawImage(wingImg, -axp, -ayp, dw, dh);
   ctx.restore();
 }
 
