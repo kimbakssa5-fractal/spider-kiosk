@@ -303,7 +303,7 @@ function getCss(v){ return cssCache[v] ?? (cssCache[v]=getComputedStyle(document
 /* ── 자동 날개 장착 ──────────────────────────────────────────────
    실제 날개 이미지(wing_white.png)를 어깨(11=왼,12=오른)에 맞춰
    부착·회전·펄럭이며 그린다. 로딩 전에는 벡터 날개로 폴백. */
-const WING_AX=0.985, WING_AY=0.458, WING_K=2.3;   // 부착점(뿌리) + 크기(어깨너비 배수)
+const WING_AX=0.985, WING_AY=0.458, WING_K=1.65;  // 부착점(뿌리) + 크기(어깨너비 배수)
 
 /* ── 파티클(불씨/빛가루) ── 어깨·날개 주변에서 피어올라 발광 */
 let particles=[];
@@ -316,17 +316,17 @@ function poseAnchor(lm){
 function emitParticles(lm){
   const A=poseAnchor(lm); if(!A||A.shoulder<8) return;
   const s=A.shoulder, ca=Math.cos(A.ang), sa=Math.sin(A.ang);
-  const count=Math.min(7,Math.max(2,Math.round(s/38)));
+  const count=Math.min(3,Math.max(1,Math.round(s/80)));
   for(let i=0;i<count;i++){
     const side=Math.random()<0.5?-1:1, t=Math.random();
-    const ox=side*(0.2+t*1.35)*s;                          // 좌우로 날개 폭만큼
-    const oy=(0.15-t*0.55)*s+(Math.random()-0.5)*0.25*s;   // 어깨~윗쪽
-    const px=A.cx+ox*ca-oy*sa, py=A.cy+ox*sa+oy*ca+s*0.15;
+    const ox=side*(0.25+t*1.0)*s;                          // 좌우로 날개 폭만큼
+    const oy=(0.15-t*0.45)*s+(Math.random()-0.5)*0.25*s;   // 어깨~윗쪽
+    const px=A.cx+ox*ca-oy*sa, py=A.cy+ox*sa+oy*ca+s*0.35;
     const warm=Math.random()<0.55;
-    particles.push({x:px,y:py,vx:(Math.random()-0.5)*0.5+side*0.15,vy:-0.5-Math.random()*1.3,
-      life:1,decay:0.006+Math.random()*0.012,size:(0.8+Math.random()*2.2)*(s/150),warm});
+    particles.push({x:px,y:py,vx:(Math.random()-0.5)*0.5+side*0.12,vy:-0.4-Math.random()*1.1,
+      life:1,decay:0.010+Math.random()*0.014,size:(0.6+Math.random()*1.5)*(s/220),warm});
   }
-  if(particles.length>600) particles.splice(0,particles.length-600);
+  if(particles.length>320) particles.splice(0,particles.length-320);
 }
 function stepParticles(){
   if(!particles.length) return;
@@ -335,10 +335,10 @@ function stepParticles(){
     const p=particles[i];
     p.x+=p.vx; p.y+=p.vy; p.vy-=0.008; p.vx*=0.985; p.life-=p.decay;
     if(p.life<=0){ particles.splice(i,1); continue; }
-    const a=Math.min(1,p.life*1.2), r=p.size*(1.2+(1-p.life)*1.6);
+    const a=Math.min(0.75,p.life*0.85), r=p.size*(1.1+(1-p.life)*1.3);
     const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.5);
-    if(p.warm){ g.addColorStop(0,`rgba(255,235,170,${a})`); g.addColorStop(.35,`rgba(255,150,45,${a*.55})`); g.addColorStop(1,'rgba(255,70,0,0)'); }
-    else      { g.addColorStop(0,`rgba(225,250,255,${a})`); g.addColorStop(.35,`rgba(120,220,255,${a*.55})`); g.addColorStop(1,'rgba(70,170,255,0)'); }
+    if(p.warm){ g.addColorStop(0,`rgba(255,225,150,${a})`); g.addColorStop(.4,`rgba(255,140,40,${a*.4})`); g.addColorStop(1,'rgba(255,70,0,0)'); }
+    else      { g.addColorStop(0,`rgba(215,245,255,${a})`); g.addColorStop(.4,`rgba(110,210,255,${a*.4})`); g.addColorStop(1,'rgba(70,170,255,0)'); }
     ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,r*2.5,0,7); ctx.fill();
   }
   ctx.restore();
@@ -361,7 +361,7 @@ function drawWings(lm){
   ctx.save();
   ctx.translate(cx,cy);
   ctx.rotate(ang);
-  ctx.translate(0, shoulder*0.15);          // 어깨선 살짝 아래(등)에 부착
+  ctx.translate(0, shoulder*0.35);          // 등 중앙(어깨선보다 아래)에 부착 → 머리 덜 가림
   if(wingReady){
     ctx.shadowColor='rgba(140,225,255,0.5)';
     ctx.shadowBlur=shoulder*0.25;
@@ -381,7 +381,7 @@ function drawWings(lm){
 function wingBlit(shoulder,mirror,flap){
   const dw=shoulder*WING_K, dh=dw*wingImg.height/wingImg.width;
   const axp=WING_AX*dw, ayp=WING_AY*dh;
-  const rot=(15*Math.PI/180)+flap;
+  const rot=(13*Math.PI/180)+flap;
   ctx.save();
   ctx.rotate(mirror? -rot : rot);
   ctx.scale(mirror? -1 : 1, 1);             // scale이 안쪽(먼저 적용)=뒤집고 나서 회전
