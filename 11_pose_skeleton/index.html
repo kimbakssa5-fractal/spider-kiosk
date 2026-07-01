@@ -104,6 +104,8 @@
   <div class="controls">
     <button class="primary" id="startBtn">▶ 시작</button>
     <button id="stopBtn" disabled>■ 정지</button>
+    <label class="toggle"><input type="checkbox" id="wingsChk" checked>🪽 날개 장착</label>
+    <label class="toggle"><input type="checkbox" id="skelChk" checked>골격 표시</label>
     <label class="toggle"><input type="checkbox" id="mirrorChk" checked>거울 모드</label>
     <label class="toggle"><input type="checkbox" id="videoChk" checked>영상 표시</label>
   </div>
@@ -127,6 +129,8 @@ const startBtn= document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const mirrorChk=document.getElementById('mirrorChk');
 const videoChk =document.getElementById('videoChk');
+const wingsChk =document.getElementById('wingsChk');
+const skelChk  =document.getElementById('skelChk');
 const statusDot=document.getElementById('statusDot');
 const statusText=document.getElementById('statusText');
 const fpsEl   =document.getElementById('fps');
@@ -228,10 +232,13 @@ function loop(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     if(res.landmarks){
       for(const lm of res.landmarks){
-        drawUtils.drawConnectors(lm,PoseLandmarker.POSE_CONNECTIONS,
-          {color:getCss('--line'),lineWidth:4});
-        drawUtils.drawLandmarks(lm,
-          {color:getCss('--joint'),fillColor:getCss('--joint'),radius:5,lineWidth:1});
+        if(wingsChk.checked) drawWings(lm);          // 날개 먼저(뒤쪽)
+        if(skelChk.checked){                          // 골격은 위에
+          drawUtils.drawConnectors(lm,PoseLandmarker.POSE_CONNECTIONS,
+            {color:getCss('--line'),lineWidth:4});
+          drawUtils.drawLandmarks(lm,
+            {color:getCss('--joint'),fillColor:getCss('--joint'),radius:5,lineWidth:1});
+        }
       }
       setStatus(res.landmarks.length>0?`인식 중 · ${res.landmarks.length}명`:'사람을 찾는 중',res.landmarks.length>0);
     }
@@ -244,6 +251,62 @@ function loop(){
 
 const cssCache={};
 function getCss(v){ return cssCache[v] ?? (cssCache[v]=getComputedStyle(document.documentElement).getPropertyValue(v).trim()); }
+
+/* ── 자동 날개 장착 ──────────────────────────────────────────────
+   어깨(11=왼, 12=오른) 위치·너비·기울기에 맞춰 날개를 붙이고
+   시간에 따라 펄럭이게 그린다. video 좌표계와 동일(x*w, y*h). */
+function drawWings(lm){
+  const w=canvas.width, h=canvas.height;
+  const L=lm[11], R=lm[12];                 // 어깨
+  if(!L||!R || (L.visibility!=null && L.visibility<0.4 && R.visibility<0.4)) return;
+  const lx=L.x*w, ly=L.y*h, rx=R.x*w, ry=R.y*h;
+  const cx=(lx+rx)/2, cy=(ly+ry)/2;         // 어깨 중앙(등 위쪽)
+  const dx=lx-rx, dy=ly-ry;
+  const shoulder=Math.hypot(dx,dy);
+  if(shoulder<8) return;
+  const ang=Math.atan2(dy,dx);              // 몸 기울기
+  const span=shoulder*2.7;                  // 날개 길이
+  const flap=(Math.sin(performance.now()/230)+1)/2;  // 0~1 펄럭임
+
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(ang);
+  ctx.translate(0, shoulder*0.18);          // 어깨선보다 살짝 아래(등)에서 시작
+  ctx.shadowColor='rgba(120,220,255,0.55)';
+  ctx.shadowBlur=shoulder*0.35;
+  drawOneWing(span,shoulder,flap, 1);       // 한쪽
+  drawOneWing(span,shoulder,flap,-1);       // 반대쪽(대칭)
+  ctx.restore();
+}
+
+function drawOneWing(span,shoulder,flap,dir){
+  const feathers=8;
+  const baseAngle=-0.12 - flap*0.55;        // 전체 각도(펄럭임에 따라 위로)
+  const base=shoulder*0.14;                 // 등 쪽 시작점
+  ctx.save();
+  ctx.scale(dir,1);
+  const grad=ctx.createLinearGradient(0,0,span,-span*0.5);
+  grad.addColorStop(0,'rgba(255,255,255,0.96)');
+  grad.addColorStop(0.6,'rgba(200,245,255,0.7)');
+  grad.addColorStop(1,'rgba(110,215,255,0.18)');
+  for(let i=0;i<feathers;i++){
+    const t=i/(feathers-1);
+    const len=span*(0.5+0.5*Math.sin(t*Math.PI));   // 가운데 깃털이 가장 김
+    const a=baseAngle - t*0.95;                       // 위·뒤로 부채꼴
+    const fx=base+Math.cos(a)*len, fy=Math.sin(a)*len;
+    const wid=span*0.11*(0.55+0.45*Math.sin(t*Math.PI));
+    const nx=-Math.sin(a), ny=Math.cos(a);            // 깃털 폭 방향
+    ctx.beginPath();
+    ctx.moveTo(base,0);
+    ctx.quadraticCurveTo((base+fx)/2 + nx*wid,(0+fy)/2 + ny*wid, fx,fy);
+    ctx.quadraticCurveTo((base+fx)/2 - nx*wid,(0+fy)/2 - ny*wid, base,0);
+    ctx.closePath();
+    ctx.fillStyle=grad; ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba(255,255,255,0.45)'; ctx.lineWidth=1; ctx.stroke();
+  }
+  ctx.restore();
+}
 
 mirrorChk.addEventListener('change',()=>{
   const t = mirrorChk.checked?'scaleX(-1)':'none';
