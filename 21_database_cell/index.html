@@ -1067,8 +1067,10 @@ function gLoop(t){
 }
 window.__gestTest = (x, y, p) => gPointer(x, y, p);   // 카메라 없는 환경 검증용
 
-if(new URLSearchParams(location.search).get('gesture') === '1' || load('dbwall_gesture', 0) == 1)
-  addEventListener('pointerdown', () => enableGesture(), { once:true });   // 첫 터치 시 자동 시작(권한 UX)
+if(new URLSearchParams(location.search).get('gesture') === '1' || load('dbwall_gesture', 0) == 1){
+  enableGesture();                                                         // 로드 시 바로 카메라 시작(키오스크=자동허용)
+  addEventListener('pointerdown', () => { if(!gest.on && !gest.loading) enableGesture(); }, { once:true });  // 혹시 막히면 첫 터치에 재시도
+}
 
 boot();
 </script>
