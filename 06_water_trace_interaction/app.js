@@ -589,6 +589,12 @@
   const MOTION_FLEE_MULT = 1.0;        // 모션 점 도망 반경 배수(마우스와 동일 — 가까울 때만 도망)
   const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
+  // ── 자기 화면 되먹임 억제(프로젝터 바닥투사를 천장 웹캠이 다시 보는 설치용) ──
+  const FB_GLOBAL_FRAC = 0.35;         // 변화 셀 비율이 이 이상 = 전역 변화(자기 화면) → 그 틱 무시
+  const FB_WINDOW_MS = 5000;           // 되먹임 판정 창
+  const FB_MAX = 220;                  // 창 내 모션 물결 상한(~70% 지속) 초과 → 냉각 시작
+  const FB_RESUME = 60;                // 이 이하로 줄면 냉각 해제(물이 잠잠해지면 자동 재개)
+  let fbTimes = [], fbCooldown = false;
   let camFlip = false;                 // 카메라 좌우반전(a 키) — 화면표시+모션매핑 함께 뒤집음
   let camOn = false, xrayOn = false, camStream = null, camVideo = null;
   let camMonitorOn = false;              // 모니터링 미리보기 창(기본 꺼짐, W 토글)
@@ -619,6 +625,13 @@
           }
         }
       }
+      // 되먹임 억제 ①: 화면 대부분이 동시에 변하면(슬라이드 전환·영상배경·전면 물결 일렁임이
+      // 카메라에 되비침) 사람의 움직임이 아니므로 이번 틱을 통째로 무시
+      if (cells.length > MW * MH * FB_GLOBAL_FRAC) {
+        motionTotal = 0; motionCells = []; motionPoints = [];
+        prevLuma = luma;
+        return;
+      }
       motionTotal = total;
       motionCells = cells;
       // 물고기 도망용 = 코어스 블록 점(시각적 격자 무관)
@@ -634,7 +647,7 @@
           }
         }
       }
-      motionPoints = pts;
+      motionPoints = fbCooldown ? [] : pts;   // 되먹임 냉각 중엔 도망점도 차단
     }
     prevLuma = luma;
   }
@@ -643,6 +656,16 @@
   function motionSplashes() {
     const cells = motionCells;
     if (!cells.length) return;
+    // 되먹임 억제 ②: 모션 물결이 장시간 연속 폭주하면(물결→카메라→물결 루프) 잠시 냉각.
+    // 냉각 중엔 물결이 잦아들어 카메라도 잠잠해지고, 창 내 카운트가 줄면 자동 재개.
+    const now = performance.now();
+    while (fbTimes.length && now - fbTimes[0] > FB_WINDOW_MS) fbTimes.shift();
+    if (fbCooldown) {
+      if (fbTimes.length <= FB_RESUME) fbCooldown = false; else return;
+    } else if (fbTimes.length >= FB_MAX) {
+      fbCooldown = true;
+      return;
+    }
     const W = window.innerWidth, H = window.innerHeight;
     const n = Math.min(MOTION_SPLASH_N, cells.length);
     for (let i = 0; i < n; i++) {
@@ -650,6 +673,7 @@
       const sx = ((c.x + Math.random()) / MW) * W;            // 셀 내부 지터(연속 위치)
       const sy = ((c.y + Math.random()) / MH) * H;
       splash(sx, sy, 70 + 90 * Math.min(1, c.d / 100));       // 작은 물결 다수 → 자연스러운 교란
+      fbTimes.push(now);
     }
   }
 
