@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Face Off — 고릴라 페이스 싱크</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0e0a;
+    --panel:rgba(18,24,16,.78);
+    --accent:#ffcf6e;
+    --line:#00e5ff;
+    --joint:#ff2d78;
+    --text:#ede8dd;
+    --muted:#9aa393;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Noto Sans KR',sans-serif;
+    background:radial-gradient(1200px 800px at 50% -10%,#1b2415 0%,var(--bg) 60%);
+    color:var(--text);
+    min-height:100dvh;
+    display:flex;flex-direction:column;align-items:center;
+    overflow-x:hidden;
+  }
+  header{text-align:center;padding:20px 16px 6px}
+  header h1{font-weight:700;font-size:clamp(20px,4vw,30px);letter-spacing:-.5px}
+  header h1 span{color:var(--accent)}
+  header p{color:var(--muted);font-weight:300;font-size:14px;margin-top:6px}
+
+  .stage{
+    position:relative;width:min(94vw,980px);aspect-ratio:5/4;
+    margin:12px 0;border-radius:16px;overflow:hidden;
+    background:
+      radial-gradient(900px 500px at 50% 108%,#22301b 0%,transparent 60%),
+      radial-gradient(700px 700px at 50% 40%,#141b10 0%,#070905 75%);
+    box-shadow:0 20px 60px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.05) inset;
+  }
+  #gorillaCv{position:absolute;inset:0;width:100%;height:100%}
+
+  /* PIP 웹캠 */
+  .pip{
+    position:absolute;left:12px;bottom:12px;z-index:6;
+    width:216px;aspect-ratio:4/3;border-radius:12px;overflow:hidden;
+    background:#000;border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+  .pip video,.pip canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  .pip .tag{position:absolute;left:8px;top:6px;z-index:2;font-size:11px;font-weight:500;color:#cfe;opacity:.85;text-shadow:0 1px 3px #000}
+  .pip.hidden{display:none}
+
+  /* 근육 게이지 패널 */
+  .muscles{
+    position:absolute;right:12px;top:12px;z-index:6;width:190px;
+    background:var(--panel);backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.09);border-radius:12px;
+    padding:10px 12px 12px;font-size:11px;
+  }
+  .muscles h3{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px;letter-spacing:.3px}
+  .mrow{display:flex;align-items:center;gap:6px;margin:4px 0}
+  .mrow .lbl{width:64px;color:var(--muted);font-weight:400;flex:none}
+  .mrow .bar{flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
+  .mrow .fill{height:100%;width:0%;border-radius:4px;background:linear-gradient(90deg,#6fae5c,var(--accent));transition:width .08s linear}
+  .muscles.hidden{display:none}
+
+  .badge{
+    position:absolute;top:12px;left:12px;z-index:6;display:flex;gap:8px;align-items:center;
+    background:var(--panel);backdrop-filter:blur(8px);padding:7px 12px;border-radius:999px;font-size:12px;font-weight:500;
+    border:1px solid rgba(255,255,255,.08);
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#ff4040}
+  .dot.live{background:#28e07a;box-shadow:0 0 10px #28e07a}
+  .fps{position:absolute;bottom:12px;right:12px;z-index:6;background:var(--panel);backdrop-filter:blur(8px);
+    padding:7px 12px;border-radius:999px;font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;border:1px solid rgba(255,255,255,.08)}
+
+  .overlay{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:16px;text-align:center;padding:24px;
+    background:rgba(5,8,4,.82);backdrop-filter:blur(4px);z-index:8;transition:opacity .4s;
+  }
+  .overlay.hidden{opacity:0;pointer-events:none}
+  .spinner{width:42px;height:42px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:8px;align-items:center}
+  button{
+    font-family:inherit;font-weight:500;font-size:14px;color:var(--text);
+    background:var(--panel);border:1px solid rgba(255,255,255,.12);
+    padding:11px 20px;border-radius:12px;cursor:pointer;transition:.18s;backdrop-filter:blur(8px);
+  }
+  button:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+  button.primary{background:var(--accent);color:#141006;border-color:var(--accent);font-weight:700}
+  button.primary:hover{filter:brightness(1.08);color:#141006}
+  button:disabled{opacity:.4;cursor:not-allowed;transform:none;border-color:rgba(255,255,255,.12);color:var(--text)}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);padding:8px 2px}
+  .toggle input{width:38px;height:20px;appearance:none;background:#2e3a28;border-radius:999px;position:relative;cursor:pointer;transition:.2s;flex:none}
+  .toggle input:checked{background:var(--accent)}
+  .toggle input::after{content:"";position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:2px;left:2px;transition:.2s}
+  .toggle input:checked::after{left:20px}
+
+  footer{color:var(--muted);font-size:12px;font-weight:300;padding:8px 16px 26px;text-align:center;line-height:1.7}
+  footer b{color:var(--text)}
+</style>
+</head>
+<body>
+  <header>
+    <h1>🦍 <span>Face Off</span> — 고릴라 페이스 싱크</h1>
+    <p>내 얼굴 근육과 스켈레톤이 고릴라 얼굴에 실시간으로 옮겨집니다 · MediaPipe Face + Pose</p>
+  </header>
+
+  <div class="stage">
+    <canvas id="gorillaCv"></canvas>
+
+    <div class="pip" id="pip">
+      <video id="video" playsinline muted></video>
+      <canvas id="pipCv"></canvas>
+      <span class="tag">MY CAM · 스켈레톤</span>
+    </div>
+
+    <div class="muscles" id="musclePanel">
+      <h3>근육 활성도</h3>
+      <div id="mrows"></div>
+    </div>
+
+    <div class="badge"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></div>
+    <div class="fps" id="fps">-- FPS</div>
+
+    <div class="overlay" id="overlay">
+      <div class="spinner" id="spinner" style="display:none"></div>
+      <div id="overlayMsg" style="max-width:440px;line-height:1.7">
+        <strong style="font-size:18px">고릴라가 당신의 표정을 따라 합니다</strong><br>
+        <span style="color:var(--muted);font-weight:300;font-size:14px">
+          <b>▶ 시작</b>을 누르고 카메라를 허용하세요 — 입 벌리기·미소·눈썹·고개 기울이기·어깨 움직임이 그대로 동기화됩니다.<br>
+          카메라 없이 보려면 <b>🎭 데모</b>를 누르세요.
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="startBtn">▶ 시작</button>
+    <button id="stopBtn" disabled>■ 정지</button>
+    <button id="demoBtn">🎭 데모</button>
+    <button id="calibBtn" disabled>⟳ 기준 다시 잡기</button>
+    <label class="toggle"><input type="checkbox" id="pipChk" checked>내 캠 표시</label>
+    <label class="toggle"><input type="checkbox" id="muscleChk" checked>근육 게이지</label>
+    <label class="toggle"><input type="checkbox" id="meshChk">메시 표시</label>
+  </div>
+
+  <footer>
+    모든 처리는 <b>브라우저 안에서</b> 실행됩니다 — 영상은 서버로 전송되지 않습니다.<br>
+    얼굴 52개 근육(블렌드셰이프) + 관절 33개를 추적해 고릴라 얼굴 메시를 실시간 변형합니다 · 권장: Chrome / Edge
+  </footer>
+
+<script type="module">
+import { FaceLandmarker, PoseLandmarker, FilesetResolver, DrawingUtils }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+/* ═══════════════ DOM ═══════════════ */
+const cv=document.getElementById('gorillaCv'), ctx=cv.getContext('2d');
+const video=document.getElementById('video');
+const pipCv=document.getElementById('pipCv'), pipCtx=pipCv.getContext('2d');
+const pip=document.getElementById('pip'), musclePanel=document.getElementById('musclePanel');
+const overlay=document.getElementById('overlay'), spinner=document.getElementById('spinner'), omsg=document.getElementById('overlayMsg');
+const startBtn=document.getElementById('startBtn'), stopBtn=document.getElementById('stopBtn');
+const demoBtn=document.getElementById('demoBtn'), calibBtn=document.getElementById('calibBtn');
+const pipChk=document.getElementById('pipChk'), muscleChk=document.getElementById('muscleChk'), meshChk=document.getElementById('meshChk');
+const statusDot=document.getElementById('statusDot'), statusText=document.getElementById('statusText');
+const fpsEl=document.getElementById('fps'), mrows=document.getElementById('mrows');
+
+function setOverlay(html,spin){ omsg.innerHTML=html; spinner.style.display=spin?'block':'none'; overlay.classList.remove('hidden'); }
+function hideOverlay(){ overlay.classList.add('hidden'); }
+function setStatus(t,live){ statusText.textContent=t; statusDot.classList.toggle('live',!!live); }
+
+/* ═══════════════ 고릴라 소스: 크로마키 + 다운스케일 ═══════════════ */
+const IMG_W=1536, IMG_H=2752, S=0.5;                 // 원본 → 소스캔버스 스케일
+const srcW=IMG_W*S, srcH=IMG_H*S;
+const srcCv=document.createElement('canvas'); srcCv.width=srcW; srcCv.height=srcH;
+const srcCtx=srcCv.getContext('2d');
+let srcReady=false;
+
+async function loadGorilla(){
+  const img=new Image();
+  await new Promise((res,rej)=>{ img.onload=res; img.onerror=()=>rej(new Error('data/gorilla.png 로드 실패')); img.src='data/gorilla.png'; });
+  srcCtx.drawImage(img,0,0,srcW,srcH);
+  const id=srcCtx.getImageData(0,0,srcW,srcH), d=id.data;
+  for(let i=0;i<d.length;i+=4){
+    const r=d[i],g=d[i+1],b=d[i+2];
+    const diff=g-Math.max(r,b);                      // 그린 초과분
+    if(diff>8){
+      const a=Math.max(0,1-(diff-8)/45);             // 소프트 키
+      d[i+3]=Math.round(d[i+3]*a);
+      d[i+1]=Math.max(r,b);                          // 그린 스필 제거
+    }
+  }
+  srcCtx.putImageData(id,0,0);
+  srcReady=true;
+}
+
+/* ═══════════════ 제어점(원본 px 좌표) ═══════════════
+   그룹: border(고정) · body(몸) · head(머리 외곽) · face(얼굴 근육)
+   wH=머리 강체(회전·시선) 가중치, wB=몸(어깨) 가중치            */
+const PT=[]; const IDX={};
+function pt(name,x,y,wH,wB){ IDX[name]=PT.length; PT.push({name,x:x*S,y:y*S,wH,wB}); }
+// 테두리(고정)
+for(const [x,y] of [[0,0],[384,0],[768,0],[1152,0],[1536,0],
+                    [0,688],[1536,688],[0,1376],[1536,1376],[0,2064],[1536,2064],
+                    [0,2752],[384,2752],[768,2752],[1152,2752],[1536,2752]])
+  pt('bd'+x+'_'+y,x,y,0,0);
+// 몸(wH=0, wB=1)
+pt('shoulderL',140,1590,0,1);  pt('shoulderR',1400,1580,0,1);
+pt('trapL',400,1400,.15,1);    pt('trapR',1160,1390,.15,1);
+pt('armL',90,2100,0,1);        pt('armR',1450,2100,0,1);
+pt('pecL',420,1880,0,1);       pt('pecR',1080,1875,0,1);
+pt('chest',770,1780,0,1);
+pt('bellyL',450,2500,0,.6);    pt('bellyR',1100,2500,0,.6);
+// 머리 외곽(강체)
+pt('headTop',770,245,1,1);
+pt('headTopL',575,307,1,1);    pt('headTopR',963,298,1,1);
+pt('templeL',518,516,.95,1);   pt('templeR',1040,506,.95,1);
+pt('flangeL',490,706,.92,1);   pt('flangeR',1059,696,.92,1);
+pt('cheekL',575,1000,.9,1);    pt('cheekR',1002,990,.9,1);
+pt('jawSideL',632,1104,.9,1);  pt('jawSideR',936,1095,.9,1);
+pt('neckL',639,1256,.45,1);    pt('neckR',905,1247,.45,1);
+// 얼굴(근육 변위 + 강체)
+pt('foreheadMid',775,460,1,1);
+pt('browL_out',575,608,1,1);   pt('browL_mid',643,595,1,1);   pt('browL_in',707,598,1,1);
+pt('browR_in',853,596,1,1);    pt('browR_mid',917,593,1,1);   pt('browR_out',985,606,1,1);
+pt('eyeL_out',623,651,1,1);    pt('eyeL_top',646,638,1,1);    pt('eyeL_in',670,651,1,1);   pt('eyeL_bot',646,664,1,1);
+pt('eyeR_in',888,645,1,1);     pt('eyeR_top',909,632,1,1);    pt('eyeR_out',936,645,1,1);  pt('eyeR_bot',909,658,1,1);
+pt('bridge',780,655,1,1);
+pt('noseTip',780,920,1,1);
+pt('nostrilL',693,886,1,1);    pt('nostrilR',869,880,1,1);
+pt('lipTop',784,981,1,1);
+pt('lipCornerL',674,1019,1,1); pt('lipCornerR',894,1013,1,1);
+pt('lipBot',784,1041,1,1);
+pt('chinL',660,1135,1,1);      pt('chin',784,1155,1,1);       pt('chinR',905,1128,1,1);
+const N=PT.length;
+const U=263*S;                                        // 눈 사이 거리(고릴라 얼굴 단위)
+const NECK={x:780*S,y:1300*S}, PELVIS={x:775*S,y:2600*S};
+
+/* ═══════════════ 근육 → 고릴라 변위 필드 (단위 U) ═══════════════
+   MediaPipe 블렌드셰이프 이름 그대로. Left=사용자 왼쪽=거울 화면 왼쪽=고릴라 L */
+const FIELDS={
+  jawOpen:[['chin',0,.60],['chinL',.03,.50],['chinR',-.03,.50],['lipBot',0,.46],
+           ['lipCornerL',.05,.28],['lipCornerR',-.05,.28],['lipTop',0,-.03],
+           ['jawSideL',.02,.15],['jawSideR',-.02,.15],['neckL',0,.06],['neckR',0,.06]],
+  eyeBlinkLeft:[['eyeL_top',0,.09],['eyeL_bot',0,-.03],['eyeL_out',0,.02],['eyeL_in',0,.02],['browL_mid',0,.02]],
+  eyeBlinkRight:[['eyeR_top',0,.09],['eyeR_bot',0,-.03],['eyeR_out',0,.02],['eyeR_in',0,.02],['browR_mid',0,.02]],
+  eyeWideLeft:[['eyeL_top',0,-.05],['browL_mid',0,-.03]],
+  eyeWideRight:[['eyeR_top',0,-.05],['browR_mid',0,-.03]],
+  browInnerUp:[['browL_in',0,-.10],['browR_in',0,-.10],['bridge',0,-.05],['foreheadMid',0,-.05],
+               ['browL_mid',0,-.04],['browR_mid',0,-.04]],
+  browDownLeft:[['browL_in',.01,.07],['browL_mid',0,.08],['browL_out',0,.05],['eyeL_top',0,.03]],
+  browDownRight:[['browR_in',-.01,.07],['browR_mid',0,.08],['browR_out',0,.05],['eyeR_top',0,.03]],
+  browOuterUpLeft:[['browL_out',0,-.09],['browL_mid',0,-.05]],
+  browOuterUpRight:[['browR_out',0,-.09],['browR_mid',0,-.05]],
+  mouthSmileLeft:[['lipCornerL',-.10,-.13],['lipTop',-.01,-.03],['cheekL',-.03,-.06],['chinL',0,-.03]],
+  mouthSmileRight:[['lipCornerR',.10,-.13],['lipTop',.01,-.03],['cheekR',.03,-.06],['chinR',0,-.03]],
+  mouthFrownLeft:[['lipCornerL',-.02,.09]],
+  mouthFrownRight:[['lipCornerR',.02,.09]],
+  mouthPucker:[['lipCornerL',.10,0],['lipCornerR',-.10,0],['lipTop',0,.01],['lipBot',0,-.01]],
+  mouthFunnel:[['lipCornerL',.08,0],['lipCornerR',-.08,0],['lipTop',0,-.04],['lipBot',0,.05]],
+  jawLeft:[['chin',-.14,.02],['lipBot',-.10,0],['chinL',-.12,0],['chinR',-.10,0]],
+  jawRight:[['chin',.14,.02],['lipBot',.10,0],['chinL',.10,0],['chinR',.12,0]],
+  cheekPuff:[['cheekL',-.07,0],['cheekR',.07,0],['jawSideL',-.05,.01],['jawSideR',.05,.01]],
+  noseSneerLeft:[['nostrilL',0,-.06],['noseTip',-.01,-.03],['browL_in',0,.02]],
+  noseSneerRight:[['nostrilR',0,-.06],['noseTip',.01,-.03],['browR_in',0,.02]],
+  mouthLeft:[['lipTop',-.08,0],['lipBot',-.08,0],['lipCornerL',-.08,0],['lipCornerR',-.08,0]],
+  mouthRight:[['lipTop',.08,0],['lipBot',.08,0],['lipCornerL',.08,0],['lipCornerR',.08,0]],
+};
+
+/* ═══════════════ 들로네 삼각분할 (초기 1회) ═══════════════ */
+function delaunay(P){
+  const n=P.length;
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  for(const p of P){ minx=Math.min(minx,p.x);miny=Math.min(miny,p.y);maxx=Math.max(maxx,p.x);maxy=Math.max(maxy,p.y); }
+  const dm=Math.max(maxx-minx,maxy-miny), mx=(minx+maxx)/2, my=(miny+maxy)/2;
+  const V=P.map(p=>[p.x,p.y]);
+  V.push([mx-20*dm,my-dm],[mx,my+20*dm],[mx+20*dm,my-dm]);
+  let tris=[[n,n+1,n+2]];
+  const cc=t=>{
+    const [a,b,c]=t.map(i=>V[i]);
+    const d=2*(a[0]*(b[1]-c[1])+b[0]*(c[1]-a[1])+c[0]*(a[1]-b[1]));
+    if(Math.abs(d)<1e-12) return {x:0,y:0,r2:-1};
+    const a2=a[0]*a[0]+a[1]*a[1], b2=b[0]*b[0]+b[1]*b[1], c2=c[0]*c[0]+c[1]*c[1];
+    const ux=(a2*(b[1]-c[1])+b2*(c[1]-a[1])+c2*(a[1]-b[1]))/d;
+    const uy=(a2*(c[0]-b[0])+b2*(a[0]-c[0])+c2*(b[0]-a[0]))/d;
+    return {x:ux,y:uy,r2:(a[0]-ux)**2+(a[1]-uy)**2};
+  };
+  for(let i=0;i<n;i++){
+    const bad=[],edges=[];
+    for(const t of tris){
+      const c=cc(t);
+      if(c.r2>0 && (V[i][0]-c.x)**2+(V[i][1]-c.y)**2 < c.r2) bad.push(t);
+    }
+    for(const t of bad) for(const e of [[t[0],t[1]],[t[1],t[2]],[t[2],t[0]]]){
+      const k=edges.findIndex(x=>(x[0]===e[1]&&x[1]===e[0])||(x[0]===e[0]&&x[1]===e[1]));
+      if(k>=0) edges.splice(k,1); else edges.push(e);
+    }
+    tris=tris.filter(t=>!bad.includes(t));
+    for(const e of edges) tris.push([e[0],e[1],i]);
+  }
+  return tris.filter(t=>t[0]<n&&t[1]<n&&t[2]<n);
+}
+const TRIS=delaunay(PT);
+
+/* ═══════════════ 삼각형 워프 렌더 ═══════════════ */
+function warpTri(sx0,sy0,sx1,sy1,sx2,sy2, x0,y0,x1,y1,x2,y2){
+  const den=(sx1-sx0)*(sy2-sy0)-(sx2-sx0)*(sy1-sy0);
+  if(Math.abs(den)<1e-8) return;
+  ctx.save();
+  const cx=(x0+x1+x2)/3, cy=(y0+y1+y2)/3, k=1.04;    // 이음새 방지 확장 클립
+  ctx.beginPath();
+  ctx.moveTo(cx+(x0-cx)*k, cy+(y0-cy)*k);
+  ctx.lineTo(cx+(x1-cx)*k, cy+(y1-cy)*k);
+  ctx.lineTo(cx+(x2-cx)*k, cy+(y2-cy)*k);
+  ctx.closePath(); ctx.clip();
+  const a=((x1-x0)*(sy2-sy0)-(x2-x0)*(sy1-sy0))/den;
+  const b=((x2-x0)*(sx1-sx0)-(x1-x0)*(sx2-sx0))/den;
+  const c=((y1-y0)*(sy2-sy0)-(y2-y0)*(sy1-sy0))/den;
+  const d=((y2-y0)*(sx1-sx0)-(y1-y0)*(sx2-sx0))/den;
+  ctx.transform(a,c,b,d, x0-a*sx0-b*sy0, y0-c*sx0-d*sy0);
+  ctx.drawImage(srcCv,0,0);
+  ctx.restore();
+}
+
+/* ═══════════════ 상태(스무딩된 신호) ═══════════════ */
+const blend={};                                       // 블렌드셰이프 0..1
+let headRoll=0, headYaw=0, headPitch=0;
+let bodyRot=0, bodyDx=0, bodyDy=0;
+let faceSeen=false, poseSeen=false;
+// 기준(정면) 캘리브레이션
+let calib={n:0, pitch:0, bx:0, by:0, done:false};
+function resetCalib(){ calib={n:0,pitch:0,bx:0,by:0,done:false}; setStatus('기준 잡는 중 — 정면을 봐 주세요',true); }
+calibBtn.addEventListener('click',resetCalib);
+
+function smooth(cur,target,dt,rate){ return cur+(target-cur)*(1-Math.exp(-dt*rate)); }
+
+/* ═══════════════ 프레임 → 고릴라 메시 변형 ═══════════════ */
+const dest=new Float32Array(N*2);
+function computeMesh(t){
+  const breathe=Math.sin(t*0.0011)*3;                 // 미세 호흡
+  const rollA=headRoll*0.85, yawDx=headYaw*0.38*U, pitDy=headPitch*0.55*U;
+  const bRot=bodyRot*0.8, cosB=Math.cos(bRot), sinB=Math.sin(bRot);
+  const cosH=Math.cos(rollA), sinH=Math.sin(rollA);
+  for(let i=0;i<N;i++){
+    const p=PT[i];
+    let x=p.x, y=p.y;
+    // ① 근육 변위
+    const md=muscleDelta[i*2], md2=muscleDelta[i*2+1];
+    x+=md; y+=md2;
+    // ② 머리 강체(목 피벗 회전 + 시선 시프트)
+    if(p.wH>0){
+      const dx=x-NECK.x, dy=y-NECK.y, w=p.wH;
+      const rx=dx*cosH-dy*sinH, ry=dx*sinH+dy*cosH;
+      x=NECK.x+dx+(rx-dx)*w + yawDx*w;
+      y=NECK.y+dy+(ry-dy)*w + pitDy*w;
+    }
+    // ③ 몸(골반 피벗 회전 + 이동 + 호흡)
+    if(p.wB>0){
+      const dx=x-PELVIS.x, dy=y-PELVIS.y, w=p.wB;
+      const rx=dx*cosB-dy*sinB, ry=dx*sinB+dy*cosB;
+      x=PELVIS.x+dx+(rx-dx)*w + bodyDx*w;
+      y=PELVIS.y+dy+(ry-dy)*w + bodyDy*w + breathe*w;
+    }
+    dest[i*2]=x; dest[i*2+1]=y;
+  }
+}
+// 근육 변위 누적 버퍼
+const muscleDelta=new Float32Array(N*2);
+function computeMuscles(){
+  muscleDelta.fill(0);
+  for(const name in FIELDS){
+    const v=blend[name]||0;
+    if(v<0.02) continue;
+    for(const [pn,dx,dy] of FIELDS[name]){
+      const i=IDX[pn];
+      muscleDelta[i*2]+=dx*U*v;
+      muscleDelta[i*2+1]+=dy*U*v;
+    }
+  }
+}
+
+/* ═══════════════ 고릴라 렌더 ═══════════════ */
+function fitTransform(){
+  const cw=cv.width, ch=cv.height;
+  const sc=(ch*0.985)/srcH;
+  return {sc, ox:(cw-srcW*sc)/2, oy:ch-srcH*sc};      // 하단 정렬(상체가 바닥에 붙게)
+}
+function px(name){ const i=IDX[name]; return {x:dest[i*2],y:dest[i*2+1]}; }
+
+function renderGorilla(t){
+  const {sc,ox,oy}=fitTransform();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(!srcReady) return;
+  computeMuscles();
+  computeMesh(t);
+  ctx.setTransform(sc,0,0,sc,ox,oy);
+  // 메시 워프
+  for(const [i,j,k] of TRIS)
+    warpTri(PT[i].x,PT[i].y,PT[j].x,PT[j].y,PT[k].x,PT[k].y,
+            dest[i*2],dest[i*2+1],dest[j*2],dest[j*2+1],dest[k*2],dest[k*2+1]);
+
+  // 입 안(턱 벌림 때 어두운 구강 + 이빨 힌트)
+  const jaw=blend.jawOpen||0;
+  if(jaw>0.12){
+    const lt=px('lipTop'), lb=px('lipBot'), lcl=px('lipCornerL'), lcr=px('lipCornerR');
+    const mx=(lt.x+lb.x)/2, my=(lt.y+lb.y)/2+U*0.05;
+    const rw=Math.hypot(lcr.x-lcl.x,lcr.y-lcl.y)/2*0.92;
+    const rh=Math.max(2,(lb.y-lt.y)/2*0.85);
+    const al=Math.min(1,(jaw-0.12)*2.2);
+    ctx.save();
+    ctx.globalAlpha=al;
+    const g=ctx.createRadialGradient(mx,my,rh*0.15,mx,my,rh*1.15);
+    g.addColorStop(0,'#050202'); g.addColorStop(.7,'#150806'); g.addColorStop(1,'rgba(21,8,6,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(mx,my,rw,rh,0,0,6.2832); ctx.fill();
+    // 윗니 힌트
+    if(jaw>0.3){
+      ctx.globalAlpha=al*0.65;
+      ctx.fillStyle='#cfc3a8';
+      const tw=rw*0.55;
+      ctx.beginPath();
+      ctx.ellipse(mx,my-rh*0.72,tw,rh*0.16,0,0,Math.PI);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  // 눈꺼풀(깜빡임 — 털색 타원 덮기)
+  for(const side of ['L','R']){
+    const bl=blend[side==='L'?'eyeBlinkLeft':'eyeBlinkRight']||0;
+    if(bl<0.12) continue;
+    const et=px('eye'+side+'_top'), eb=px('eye'+side+'_bot'), eo=px('eye'+side+'_out'), ei=px('eye'+side+'_in');
+    const ex=(eo.x+ei.x)/2, ey=(et.y+eb.y)/2;
+    const rw=Math.hypot(eo.x-ei.x,eo.y-ei.y)/2*1.15;
+    const ry=Math.max(1.5,rw*0.55*bl);
+    ctx.save();
+    ctx.globalAlpha=Math.min(0.92,(bl-0.1)*1.5);
+    const g=ctx.createRadialGradient(ex,ey,ry*0.2,ex,ey,rw);
+    g.addColorStop(0,'#41362c'); g.addColorStop(.75,'#332a22'); g.addColorStop(1,'rgba(43,35,28,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(ex,ey,rw,ry,0,0,6.2832); ctx.fill();
+    // 감은 라인
+    ctx.globalAlpha=Math.min(0.8,bl);
+    ctx.strokeStyle='#1c1610'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(ex-rw*0.8,ey+ry*0.15); ctx.quadraticCurveTo(ex,ey+ry*0.5,ex+rw*0.8,ey+ry*0.1); ctx.stroke();
+    ctx.restore();
+  }
+  // 디버그 메시
+  if(meshChk.checked){
+    ctx.strokeStyle='rgba(0,229,255,.35)'; ctx.lineWidth=1/sc;
+    for(const [i,j,k] of TRIS){
+      ctx.beginPath();
+      ctx.moveTo(dest[i*2],dest[i*2+1]); ctx.lineTo(dest[j*2],dest[j*2+1]);
+      ctx.lineTo(dest[k*2],dest[k*2+1]); ctx.closePath(); ctx.stroke();
+    }
+    ctx.fillStyle='rgba(255,207,110,.9)';
+    for(let i=0;i<N;i++){ ctx.beginPath(); ctx.arc(dest[i*2],dest[i*2+1],2.2/sc,0,6.2832); ctx.fill(); }
+  }
+  ctx.setTransform(1,0,0,1,0,0);
+}
+
+/* ═══════════════ 근육 게이지 ═══════════════ */
+const GAUGES=[
+  ['턱 벌림', ()=>blend.jawOpen||0],
+  ['왼눈 감기', ()=>blend.eyeBlinkLeft||0],
+  ['오른눈 감기', ()=>blend.eyeBlinkRight||0],
+  ['눈썹 올림', ()=>blend.browInnerUp||0],
+  ['눈썹 찌푸림', ()=>Math.max(blend.browDownLeft||0,blend.browDownRight||0)],
+  ['미소 (좌)', ()=>blend.mouthSmileLeft||0],
+  ['미소 (우)', ()=>blend.mouthSmileRight||0],
+  ['입 오므림', ()=>blend.mouthPucker||0],
+  ['볼 부풀림', ()=>blend.cheekPuff||0],
+  ['코 찡긋', ()=>Math.max(blend.noseSneerLeft||0,blend.noseSneerRight||0)],
+];
+const fills=[];
+for(const [lbl] of GAUGES){
+  const row=document.createElement('div'); row.className='mrow';
+  row.innerHTML=`<span class="lbl">${lbl}</span><div class="bar"><div class="fill"></div></div>`;
+  mrows.appendChild(row); fills.push(row.querySelector('.fill'));
+}
+function updateGauges(){
+  for(let i=0;i<GAUGES.length;i++)
+    fills[i].style.width=Math.round(Math.min(1,GAUGES[i][1]())*100)+'%';
+}
+
+/* ═══════════════ MediaPipe ═══════════════ */
+let faceLm=null, poseLm=null, drawUtils=null;
+async function loadModels(){
+  setOverlay('AI 모델을 불러오는 중…<br><span style="color:var(--muted);font-weight:300;font-size:13px">얼굴 + 골격 모델, 최초 1회만 로드됩니다</span>',true);
+  const vision=await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  faceLm=await FaceLandmarker.createFromOptions(vision,{
+    baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:"GPU"},
+    runningMode:"VIDEO", numFaces:1,
+    outputFaceBlendshapes:true, outputFacialTransformationMatrixes:false
+  });
+  poseLm=await PoseLandmarker.createFromOptions(vision,{
+    baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",delegate:"GPU"},
+    runningMode:"VIDEO", numPoses:1,
+    minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5
+  });
+  drawUtils=new DrawingUtils(pipCtx);
+}
+
+async function openCamera(){
+  if(!navigator.mediaDevices?.getUserMedia)
+    throw new DOMException('이 브라우저/환경에서는 카메라 API를 쓸 수 없습니다 (HTTPS 필요).','NotSupportedError');
+  const tries=[
+    {video:{width:{ideal:960},height:{ideal:720},facingMode:'user'},audio:false},
+    {video:{width:{ideal:640},height:{ideal:480}},audio:false},
+    {video:true,audio:false}
+  ];
+  let last=null;
+  for(const c of tries){
+    try{ return await navigator.mediaDevices.getUserMedia(c); }
+    catch(e){ last=e; if(['NotAllowedError','NotFoundError','NotReadableError','SecurityError'].includes(e.name)) throw e; }
+  }
+  throw last;
+}
+function cameraErrorMsg(e){
+  const sub=s=>'<br><span style="color:var(--muted);font-weight:300;font-size:13px">'+s+'</span>';
+  switch(e.name){
+    case 'NotAllowedError': return '카메라 접근이 <b>차단</b>되어 있습니다.'+sub('주소창의 🔒/카메라 아이콘 → 카메라 <b>허용</b> 후 다시 시작하세요.');
+    case 'NotFoundError': return '연결된 <b>카메라를 찾지 못했습니다.</b>'+sub('웹캠 연결을 확인하거나 <b>🎭 데모</b>로 감상하세요.');
+    case 'NotReadableError': return '<b>다른 앱이 카메라를 사용 중</b>입니다.'+sub('Zoom · Teams · 다른 탭을 끄고 다시 시작하세요.');
+    case 'SecurityError': case 'NotSupportedError': return '보안 컨텍스트가 아니라 카메라를 못 엽니다.'+sub('https:// 또는 localhost 에서 열어야 합니다. 카메라 없이 보려면 <b>🎭 데모</b>.');
+    default: return '카메라를 열 수 없습니다.'+sub('['+(e.name||'Error')+'] '+(e.message||''));
+  }
+}
+
+/* ═══════════════ 캠 루프 ═══════════════ */
+let running=false, demoRunning=false, stream=null, raf=null;
+let lastVideoTime=-1, lastT=performance.now(), frames=0, prevT=performance.now();
+
+// 미러 좌표 헬퍼(디스플레이가 좌우반전이므로 x→1-x)
+const mir=lm=>({x:1-lm.x, y:lm.y, z:lm.z, visibility:lm.visibility});
+
+function camLoop(){
+  if(!running) return;
+  const now=performance.now(), dt=Math.min(0.05,(now-prevT)/1000); prevT=now;
+  if(video.currentTime!==lastVideoTime && video.videoWidth>0){
+    lastVideoTime=video.currentTime;
+    const fRes=faceLm.detectForVideo(video,now);
+    const pRes=poseLm.detectForVideo(video,now+0.001);
+
+    // ── 얼굴: 블렌드셰이프(근육) ──
+    faceSeen=!!(fRes.faceLandmarks && fRes.faceLandmarks.length);
+    if(faceSeen){
+      const cats=fRes.faceBlendshapes[0].categories;
+      for(const c of cats){
+        const tgt=c.score;
+        blend[c.categoryName]=smooth(blend[c.categoryName]||0,tgt,dt,14);
+      }
+      // 머리 자세: 랜드마크 기반(미러 공간)
+      const lm=fRes.faceLandmarks[0];
+      const eL=mir(lm[468]||lm[159]), eR=mir(lm[473]||lm[386]);   // 홍채 중심(468/473) 폴백 눈꺼풀
+      const nose=mir(lm[1]), chL=mir(lm[234]), chR=mir(lm[454]);
+      // 미러 공간에서 화면왼쪽 눈 = min x
+      const [sL,sR]=eL.x<eR.x?[eL,eR]:[eR,eL];
+      const inter=Math.max(1e-4,Math.hypot(sR.x-sL.x,sR.y-sL.y));
+      const rollT=Math.atan2(sR.y-sL.y,sR.x-sL.x);
+      const [cl,cr]=chL.x<chR.x?[chL,chR]:[chR,chL];
+      const yawT=Math.max(-1,Math.min(1, ((nose.x-cl.x)-(cr.x-nose.x))/Math.max(1e-4,(cr.x-cl.x)) *2 ));
+      const pitchRaw=(nose.y-(sL.y+sR.y)/2)/inter;
+      if(!calib.done){
+        calib.pitch+=pitchRaw; calib.n++;
+        if(calib.n>=20){ calib.pitch/=calib.n; calib.done=true; }
+      }
+      const pitchT=calib.done?Math.max(-1,Math.min(1,(pitchRaw-calib.pitch)*1.6)):0;
+      headRoll=smooth(headRoll,rollT,dt,10);
+      headYaw=smooth(headYaw,yawT,dt,8);
+      headPitch=smooth(headPitch,pitchT,dt,8);
+    }else{
+      for(const k in blend) blend[k]=smooth(blend[k],0,dt,4);
+      headRoll=smooth(headRoll,0,dt,3); headYaw=smooth(headYaw,0,dt,3); headPitch=smooth(headPitch,0,dt,3);
+    }
+
+    // ── 몸: 어깨 ──
+    poseSeen=!!(pRes.landmarks && pRes.landmarks.length);
+    if(poseSeen){
+      const lm=pRes.landmarks[0];
+      const a=mir(lm[11]), b=mir(lm[12]);
+      const [sl,sr]=a.x<b.x?[a,b]:[b,a];
+      const tiltT=Math.atan2(sr.y-sl.y,sr.x-sl.x);
+      const mx=(sl.x+sr.x)/2, my=(sl.y+sr.y)/2;
+      if(calib.done && calib.bx===0 && calib.by===0){ calib.bx=mx; calib.by=my; }
+      const dxT=calib.bx?(mx-calib.bx)*srcW*0.9:0;
+      const dyT=calib.by?(my-calib.by)*srcH*0.35:0;
+      bodyRot=smooth(bodyRot,Math.max(-.5,Math.min(.5,tiltT)),dt,8);
+      bodyDx=smooth(bodyDx,Math.max(-srcW*.25,Math.min(srcW*.25,dxT)),dt,8);
+      bodyDy=smooth(bodyDy,Math.max(-srcH*.1,Math.min(srcH*.1,dyT)),dt,8);
+    }else{
+      bodyRot=smooth(bodyRot,0,dt,3); bodyDx=smooth(bodyDx,0,dt,3); bodyDy=smooth(bodyDy,0,dt,3);
+    }
+
+    // ── PIP: 스켈레톤 + 페이스 메시 ──
+    if(pipChk.checked){
+      pipCtx.clearRect(0,0,pipCv.width,pipCv.height);
+      if(faceSeen)
+        drawUtils.drawConnectors(fRes.faceLandmarks[0],FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+          {color:'rgba(0,229,255,.22)',lineWidth:.5});
+      if(poseSeen){
+        drawUtils.drawConnectors(pRes.landmarks[0],PoseLandmarker.POSE_CONNECTIONS,{color:'#00e5ff',lineWidth:3});
+        drawUtils.drawLandmarks(pRes.landmarks[0],{color:'#ff2d78',fillColor:'#ff2d78',radius:3.5,lineWidth:1});
+      }
+    }
+
+    setStatus(
+      !calib.done&&faceSeen ? '기준 잡는 중 — 정면을 봐 주세요'
+      : faceSeen&&poseSeen ? '동기화 중 · 얼굴+몸'
+      : faceSeen ? '동기화 중 · 얼굴'
+      : poseSeen ? '동기화 중 · 몸' : '사람을 찾는 중',
+      faceSeen||poseSeen);
+  }
+  renderGorilla(now);
+  if(muscleChk.checked) updateGauges();
+  frames++;
+  if(now-lastT>=500){ fpsEl.textContent=Math.round(frames*1000/(now-lastT))+' FPS'; frames=0; lastT=now; }
+  raf=requestAnimationFrame(camLoop);
+}
+
+async function start(){
+  if(demoRunning) stopDemo();
+  startBtn.disabled=true;
+  try{
+    if(!srcReady) await loadGorilla();
+    if(!faceLm) await loadModels();
+    setOverlay('카메라를 켜는 중…',true);
+    stream=await openCamera();
+    video.srcObject=stream;
+    await video.play();
+    pipCv.width=video.videoWidth; pipCv.height=video.videoHeight;
+    running=true; stopBtn.disabled=false; calibBtn.disabled=false;
+    resetCalib();
+    hideOverlay();
+    prevT=performance.now();
+    camLoop();
+  }catch(e){
+    console.error(e);
+    setOverlay(cameraErrorMsg(e)+'<br><br><button id="retryBtn" style="font-family:inherit;font-weight:600;font-size:13px;color:#141006;background:var(--accent);border:none;padding:9px 18px;border-radius:10px;cursor:pointer">다시 시도</button>',false);
+    document.getElementById('retryBtn')?.addEventListener('click',start);
+    setStatus('오류'); startBtn.disabled=false;
+  }
+}
+function stop(){
+  running=false;
+  if(raf) cancelAnimationFrame(raf);
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  video.srcObject=null;
+  pipCtx.clearRect(0,0,pipCv.width,pipCv.height);
+  startBtn.disabled=false; stopBtn.disabled=true; calibBtn.disabled=true;
+  setStatus('정지'); fpsEl.textContent='-- FPS';
+  setOverlay('정지되었습니다. 다시 <b>▶ 시작</b> 또는 <b>🎭 데모</b>를 눌러 주세요.',false);
+}
+
+/* ═══════════════ 데모 모드(카메라 불필요) ═══════════════ */
+function ss(x){ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); }
+function envp(t,a,b,r){ r=r||0.3; return ss((t-a)/r)*ss((b-t)/r); }
+let demoRaf=null, demoT0=0;
+const FREEZE_T=parseFloat(new URLSearchParams(location.search).get('t')); // ?t=1.5 → 데모 시간 고정(튜닝용)
+function demoLoop(){
+  if(!demoRunning) return;
+  const now=performance.now(), t=isNaN(FREEZE_T)?((now-demoT0)/1000)%11:FREEZE_T;
+  // 표정 시나리오(11초 루프)
+  const z={};
+  z.jawOpen=envp(t,0.6,2.3,0.5)*0.95;                       // 포효
+  z.browInnerUp=envp(t,0.6,2.3,0.5)*0.5 + envp(t,4.6,5.6,0.3)*0.9;
+  z.eyeWideLeft=z.eyeWideRight=envp(t,0.6,2.0,0.4)*0.7;
+  z.mouthSmileLeft=z.mouthSmileRight=envp(t,2.8,4.2,0.4)*0.95;   // 씨익
+  z.browDownLeft=z.browDownRight=envp(t,5.9,7.0,0.3)*0.9;        // 찌푸림
+  z.mouthFrownLeft=z.mouthFrownRight=envp(t,5.9,7.0,0.3)*0.6;
+  z.noseSneerLeft=z.noseSneerRight=envp(t,5.9,7.0,0.3)*0.8;
+  z.mouthPucker=envp(t,7.4,8.4,0.3)*0.95;                        // 오므림
+  z.cheekPuff=envp(t,8.7,9.6,0.3)*0.9;                           // 볼 빵빵
+  const chew=envp(t,9.8,10.9,0.25);                              // 우물우물
+  z.jawOpen=Math.max(z.jawOpen, chew*(0.25+0.2*Math.sin(t*12)));
+  z.jawLeft=chew*Math.max(0,Math.sin(t*6))*0.8;
+  z.jawRight=chew*Math.max(0,-Math.sin(t*6))*0.8;
+  const wink=(t%3.4<0.22)?ss((t%3.4)/0.1)*ss((0.22-t%3.4)/0.1):0; // 깜빡임
+  z.eyeBlinkLeft=Math.max(wink, envp(t,4.6,5.4,0.2)*0);
+  z.eyeBlinkRight=wink;
+  for(const k in FIELDS) blend[k]=z[k]||0;
+  headRoll=0.13*Math.sin(t*0.9)+0.05*Math.sin(t*2.3);
+  headYaw=0.45*Math.sin(t*0.55);
+  headPitch=0.2*Math.sin(t*0.75)-envp(t,0.6,2.3,0.5)*0.25;       // 포효 때 고개 젖힘
+  bodyRot=0.07*Math.sin(t*0.5);
+  bodyDx=srcW*0.06*Math.sin(t*0.35);
+  bodyDy=srcH*0.012*Math.sin(t*0.8);
+  renderGorilla(now);
+  if(muscleChk.checked) updateGauges();
+  frames++;
+  if(now-lastT>=500){ fpsEl.textContent=Math.round(frames*1000/(now-lastT))+' FPS'; frames=0; lastT=now; }
+  demoRaf=requestAnimationFrame(demoLoop);
+}
+async function startDemo(){
+  if(running) stop();
+  try{
+    if(!srcReady){ setOverlay('고릴라를 깨우는 중…',true); await loadGorilla(); }
+  }catch(e){
+    console.error(e);
+    setOverlay('이미지를 불러오지 못했습니다.<br><span style="color:var(--muted);font-size:13px">http:// 서버 또는 배포 페이지에서 열어야 합니다 (file:// 불가)</span>',false);
+    return;
+  }
+  demoRunning=true; demoT0=performance.now();
+  demoBtn.textContent='🎭 데모 정지';
+  setStatus('데모 모드 · 가상 표정 재생',true);
+  hideOverlay();
+  demoLoop();
+}
+function stopDemo(){
+  demoRunning=false;
+  if(demoRaf) cancelAnimationFrame(demoRaf);
+  demoBtn.textContent='🎭 데모';
+  if(!running){ setStatus('정지'); }
+}
+demoBtn.addEventListener('click',()=>demoRunning?stopDemo():startDemo());
+
+/* ═══════════════ 초기화 ═══════════════ */
+function resizeCanvas(){
+  const r=cv.getBoundingClientRect();
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
+}
+window.addEventListener('resize',()=>{ resizeCanvas(); if(!running&&!demoRunning) drawIdle(); });
+resizeCanvas();
+
+pipChk.addEventListener('change',()=>pip.classList.toggle('hidden',!pipChk.checked));
+muscleChk.addEventListener('change',()=>musclePanel.classList.toggle('hidden',!muscleChk.checked));
+startBtn.addEventListener('click',start);
+stopBtn.addEventListener('click',stop);
+
+// 대기 화면에도 고릴라 정지 상태 표시
+async function drawIdle(){
+  try{ if(!srcReady) await loadGorilla(); }catch(e){ console.warn(e); return; }
+  for(const k in blend) blend[k]=0;
+  headRoll=headYaw=headPitch=bodyRot=bodyDx=bodyDy=0;
+  renderGorilla(performance.now());
+}
+drawIdle();
+
+// ?demo=1 → 자동 데모(검증용)
+if(new URLSearchParams(location.search).get('demo')==='1') startDemo();
+</script>
+</body>
+</html>
