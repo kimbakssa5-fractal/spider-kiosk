@@ -208,6 +208,10 @@
     transform:scaleX(-1);border:3px solid rgba(255,255,255,.25);display:none;
     box-shadow:0 10px 30px rgba(0,0,0,.5);}
   #gpreview.show{display:block;}
+  #ghud{position:fixed;left:18px;bottom:334px;z-index:9;display:none;
+    font-size:13px;font-weight:600;color:#fff;background:rgba(10,12,16,.8);
+    padding:7px 11px;border-radius:8px;border:1px solid var(--line);white-space:nowrap;}
+  #ghud.show{display:block;}
 
   /* 단축키(칸 수 등) 안내 토스트 */
   #toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:82;
@@ -957,9 +961,12 @@ async function enableGesture(){
     const mp = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
     const files = await mp.FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-    gest.rec = await mp.GestureRecognizer.createFromOptions(files, {
-      baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task', delegate:'GPU' },
-      runningMode:'VIDEO', numHands:1 });
+    const opts = (delegate) => ({
+      baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate },
+      runningMode:'VIDEO', numHands:1,
+      minHandDetectionConfidence:0.3, minHandPresenceConfidence:0.3, minTrackingConfidence:0.3 });
+    try{ gest.rec = await mp.HandLandmarker.createFromOptions(files, opts('GPU')); }
+    catch(e){ console.warn('GPU 실패 → CPU', e); gest.rec = await mp.HandLandmarker.createFromOptions(files, opts('CPU')); }
     try{      // 원거리 인식용 고해상도 → 실패 시 기본
       gest.stream = await navigator.mediaDevices.getUserMedia({ video:{ width:1280, height:720 } });
     }catch(e){
@@ -988,6 +995,7 @@ function disableGesture(){
   cancelAnimationFrame(gest.raf);
   if(gest.stream) gest.stream.getTracks().forEach(t => t.stop());
   if(gest.video) gest.video.remove();
+  if($('#ghud')) $('#ghud').remove();
   gest.video = null; gest.snapped = false;
   gPointer(0, 0, false);
   $('#gbadge').classList.remove('on','seen','track');
@@ -997,9 +1005,18 @@ let gPrevTmr;
 function gPreviewShow(ms){
   if(!gest.video) return;
   gest.video.classList.add('show');
+  const hud = $('#ghud'); if(hud) hud.classList.add('show');
   clearTimeout(gPrevTmr);
-  if(!state.admin)   // 관리자 모드에선 계속 표시, 아니면 ms 후 숨김
-    gPrevTmr = setTimeout(() => gest.video && gest.video.classList.remove('show'), ms || 6000);
+  if(!state.admin){  // 관리자 모드에선 계속 표시, 아니면 ms 후 숨김
+    gPrevTmr = setTimeout(() => { if(gest.video) gest.video.classList.remove('show'); if($('#ghud')) $('#ghud').classList.remove('show'); }, ms || 6000);
+  }
+}
+/* 진단 표시: 카메라 해상도·손 감지·펴진 손가락·장착 상태 */
+function gHud(res, ext, vw){
+  let h = $('#ghud');
+  if(!h){ h = document.createElement('div'); h.id = 'ghud'; document.body.appendChild(h); }
+  const hands = (res && res.landmarks) ? res.landmarks.length : 0;
+  h.textContent = `📷 ${vw||'-'}px · 손 ${hands} · 손가락 ${ext} · ${gest.snapped?'포인터 장착 ✅':'대기'}`;
 }
 function toggleGesture(){ gest.on ? disableGesture() : enableGesture(); }
 $('#gbadge').addEventListener('click', toggleGesture);   // 배지 클릭(마우스/터치)으로도 토글
@@ -1009,27 +1026,25 @@ function gLoop(t){
   gest.raf = requestAnimationFrame(gLoop);
   if(t - gest.last < 50) return;     // 검출 ~20fps (벽 애니메이션과 경합 방지)
   gest.last = t;
-  let res; try{ res = gest.rec.recognizeForVideo(gest.video, performance.now()); }catch(e){ return; }
+  const vw = gest.video.videoWidth || 0;
+  if(vw === 0){ gHud(null, 0, vw); return; }         // 카메라 프레임 아직 없음
+  let res; try{ res = gest.rec.detectForVideo(gest.video, performance.now()); }catch(e){ return; }
   const lms = res.landmarks && res.landmarks[0];
-  const cat = res.gestures && res.gestures[0] && res.gestures[0][0];
-  // 손바닥 판정을 관대하게: 내장 분류기(임계 완화) 또는 랜드마크로 손가락 4개 펴짐 확인
-  let ext = 0;
+  let ext = 0;                                        // 펴진 손가락 수(진단용)
   if(lms){
-    const w = lms[0];   // 손목
-    [[8,6],[12,10],[16,14],[20,18]].forEach(p => {   // 검지~새끼 [끝,중간관절]
-      const dt = Math.hypot(lms[p[0]].x - w.x, lms[p[0]].y - w.y);
-      const dp = Math.hypot(lms[p[1]].x - w.x, lms[p[1]].y - w.y);
-      if(dt > dp * 1.12) ext++;                      // 끝이 관절보다 바깥 = 펴짐
+    const w = lms[0];
+    [[8,6],[12,10],[16,14],[20,18]].forEach(p => {
+      if(Math.hypot(lms[p[0]].x-w.x, lms[p[0]].y-w.y) > Math.hypot(lms[p[1]].x-w.x, lms[p[1]].y-w.y)*1.05) ext++;
     });
   }
-  const palm = (cat && cat.categoryName === 'Open_Palm' && cat.score > 0.35) || ext >= 4;
+  gHud(res, ext, vw);
   // 현장 확인용 상태: 배지(주황=손 감지, 파랑=장착) + 미리보기 테두리색
   $('#gbadge').classList.toggle('seen', !!lms && !gest.snapped);
   if(gest.video) gest.video.style.borderColor =
     gest.snapped ? 'rgba(77,163,255,.9)' : (lms ? 'rgba(255,190,60,.85)' : 'rgba(255,255,255,.25)');
   const now = performance.now()/1000;
-  if(lms && (gest.snapped || palm)){
-    if(!gest.snapped) gest.snapped = true;          // 손바닥 확인 시 스냅 장착
+  if(lms){                                            // 손이 감지되면 즉시 포인터 장착(관대)
+    if(!gest.snapped) gest.snapped = true;
     gest.lastSeen = now;
     let x=0, y=0; [0,5,9,13,17].forEach(i => { x += lms[i].x; y += lms[i].y; });  // 손바닥 중심
     x = 1 - x/5; y = y/5;                            // 좌우 미러
