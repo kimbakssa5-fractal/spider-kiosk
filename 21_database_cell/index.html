@@ -956,7 +956,28 @@ function gPointer(x, y, present){
 
 async function enableGesture(){
   if(gest.on || gest.loading) return;
-  gest.loading = true; toast('손 제스처 준비 중…');
+  gest.loading = true;
+  // ── 1) 카메라 먼저 열기 → 파란불·미리보기 즉시(모델 로드보다 우선) ──
+  try{
+    toast('카메라 여는 중…');
+    try{ gest.stream = await navigator.mediaDevices.getUserMedia({ video:{ width:1280, height:720 } }); }
+    catch(e){ gest.stream = await navigator.mediaDevices.getUserMedia({ video:true }); }
+  }catch(err){
+    console.warn('camera', err);
+    toast('카메라를 열 수 없습니다 — 권한/장치 확인 (' + (err && err.name || 'error') + ')');
+    save('dbwall_gesture', 0); gest.loading = false; return;
+  }
+  gest.video = document.createElement('video');
+  gest.video.id = 'gpreview';
+  gest.video.playsInline = true; gest.video.muted = true; gest.video.srcObject = gest.stream;
+  document.body.appendChild(gest.video);
+  try{ await gest.video.play(); }catch(e){}
+  gest.on = true; save('dbwall_gesture', 1);
+  $('#gbadge').classList.add('on');
+  gPreviewShow(12000);
+  gHud(null, 0, gest.video.videoWidth);
+  toast('카메라 ON 🎥 — 인식 모델 로드 중…');
+  // ── 2) 인식 모델 로드(인터넷 필요) ──
   try{
     const mp = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
     const files = await mp.FilesetResolver.forVisionTasks(
@@ -967,25 +988,13 @@ async function enableGesture(){
       minHandDetectionConfidence:0.3, minHandPresenceConfidence:0.3, minTrackingConfidence:0.3 });
     try{ gest.rec = await mp.HandLandmarker.createFromOptions(files, opts('GPU')); }
     catch(e){ console.warn('GPU 실패 → CPU', e); gest.rec = await mp.HandLandmarker.createFromOptions(files, opts('CPU')); }
-    try{      // 원거리 인식용 고해상도 → 실패 시 기본
-      gest.stream = await navigator.mediaDevices.getUserMedia({ video:{ width:1280, height:720 } });
-    }catch(e){
-      gest.stream = await navigator.mediaDevices.getUserMedia({ video:true });
-    }
-    gest.video = document.createElement('video');
-    gest.video.id = 'gpreview';
-    gest.video.playsInline = true; gest.video.muted = true; gest.video.srcObject = gest.stream;
-    document.body.appendChild(gest.video);
-    await gest.video.play();
-    gest.on = true; save('dbwall_gesture', 1);
-    $('#gbadge').classList.add('on');
-    gPreviewShow(8000);                    // 켠 직후 8초간 카메라 미리보기(조준 확인)
-    toast('손 제스처 ON — 손바닥을 펴세요 🖐');
+    toast('손 제스처 준비 완료 — 손을 펴 보세요 🖐');
     gest.raf = requestAnimationFrame(gLoop);
   }catch(err){
-    console.warn('gesture init', err);
-    toast('카메라 또는 모델을 사용할 수 없습니다');
-    save('dbwall_gesture', 0);
+    console.warn('model', err);
+    const h = $('#ghud'); if(h) h.textContent = '📷 카메라 ON · 모델 로드 실패(인터넷 연결 필요)';
+    toast('제스처 모델을 불러오지 못했습니다 — 인터넷 연결이 필요합니다');
+    // 카메라는 켜둔 채로 미리보기 유지(문제 진단용). 다시 M 두 번으로 재시도 가능.
   }
   gest.loading = false;
 }
