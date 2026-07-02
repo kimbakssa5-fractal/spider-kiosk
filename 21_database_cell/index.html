@@ -201,7 +201,13 @@
     display:none;align-items:center;justify-content:center;font-size:16px;opacity:.45;transition:.2s;
     background:rgba(255,255,255,.05);border:1px solid var(--line);}
   #gbadge.on{display:flex;}
-  #gbadge.track{opacity:1;background:rgba(77,163,255,.25);border-color:rgba(77,163,255,.65);}
+  #gbadge.seen{opacity:.85;background:rgba(255,190,60,.22);border-color:rgba(255,190,60,.6);}   /* 손 감지됨(장착 전) */
+  #gbadge.track{opacity:1;background:rgba(77,163,255,.25);border-color:rgba(77,163,255,.65);}   /* 포인터 장착 */
+  /* 제스처 카메라 미리보기(켠 직후 8초 / 관리자 모드에서 계속) — 테두리: 회색=손없음, 주황=손감지, 파랑=장착 */
+  #gpreview{position:fixed;left:18px;bottom:140px;z-index:9;width:186px;border-radius:10px;
+    transform:scaleX(-1);border:3px solid rgba(255,255,255,.25);display:none;
+    box-shadow:0 10px 30px rgba(0,0,0,.5);}
+  #gpreview.show{display:block;}
 
   /* 단축키(칸 수 등) 안내 토스트 */
   #toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:82;
@@ -793,6 +799,7 @@ function setAdmin(on){
   $('#wall').classList.toggle('admin', on);
   $('#admin-badge').style.display = on ? 'block' : 'none';
   if($('#overlay').classList.contains('on')) $('#bEdit').style.display = on?'inline-flex':'none';
+  if(gest.on && gest.video){ on ? gPreviewShow() : gest.video.classList.remove('show'); }  // 관리자: 캠 미리보기 상시
 }
 $('#gear').addEventListener('click', () => {
   if(state.admin){ setAdmin(false); return; }
@@ -953,12 +960,19 @@ async function enableGesture(){
     gest.rec = await mp.GestureRecognizer.createFromOptions(files, {
       baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task', delegate:'GPU' },
       runningMode:'VIDEO', numHands:1 });
-    gest.stream = await navigator.mediaDevices.getUserMedia({ video:{ width:640, height:360 } });
+    try{      // 원거리 인식용 고해상도 → 실패 시 기본
+      gest.stream = await navigator.mediaDevices.getUserMedia({ video:{ width:1280, height:720 } });
+    }catch(e){
+      gest.stream = await navigator.mediaDevices.getUserMedia({ video:true });
+    }
     gest.video = document.createElement('video');
+    gest.video.id = 'gpreview';
     gest.video.playsInline = true; gest.video.muted = true; gest.video.srcObject = gest.stream;
+    document.body.appendChild(gest.video);
     await gest.video.play();
     gest.on = true; save('dbwall_gesture', 1);
     $('#gbadge').classList.add('on');
+    gPreviewShow(8000);                    // 켠 직후 8초간 카메라 미리보기(조준 확인)
     toast('손 제스처 ON — 손바닥을 펴세요 🖐');
     gest.raf = requestAnimationFrame(gLoop);
   }catch(err){
@@ -973,10 +987,19 @@ function disableGesture(){
   gest.on = false; save('dbwall_gesture', 0);
   cancelAnimationFrame(gest.raf);
   if(gest.stream) gest.stream.getTracks().forEach(t => t.stop());
+  if(gest.video) gest.video.remove();
   gest.video = null; gest.snapped = false;
   gPointer(0, 0, false);
-  $('#gbadge').classList.remove('on','track');
+  $('#gbadge').classList.remove('on','seen','track');
   toast('손 제스처 OFF');
+}
+let gPrevTmr;
+function gPreviewShow(ms){
+  if(!gest.video) return;
+  gest.video.classList.add('show');
+  clearTimeout(gPrevTmr);
+  if(!state.admin)   // 관리자 모드에선 계속 표시, 아니면 ms 후 숨김
+    gPrevTmr = setTimeout(() => gest.video && gest.video.classList.remove('show'), ms || 6000);
 }
 function toggleGesture(){ gest.on ? disableGesture() : enableGesture(); }
 $('#gbadge').addEventListener('click', toggleGesture);   // 배지 클릭(마우스/터치)으로도 토글
@@ -989,7 +1012,21 @@ function gLoop(t){
   let res; try{ res = gest.rec.recognizeForVideo(gest.video, performance.now()); }catch(e){ return; }
   const lms = res.landmarks && res.landmarks[0];
   const cat = res.gestures && res.gestures[0] && res.gestures[0][0];
-  const palm = !!(cat && cat.categoryName === 'Open_Palm' && cat.score > 0.5);
+  // 손바닥 판정을 관대하게: 내장 분류기(임계 완화) 또는 랜드마크로 손가락 4개 펴짐 확인
+  let ext = 0;
+  if(lms){
+    const w = lms[0];   // 손목
+    [[8,6],[12,10],[16,14],[20,18]].forEach(p => {   // 검지~새끼 [끝,중간관절]
+      const dt = Math.hypot(lms[p[0]].x - w.x, lms[p[0]].y - w.y);
+      const dp = Math.hypot(lms[p[1]].x - w.x, lms[p[1]].y - w.y);
+      if(dt > dp * 1.12) ext++;                      // 끝이 관절보다 바깥 = 펴짐
+    });
+  }
+  const palm = (cat && cat.categoryName === 'Open_Palm' && cat.score > 0.35) || ext >= 4;
+  // 현장 확인용 상태: 배지(주황=손 감지, 파랑=장착) + 미리보기 테두리색
+  $('#gbadge').classList.toggle('seen', !!lms && !gest.snapped);
+  if(gest.video) gest.video.style.borderColor =
+    gest.snapped ? 'rgba(77,163,255,.9)' : (lms ? 'rgba(255,190,60,.85)' : 'rgba(255,255,255,.25)');
   const now = performance.now()/1000;
   if(lms && (gest.snapped || palm)){
     if(!gest.snapped) gest.snapped = true;          // 손바닥 확인 시 스냅 장착
