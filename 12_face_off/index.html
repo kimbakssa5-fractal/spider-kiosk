@@ -246,33 +246,52 @@ const NECK={x:780*S,y:1300*S}, PELVIS={x:775*S,y:2600*S};
 /* ═══════════════ 근육 → 고릴라 변위 필드 (단위 U) ═══════════════
    MediaPipe 블렌드셰이프 이름 그대로. Left=사용자 왼쪽=거울 화면 왼쪽=고릴라 L */
 const FIELDS={
-  jawOpen:[['chin',0,.60],['chinL',.03,.50],['chinR',-.03,.50],['lipBot',0,.46],
-           ['lipCornerL',.05,.28],['lipCornerR',-.05,.28],['lipTop',0,-.03],
-           ['jawSideL',.02,.15],['jawSideR',-.02,.15],['neckL',0,.06],['neckR',0,.06]],
-  eyeBlinkLeft:[['eyeL_top',0,.09],['eyeL_bot',0,-.03],['eyeL_out',0,.02],['eyeL_in',0,.02],['browL_mid',0,.02]],
-  eyeBlinkRight:[['eyeR_top',0,.09],['eyeR_bot',0,-.03],['eyeR_out',0,.02],['eyeR_in',0,.02],['browR_mid',0,.02]],
-  eyeWideLeft:[['eyeL_top',0,-.05],['browL_mid',0,-.03]],
-  eyeWideRight:[['eyeR_top',0,-.05],['browR_mid',0,-.03]],
-  browInnerUp:[['browL_in',0,-.10],['browR_in',0,-.10],['bridge',0,-.05],['foreheadMid',0,-.05],
-               ['browL_mid',0,-.04],['browR_mid',0,-.04]],
-  browDownLeft:[['browL_in',.01,.07],['browL_mid',0,.08],['browL_out',0,.05],['eyeL_top',0,.03]],
-  browDownRight:[['browR_in',-.01,.07],['browR_mid',0,.08],['browR_out',0,.05],['eyeR_top',0,.03]],
-  browOuterUpLeft:[['browL_out',0,-.09],['browL_mid',0,-.05]],
-  browOuterUpRight:[['browR_out',0,-.09],['browR_mid',0,-.05]],
-  mouthSmileLeft:[['lipCornerL',-.10,-.13],['lipTop',-.01,-.03],['cheekL',-.03,-.06],['chinL',0,-.03]],
-  mouthSmileRight:[['lipCornerR',.10,-.13],['lipTop',.01,-.03],['cheekR',.03,-.06],['chinR',0,-.03]],
-  mouthFrownLeft:[['lipCornerL',-.02,.09]],
-  mouthFrownRight:[['lipCornerR',.02,.09]],
-  mouthPucker:[['lipCornerL',.10,0],['lipCornerR',-.10,0],['lipTop',0,.01],['lipBot',0,-.01]],
-  mouthFunnel:[['lipCornerL',.08,0],['lipCornerR',-.08,0],['lipTop',0,-.04],['lipBot',0,.05]],
-  jawLeft:[['chin',-.14,.02],['lipBot',-.10,0],['chinL',-.12,0],['chinR',-.10,0]],
-  jawRight:[['chin',.14,.02],['lipBot',.10,0],['chinL',.10,0],['chinR',.12,0]],
-  cheekPuff:[['cheekL',-.07,0],['cheekR',.07,0],['jawSideL',-.05,.01],['jawSideR',.05,.01]],
-  noseSneerLeft:[['nostrilL',0,-.06],['noseTip',-.01,-.03],['browL_in',0,.02]],
-  noseSneerRight:[['nostrilR',0,-.06],['noseTip',.01,-.03],['browR_in',0,.02]],
-  mouthLeft:[['lipTop',-.08,0],['lipBot',-.08,0],['lipCornerL',-.08,0],['lipCornerR',-.08,0]],
-  mouthRight:[['lipTop',.08,0],['lipBot',.08,0],['lipCornerL',.08,0],['lipCornerR',.08,0]],
+  jawOpen:[['chin',0,.85],['chinL',.04,.72],['chinR',-.04,.72],['lipBot',0,.65],
+           ['lipCornerL',.06,.42],['lipCornerR',-.06,.42],['lipTop',0,-.04],['noseTip',0,.04],
+           ['jawSideL',.03,.22],['jawSideR',-.03,.22],['neckL',0,.08],['neckR',0,.08]],
+  eyeBlinkLeft:[['eyeL_top',0,.10],['eyeL_bot',0,-.03],['eyeL_out',0,.02],['eyeL_in',0,.02],['browL_mid',0,.03]],
+  eyeBlinkRight:[['eyeR_top',0,.10],['eyeR_bot',0,-.03],['eyeR_out',0,.02],['eyeR_in',0,.02],['browR_mid',0,.03]],
+  eyeWideLeft:[['eyeL_top',0,-.07],['browL_mid',0,-.05]],
+  eyeWideRight:[['eyeR_top',0,-.07],['browR_mid',0,-.05]],
+  browInnerUp:[['browL_in',0,-.16],['browR_in',0,-.16],['bridge',0,-.08],['foreheadMid',0,-.09],
+               ['browL_mid',0,-.10],['browR_mid',0,-.10]],
+  browDownLeft:[['browL_in',.02,.12],['browL_mid',0,.12],['browL_out',0,.07],['eyeL_top',0,.04]],
+  browDownRight:[['browR_in',-.02,.12],['browR_mid',0,.12],['browR_out',0,.07],['eyeR_top',0,.04]],
+  browOuterUpLeft:[['browL_out',0,-.14],['browL_mid',0,-.08]],
+  browOuterUpRight:[['browR_out',0,-.14],['browR_mid',0,-.08]],
+  mouthSmileLeft:[['lipCornerL',-.13,-.16],['lipTop',-.02,-.04],['cheekL',-.04,-.08],['chinL',0,-.04]],
+  mouthSmileRight:[['lipCornerR',.13,-.16],['lipTop',.02,-.04],['cheekR',.04,-.08],['chinR',0,-.04]],
+  mouthFrownLeft:[['lipCornerL',-.03,.12]],
+  mouthFrownRight:[['lipCornerR',.03,.12]],
+  mouthPucker:[['lipCornerL',.14,0],['lipCornerR',-.14,0],['lipTop',0,.02],['lipBot',0,-.02]],
+  mouthFunnel:[['lipCornerL',.10,0],['lipCornerR',-.10,0],['lipTop',0,-.05],['lipBot',0,.07]],
+  jawLeft:[['chin',-.18,.02],['lipBot',-.13,0],['chinL',-.15,0],['chinR',-.13,0]],
+  jawRight:[['chin',.18,.02],['lipBot',.13,0],['chinL',.13,0],['chinR',.15,0]],
+  cheekPuff:[['cheekL',-.10,0],['cheekR',.10,0],['jawSideL',-.07,.02],['jawSideR',.07,.02]],
+  noseSneerLeft:[['nostrilL',0,-.09],['noseTip',-.02,-.04],['browL_in',0,.03]],
+  noseSneerRight:[['nostrilR',0,-.09],['noseTip',.02,-.04],['browR_in',0,.03]],
+  mouthLeft:[['lipTop',-.10,0],['lipBot',-.10,0],['lipCornerL',-.10,0],['lipCornerR',-.10,0]],
+  mouthRight:[['lipTop',.10,0],['lipBot',.10,0],['lipCornerL',.10,0],['lipCornerR',.10,0]],
 };
+/* 실측 블렌드셰이프는 풀스케일이 안 나옴(입 크게 벌려도 ~0.5) → 근육별 증폭 커브 */
+const c01=v=>v<0?0:v>1?1:v;
+const sstep=(a,b,v)=>{ v=c01((v-a)/(b-a)); return v*v*(3-2*v); };
+const GAIN={
+  jawOpen:s=>c01((s-0.03)*1.9),
+  eyeBlinkLeft:s=>sstep(0.18,0.48,s), eyeBlinkRight:s=>sstep(0.18,0.48,s),
+  eyeWideLeft:s=>c01(s*2.5), eyeWideRight:s=>c01(s*2.5),
+  browInnerUp:s=>c01(s*3), browDownLeft:s=>c01(s*2.8), browDownRight:s=>c01(s*2.8),
+  browOuterUpLeft:s=>c01(s*3), browOuterUpRight:s=>c01(s*3),
+  mouthSmileLeft:s=>c01(s*2.2), mouthSmileRight:s=>c01(s*2.2),
+  mouthFrownLeft:s=>c01(s*2.2), mouthFrownRight:s=>c01(s*2.2),
+  mouthPucker:s=>c01(s*1.7), mouthFunnel:s=>c01(s*1.7),
+  jawLeft:s=>c01(s*2.2), jawRight:s=>c01(s*2.2),
+  cheekPuff:s=>c01(s*2.2),
+  noseSneerLeft:s=>c01(s*2.8), noseSneerRight:s=>c01(s*2.8),
+  mouthLeft:s=>c01(s*1.8), mouthRight:s=>c01(s*1.8),
+};
+const amp=(name,s)=>GAIN[name]?GAIN[name](s):s;
+const blendRate=name=>name.startsWith('eyeBlink')?25:name==='jawOpen'?18:14;
 
 /* ═══════════════ 들로네 삼각분할 (초기 1회) ═══════════════ */
 function delaunay(P){
@@ -343,30 +362,22 @@ function smooth(cur,target,dt,rate){ return cur+(target-cur)*(1-Math.exp(-dt*rat
 
 /* ═══════════════ 프레임 → 고릴라 메시 변형 ═══════════════ */
 const dest=new Float32Array(N*2);
-function computeMesh(t){
-  const breathe=Math.sin(t*0.0011)*3;                 // 미세 호흡
-  const rollA=headRoll*0.85, yawDx=headYaw*0.38*U, pitDy=headPitch*0.55*U;
-  const bRot=bodyRot*0.8, cosB=Math.cos(bRot), sinB=Math.sin(bRot);
+function computeMesh(){
+  // 몸 움직임은 메시가 아니라 '고릴라 전체 강체 변환'(renderGorilla)으로 처리 —
+  // 테두리 고정점에 몸이 끌려 배경에 눌어붙는 왜곡 방지. 메시는 머리·얼굴만 변형.
+  const rollA=headRoll*1.0, yawDx=headYaw*0.45*U, pitDy=headPitch*0.6*U;
   const cosH=Math.cos(rollA), sinH=Math.sin(rollA);
   for(let i=0;i<N;i++){
     const p=PT[i];
     let x=p.x, y=p.y;
     // ① 근육 변위
-    const md=muscleDelta[i*2], md2=muscleDelta[i*2+1];
-    x+=md; y+=md2;
+    x+=muscleDelta[i*2]; y+=muscleDelta[i*2+1];
     // ② 머리 강체(목 피벗 회전 + 시선 시프트)
     if(p.wH>0){
       const dx=x-NECK.x, dy=y-NECK.y, w=p.wH;
       const rx=dx*cosH-dy*sinH, ry=dx*sinH+dy*cosH;
       x=NECK.x+dx+(rx-dx)*w + yawDx*w;
       y=NECK.y+dy+(ry-dy)*w + pitDy*w;
-    }
-    // ③ 몸(골반 피벗 회전 + 이동 + 호흡)
-    if(p.wB>0){
-      const dx=x-PELVIS.x, dy=y-PELVIS.y, w=p.wB;
-      const rx=dx*cosB-dy*sinB, ry=dx*sinB+dy*cosB;
-      x=PELVIS.x+dx+(rx-dx)*w + bodyDx*w;
-      y=PELVIS.y+dy+(ry-dy)*w + bodyDy*w + breathe*w;
     }
     dest[i*2]=x; dest[i*2+1]=y;
   }
@@ -400,8 +411,12 @@ function renderGorilla(t){
   ctx.clearRect(0,0,cv.width,cv.height);
   if(!srcReady) return;
   computeMuscles();
-  computeMesh(t);
+  computeMesh();
   ctx.setTransform(sc,0,0,sc,ox,oy);
+  // 몸 전체 강체 변환: 어깨 기울기→골반 피벗 회전, 어깨 이동→평행이동(+호흡)
+  const breathe=Math.sin(t*0.0011)*3;
+  ctx.translate(bodyDx, bodyDy+breathe);
+  ctx.translate(PELVIS.x,PELVIS.y); ctx.rotate(bodyRot); ctx.translate(-PELVIS.x,-PELVIS.y);
   // 메시 워프
   for(const [i,j,k] of TRIS)
     warpTri(PT[i].x,PT[i].y,PT[j].x,PT[j].y,PT[k].x,PT[k].y,
@@ -411,9 +426,9 @@ function renderGorilla(t){
   const jaw=blend.jawOpen||0;
   if(jaw>0.12){
     const lt=px('lipTop'), lb=px('lipBot'), lcl=px('lipCornerL'), lcr=px('lipCornerR');
-    const mx=(lt.x+lb.x)/2, my=(lt.y+lb.y)/2+U*0.05;
+    const mx=(lt.x+lb.x)/2, my=(lt.y+lb.y)/2;
     const rw=Math.hypot(lcr.x-lcl.x,lcr.y-lcl.y)/2*0.92;
-    const rh=Math.max(2,(lb.y-lt.y)/2*0.85);
+    const rh=Math.max(2,(lb.y-lt.y)/2*0.78);
     const al=Math.min(1,(jaw-0.12)*2.2);
     ctx.save();
     ctx.globalAlpha=al;
@@ -555,8 +570,8 @@ function camLoop(){
     if(faceSeen){
       const cats=fRes.faceBlendshapes[0].categories;
       for(const c of cats){
-        const tgt=c.score;
-        blend[c.categoryName]=smooth(blend[c.categoryName]||0,tgt,dt,14);
+        const tgt=amp(c.categoryName,c.score);
+        blend[c.categoryName]=smooth(blend[c.categoryName]||0,tgt,dt,blendRate(c.categoryName));
       }
       // 머리 자세: 랜드마크 기반(미러 공간)
       const lm=fRes.faceLandmarks[0];
@@ -686,7 +701,7 @@ function demoLoop(){
   const wink=(t%3.4<0.22)?ss((t%3.4)/0.1)*ss((0.22-t%3.4)/0.1):0; // 깜빡임
   z.eyeBlinkLeft=Math.max(wink, envp(t,4.6,5.4,0.2)*0);
   z.eyeBlinkRight=wink;
-  for(const k in FIELDS) blend[k]=z[k]||0;
+  for(const k in FIELDS) blend[k]=amp(k,z[k]||0);   // 캠과 동일 파이프라인
   headRoll=0.13*Math.sin(t*0.9)+0.05*Math.sin(t*2.3);
   headYaw=0.45*Math.sin(t*0.55);
   headPitch=0.2*Math.sin(t*0.75)-envp(t,0.6,2.3,0.5)*0.25;       // 포효 때 고개 젖힘
