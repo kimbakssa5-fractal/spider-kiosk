@@ -276,7 +276,8 @@ function loop(){
       const arms  = lms.map(armRaise);      // 팔 든 정도
       // 날갯짓 위상 진행(팔 들면 빨라짐)
       const nowT=performance.now(), dt=Math.min(0.05,(nowT-flapLast)/1000); flapLast=nowT;
-      flapPhase += dt*(2.2 + (arms.length?Math.max(...arms):0)*5.5);
+      frameDt=dt;
+      flapPhase += dt*(2.0 + (arms.length?Math.max(...arms):0)*4.5);
       // ① 정면인 사람의 날개 → 사람보다 뒤(등 뒤)
       if(wingsChk.checked) for(let i=0;i<lms.length;i++) if(front[i]) drawWings(lms[i],i,arms[i]);
       // ② 인물(전경)을 마스크로 잘라 위에 덮음
@@ -399,7 +400,7 @@ const WREAR  =loadWing('wing_rear.png',    0.5, 0.195);  // 후면 펼침
 const WPROF  =loadWing('wing_profile.png', 0.5, 0.02);   // 측면 드리움
 const SET_K=2.5;   // 이미지(=날개 한 쌍) 폭 = 몸통 × SET_K
 
-let flapPhase=0, flapLast=performance.now();
+let flapPhase=0, flapLast=performance.now(), frameDt=0.016;
 const prevTips={};   // 사람별 날개끝 이전 위치(속도 계산용)
 
 // 팔을 든 정도 0~1 (손목·팔꿈치가 어깨보다 위로 올라갈수록 ↑)
@@ -413,59 +414,83 @@ function armRaise(lm){
   return Math.max(0,Math.min(1,(e/c)/(H*0.9)));
 }
 
-// 날개 이미지 + 펄럭임(beat) 반영
-function drawSet(o,F,mirror,squash,beat,amp){
-  if(!o.ready) return false;
+// 날개 이미지 + 펄럭임(beat) 반영 (alpha=크로스페이드 가중치)
+function drawSet(o,S,mirror,squash,beat,amp,alpha){
+  if(!o.ready || alpha<0.02) return false;
   const spreadOsc=1+beat*amp*0.14;                 // 위로 칠 때 벌어짐
-  const dw=F.scale*SET_K*squash*spreadOsc;
-  const dh=F.scale*SET_K*o.im.height/o.im.width*(1-beat*amp*0.06);
+  const dw=S.scale*SET_K*squash*spreadOsc;
+  const dh=S.scale*SET_K*o.im.height/o.im.width*(1-beat*amp*0.06);
   ctx.save();
-  ctx.shadowColor='rgba(140,225,255,0.45)'; ctx.shadowBlur=F.scale*0.18;
+  ctx.globalAlpha=alpha;
+  ctx.shadowColor='rgba(140,225,255,0.45)'; ctx.shadowBlur=S.scale*0.18;
   ctx.rotate(beat*amp*0.10);                       // 날갯짓 회전
+  ctx.translate(0, -Math.max(0,beat)*amp*S.scale*0.05);  // 칠 때 몸쪽으로 살짝 들림
   if(mirror) ctx.scale(-1,1);
   ctx.drawImage(o.im, -o.ax*dw, -o.ay*dh, dw, dh);
   ctx.restore();
   return true;
 }
 
-let wingMode='front';   // 'front' ↔ 'rear' ↔ 'profile' (히스테리시스)
-function drawWings(lm, idx, arm){
+// ── 사람별 시간 스무딩(지터 제거) + 모드 크로스페이드 상태 ──
+const wingStates={};
+function wingState(idx){
+  return wingStates[idx] ??= {ax:null,ay:0,scale:0,ang:0,frontal:1,arm:0,
+                              w:{front:1,rear:0,profile:0}, mode:'front'};
+}
+function drawWings(lm, idx, armRaw){
   const L=lm[11], R=lm[12];
   if(!L||!R || (L.visibility!=null && L.visibility<0.3 && R.visibility<0.3)) return;
   const F=poseFrame(lm); if(!F || F.scale<10) return;
-  const beat=Math.sin(flapPhase);
-  const amp=0.32 + arm*1.2;                 // 팔 들면 펄럭 진폭 ↑
-  if(F.frontal < 0.32) wingMode='profile';
-  else if(F.frontal > 0.5) wingMode = facingFront(lm) ? 'front' : 'rear';
+  const st=wingState(idx);
+  // 시간 기반 지수 스무딩: 위치·크기·기울기·정면도·팔 (떨림 제거, 반응은 유지)
+  const kPos=1-Math.exp(-frameDt*9), kSlow=1-Math.exp(-frameDt*5);
+  if(st.ax==null){ st.ax=F.ax; st.ay=F.ay; st.scale=F.scale; st.ang=F.ang; st.frontal=F.frontal; }
+  st.ax+= (F.ax-st.ax)*kPos;   st.ay+= (F.ay-st.ay)*kPos;
+  st.scale+=(F.scale-st.scale)*kSlow;
+  st.ang += (F.ang-st.ang)*kPos;
+  st.frontal+=(F.frontal-st.frontal)*kSlow;
+  st.arm += (armRaw-st.arm)*kSlow;
 
+  // 유기적 날갯짓: 기본파+2배음(내려칠 땐 빠르고 올릴 땐 느긋)
+  const beat=Math.sin(flapPhase)+0.28*Math.sin(flapPhase*2+0.9);
+  const amp=0.30 + st.arm*1.15;
+
+  // 모드 목표 결정 후 가중치를 부드럽게 이동 → 이미지 크로스페이드(팝 제거)
+  if(st.frontal < 0.32) st.mode='profile';
+  else if(st.frontal > 0.5) st.mode = facingFront(lm) ? 'front' : 'rear';
+  const kFade=1-Math.exp(-frameDt*7);
+  for(const m of ['front','rear','profile'])
+    st.w[m]+=(((st.mode===m)?1:0)-st.w[m])*kFade;
+
+  const squash=Math.max(st.frontal,0.35);
   ctx.save();
-  ctx.translate(F.ax,F.ay);                 // 등 위쪽 부착점
-  ctx.rotate(F.ang);                        // 몸 기울기
-  let ok;
-  if(wingMode==='profile')      ok=drawSet(WPROF,F, !F.faceLeft, 1, beat, amp);
-  else if(wingMode==='rear')    ok=drawSet(WREAR,F, false, Math.max(F.frontal,0.35), beat, amp);
-  else                          ok=drawSet(WFRONT,F, false, Math.max(F.frontal,0.35), beat, amp);
+  ctx.translate(st.ax,st.ay);               // (스무딩된) 등 위쪽 부착점
+  ctx.rotate(st.ang);
+  let ok=false;
+  ok=drawSet(WFRONT,st,false,squash,beat,amp,st.w.front)||ok;
+  ok=drawSet(WREAR ,st,false,squash,beat,amp,st.w.rear )||ok;
+  ok=drawSet(WPROF ,st,!F.faceLeft,1,   beat,amp,st.w.profile)||ok;
   if(!ok){
-    ctx.shadowColor='rgba(120,220,255,0.55)'; ctx.shadowBlur=F.scale*0.3;
+    ctx.shadowColor='rgba(120,220,255,0.55)'; ctx.shadowBlur=st.scale*0.3;
     const f=(Math.sin(performance.now()/230)+1)/2;
-    drawOneWing(F.scale*1.9,F.scale,f, 1); drawOneWing(F.scale*1.9,F.scale,f,-1);
+    drawOneWing(st.scale*1.9,st.scale,f, 1); drawOneWing(st.scale*1.9,st.scale,f,-1);
   }
   ctx.restore();
 
-  // ── 날개 끝 world좌표 + 순간속도 → 입자 방출 ──
+  // ── 날개 끝 world좌표 + 순간속도 → 입자 방출 (스무딩된 좌표 기준) ──
   if(!particleChk.checked) return;
-  const spread=F.scale*SET_K, ca=Math.cos(F.ang), sa=Math.sin(F.ang);
-  const outB=spread*0.44*(1+beat*amp*0.20);        // 끝이 벌어졌다 좁아짐
-  const downB=spread*0.66*(1-beat*amp*0.14);       // 위로 칠 때 끝이 올라옴
-  const toC=(lx,ly)=>({x:F.ax+lx*ca-ly*sa, y:F.ay+lx*sa+ly*ca});
-  const tips = (wingMode==='profile')
+  const spread=st.scale*SET_K, ca=Math.cos(st.ang), sa=Math.sin(st.ang);
+  const outB=spread*0.44*(1+beat*amp*0.20);
+  const downB=spread*0.66*(1-beat*amp*0.14);
+  const toC=(lx,ly)=>({x:st.ax+lx*ca-ly*sa, y:st.ay+lx*sa+ly*ca});
+  const tips = (st.mode==='profile')
     ? [ toC((F.faceLeft?1:-1)*outB*0.5, downB*1.05) ]
     : [ toC(-outB,downB), toC(+outB,downB) ];
   const prev=prevTips[idx]||tips.map(t=>({x:t.x,y:t.y}));
-  const emitN=Math.round(5 + arm*18);              // 팔 들면 더 많이(곱고 다량)
+  const emitN=Math.round(4 + st.arm*16);
   for(let t=0;t<tips.length;t++){
     const p=prev[t]||tips[t];
-    emitTip(tips[t].x, tips[t].y, tips[t].x-p.x, tips[t].y-p.y, emitN, F.scale);
+    emitTip(tips[t].x, tips[t].y, tips[t].x-p.x, tips[t].y-p.y, emitN, st.scale);
   }
   prevTips[idx]=tips.map(t=>({x:t.x,y:t.y}));
 }
