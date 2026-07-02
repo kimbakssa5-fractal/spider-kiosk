@@ -25,7 +25,7 @@
   body.hide-cursor, body.hide-cursor *{cursor:none !important;}
 
   /* ─── 벽(Wall) : 세로 터치스크린 위를 흐르는 사진 필드 (3240×1920 = 1080×1920 ×3) ─── */
-  #wall{position:fixed;inset:0;overflow:hidden;background:
+  #wall{position:fixed;inset:0;overflow:hidden;isolation:isolate;background:
       radial-gradient(120% 100% at 50% -10%, #0c0e12 0%, #050506 60%, #000 100%);}
   #cols{position:absolute;inset:0;}
   .col{position:absolute;top:0;height:100%;will-change:transform;}
@@ -559,22 +559,24 @@ function layoutFocus(){
   focus.style.left=left+'px'; focus.style.top=top+'px';
 }
 
-/* 주변 카드 방사형 팝아웃(터치 지점을 중심으로 원형 공터 형성) */
+/* 주변 카드 방사형 팝아웃 + 크기 그라데이션(가까운 사진일수록 크게) */
 function scatter(cx, cy, on){
   const cards = document.querySelectorAll('#cols .card');
   const R = Math.min(innerWidth, innerHeight) * 0.55;   // 영향 반경
   const MAX = Math.min(innerWidth, innerHeight) * 0.5;  // 최대 밀어냄
+  const GROW = 0.75;                                    // 가까운 주변 사진 최대 확대량
   cards.forEach(card => {
-    if(!on){ card.style.transition=''; card.style.transitionDelay=''; card.style.transform=''; return; }
+    if(!on){ card.style.transition=''; card.style.transitionDelay=''; card.style.transform=''; card.style.zIndex=''; return; }
     if(card === state.fromEl) return;                   // 확대된 원본은 그대로
     const r=card.getBoundingClientRect();
     const dx=(r.left+r.width/2)-cx, dy=(r.top+r.height/2)-cy;
     const d=Math.hypot(dx,dy)||1;
-    const k=Math.exp(-d/R);                             // 가까울수록 강함
+    const k=Math.exp(-d/R);                             // 0~1, 가까울수록 큼
     const m=MAX*k, ux=dx/d, uy=dy/d;
     card.style.transition='transform .6s cubic-bezier(.16,.9,.24,1)';
     card.style.transitionDelay=(Math.min(d,700)*0.00035)+'s';   // 거리 기반 물결 지연
-    card.style.transform=`translate(${ux*m}px,${uy*m}px) scale(${1-0.1*k})`;
+    card.style.transform=`translate(${ux*m}px,${uy*m}px) scale(${1 + GROW*k})`;  // 가까울수록 확대
+    card.style.zIndex = Math.round(k*100);              // 가까운(큰) 카드가 위로
   });
 }
 
