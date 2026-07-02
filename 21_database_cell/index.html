@@ -900,7 +900,7 @@ const gest = { on:false, loading:false, rec:null, video:null, stream:null, raf:0
   px:innerWidth/2, py:innerHeight/2, snapped:false, lastSeen:0,
   tgt:null, tx:0, ty:0, t0:0, cooldown:0 };
 const G_CLICKABLE = '.card,.act,.nav,#close,#zoomClose,.gear,.cls,.exp,.hz';
-const G_DWELL = 3.0;                 // 머무름 시간(초) → 3·2·1 표시
+const G_DWELL = 1.0;                 // 머무름 시간(초) — 3·2·1 이 1초 안에 지나감
 
 function gCursor(){
   let c = $('#gcursor');
@@ -925,8 +925,11 @@ function gPointer(x, y, present){
   $('#gbadge').classList.toggle('track', present);
   if(!present){ cur.classList.remove('on','count'); gReset(); return; }
   if(!cur.classList.contains('on')){ cur.classList.add('on','snap'); setTimeout(()=>cur.classList.remove('snap'), 450); gest.px=x; gest.py=y; }
-  gest.px += (x - gest.px) * 0.42;   // EMA 스무딩(떨림 제거)
-  gest.py += (y - gest.py) * 0.42;
+  // 가속 스무딩: 손이 빠르면 즉각 따라가고(가속), 느리면 강하게 필터링(정밀)
+  const gdist = Math.hypot(x - gest.px, y - gest.py);
+  const ga = Math.min(0.95, 0.10 + gdist / 130);
+  gest.px += (x - gest.px) * ga;
+  gest.py += (y - gest.py) * ga;
   cur.style.left = gest.px + 'px'; cur.style.top = gest.py + 'px';
 
   const now = performance.now()/1000;
@@ -946,7 +949,7 @@ function gPointer(x, y, present){
   if(tgt !== gest.tgt || moved > 60){ gest.tgt = tgt; gest.tx = gest.px; gest.ty = gest.py; gest.t0 = now; }
   const elapsed = now - gest.t0, remain = G_DWELL - elapsed;
   cur.classList.add('count');
-  gRing(Math.min(1, elapsed/G_DWELL), String(Math.max(1, Math.ceil(remain))));  // 3→2→1
+  gRing(Math.min(1, elapsed/G_DWELL), String(Math.max(1, Math.ceil(remain/G_DWELL*3))));  // 3→2→1 (총 G_DWELL초)
   if(remain <= 0){
     gest.cooldown = now + 1.6;       // 연속 오클릭 방지
     const t = gest.tgt; gReset();
