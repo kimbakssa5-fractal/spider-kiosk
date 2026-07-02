@@ -304,6 +304,7 @@ const state = {
   admin: false, cur: -1, fromEl: null, editing: false,
   touch: {x:0, y:0}, imgW: 0, imgH: 0,   // 터치 지점 · 확대 사진 표시크기
   perScreen: load('dbwall_perscreen', null),   // TV 1대당 칸 수(1~9, null=자동)
+  speedMul: load('dbwall_speed', 1),           // 흐름 속도 배율(z=1, x=2, c=4)
 };
 function load(k, d){ try{ return JSON.parse(localStorage.getItem(k)) || d; }catch(e){ return d; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -434,8 +435,9 @@ function startFlow(){
   const step = (t) => {
     const dt = Math.min(0.05, (t - flow.last)/1000); flow.last = t;
     if(!flow.paused){
+      const sp = state.speedMul;
       for(const c of flow.cols){
-        c.offset -= c.speed*dt;
+        c.offset -= c.speed*sp*dt;
         if(c.offset <= -c.cycleH) c.offset += c.cycleH;
         c.strip.style.transform = `translateY(${c.offset}px)`;
       }
@@ -461,6 +463,11 @@ function setPerScreen(n){
 function markHotzone(){
   document.querySelectorAll('#hotzones .hz').forEach(c =>
     c.classList.toggle('sel', +c.dataset.val === state.perScreen));
+}
+/* 흐름 속도 배율(z=1, x=2, c=4) */
+function setSpeed(m){
+  state.speedMul = m; save('dbwall_speed', m);
+  toast(m === 1 ? '기본 속도' : m + '배속');
 }
 /* 상단 숨김 단축키 터치영역 18칸(1~9, q w e r t y u i o) 생성 */
 (function buildHotzones(){
@@ -783,6 +790,9 @@ addEventListener('keydown', e => {
     // 칸 수: 1~9 = 1~9칸,  q w e r t y u i o = 10~18칸 (TV 1대당). 같은 값 재입력 시 자동 복귀.
     const ci = COL_KEYS.indexOf(e.key.toLowerCase());
     if(ci >= 0) setPerScreen(ci + 1);
+    else if(e.key==='z') setSpeed(1);              // 현재(기본) 속도
+    else if(e.key==='x') setSpeed(2);              // 2배속
+    else if(e.key==='c') setSpeed(4);              // 4배속
     else if(e.key==='A') setAdmin(!state.admin);   // Shift+A: 관리자 토글
     else if(e.key==='F') toggleFS();               // Shift+F: 전체화면 토글
     return;
