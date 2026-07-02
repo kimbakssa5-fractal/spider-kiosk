@@ -590,11 +590,14 @@
   const MOTION_SPLASH_MS = 80;         // 모션 물결 주기
   const MOTION_SPLASH_N = 5;           // 한 틱에 찍는 물결 수(움직인 셀에서 무작위 추출)
   // ── 자기 화면 되먹임 억제(프로젝터 바닥투사를 천장 웹캠이 다시 보는 설치용) ──
+  // 판정 = '움직임의 공간적 퍼짐'. 사람=국소 덩어리(블록 소수), 되먹임 일렁임=바닥 전체.
+  // (횟수 기반 냉각은 관람객이 계속 놀 때도 끊겨서 폐기 — 퍼짐 기반은 사람에겐 안 걸림)
   const FB_GLOBAL_FRAC = 0.35;         // 변화 셀 비율이 이 이상 = 전역 변화(자기 화면) → 그 틱 무시
-  const FB_WINDOW_MS = 5000;           // 되먹임 판정 창
-  const FB_MAX = 220;                  // 창 내 모션 물결 상한(~70% 지속) 초과 → 냉각 시작
-  const FB_RESUME = 60;                // 이 이하로 줄면 냉각 해제(물이 잠잠해지면 자동 재개)
-  let fbTimes = [], fbCooldown = false;
+  const FB_WIDE_FRAC = 0.55;           // 움직임 블록 비율이 이 이상 = '넓게 퍼짐'(되먹임 의심)
+  const FB_WIDE_MS = 1300;             // 넓게 퍼진 상태가 이 시간 지속되면 냉각 시작
+  const FB_CALM_FRAC = 0.32;           // 이 미만으로 좁아진 상태가
+  const FB_CALM_MS = 600;              //   이 시간 지속되면 냉각 해제(사람 상호작용 즉시 재개)
+  let fbCooldown = false, fbWideAcc = 0, fbCalmAcc = 0, fbLastT = 0;
   let camFlip = false;                 // 카메라 좌우반전(a 키) — 화면표시+모션매핑 함께 뒤집음
   let camOn = false, xrayOn = false, camStream = null, camVideo = null;
   let camMonitorOn = false;              // 모니터링 미리보기 창(기본 꺼짐, W 토글)
@@ -625,9 +628,13 @@
           }
         }
       }
+      const now = performance.now();
+      const fdt = fbLastT ? Math.min(200, now - fbLastT) : 0;
+      fbLastT = now;
       // 되먹임 억제 ①: 화면 대부분이 동시에 변하면(슬라이드 전환·영상배경·전면 물결 일렁임이
       // 카메라에 되비침) 사람의 움직임이 아니므로 이번 틱을 통째로 무시
       if (cells.length > MW * MH * FB_GLOBAL_FRAC) {
+        fbWideAcc += fdt; fbCalmAcc = 0;       // 전역 변화도 '넓게 퍼짐'으로 집계
         motionTotal = 0; motionCells = []; motionPoints = [];
         prevLuma = luma;
         return;
@@ -637,8 +644,10 @@
       // 물고기 도망용 = 코어스 블록 점(시각적 격자 무관)
       const cellsPerBlock = (MW / MBX) * (MH / MBY);
       const pts = [];
+      let activeBlocks = 0;
       for (let by = 0; by < MBY; by++) {
         for (let bx = 0; bx < MBX; bx++) {
+          if (blocks[by * MBX + bx] > 0) activeBlocks++;
           const strength = Math.min(1, blocks[by * MBX + bx] / (cellsPerBlock * 70));
           if (strength > MOTION_BLOCK_T) {
             // 도망 힘: 마우스(w=1)에 준하도록 바닥값+게인 (가장자리 미세 움직임은 과하지 않게)
@@ -647,7 +656,17 @@
           }
         }
       }
-      motionPoints = fbCooldown ? [] : pts;   // 되먹임 냉각 중엔 도망점도 차단
+      // 되먹임 억제 ②: 움직임이 바닥 '전체에 넓게' 퍼진 상태가 지속될 때만 냉각(사람=국소라 안 걸림)
+      const wideFrac = activeBlocks / (MBX * MBY);
+      if (wideFrac > FB_WIDE_FRAC) { fbWideAcc += fdt; } else { fbWideAcc = 0; }
+      if (!fbCooldown && fbWideAcc > FB_WIDE_MS) { fbCooldown = true; fbCalmAcc = 0; }
+      if (fbCooldown) {
+        if (wideFrac < FB_CALM_FRAC) {
+          fbCalmAcc += fdt;
+          if (fbCalmAcc > FB_CALM_MS) { fbCooldown = false; fbWideAcc = 0; }
+        } else { fbCalmAcc = 0; }
+      }
+      motionPoints = fbCooldown ? [] : pts;   // 냉각 중엔 도망점도 차단
     }
     prevLuma = luma;
   }
@@ -656,16 +675,7 @@
   function motionSplashes() {
     const cells = motionCells;
     if (!cells.length) return;
-    // 되먹임 억제 ②: 모션 물결이 장시간 연속 폭주하면(물결→카메라→물결 루프) 잠시 냉각.
-    // 냉각 중엔 물결이 잦아들어 카메라도 잠잠해지고, 창 내 카운트가 줄면 자동 재개.
-    const now = performance.now();
-    while (fbTimes.length && now - fbTimes[0] > FB_WINDOW_MS) fbTimes.shift();
-    if (fbCooldown) {
-      if (fbTimes.length <= FB_RESUME) fbCooldown = false; else return;
-    } else if (fbTimes.length >= FB_MAX) {
-      fbCooldown = true;
-      return;
-    }
+    if (fbCooldown) return;    // 되먹임 냉각 중(넓게 퍼진 일렁임 지속) — updateMotion 이 판정
     const W = window.innerWidth, H = window.innerHeight;
     const n = Math.min(MOTION_SPLASH_N, cells.length);
     for (let i = 0; i < n; i++) {
@@ -673,7 +683,6 @@
       const sx = ((c.x + Math.random()) / MW) * W;            // 셀 내부 지터(연속 위치)
       const sy = ((c.y + Math.random()) / MH) * H;
       splash(sx, sy, 70 + 90 * Math.min(1, c.d / 100));       // 작은 물결 다수 → 자연스러운 교란
-      fbTimes.push(now);
     }
   }
 
