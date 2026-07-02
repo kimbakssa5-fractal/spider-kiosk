@@ -740,9 +740,11 @@ $('#backdrop').addEventListener('click', closePhoto);
 addEventListener('keydown', e => {
   if($('#share').classList.contains('on')){ if(e.key==='Escape') $('#share').classList.remove('on'); return; }
   if(!$('#overlay').classList.contains('on')){
-    if(e.key.toLowerCase()==='a') setAdmin(!state.admin);   // 관리자 토글 단축키
-    if(e.key.toLowerCase()==='f') toggleFS();               // 전체화면 토글
-    if(e.key>='1' && e.key<='9') setPerScreen(parseInt(e.key));  // TV당 칸 수 1~9
+    // 칸 수: 1~9 = 1~9칸,  a~i = 10~18칸 (TV 1대당). 같은 값 재입력 시 자동 복귀.
+    if(e.key>='1' && e.key<='9') setPerScreen(parseInt(e.key));
+    else if(e.key>='a' && e.key<='i') setPerScreen(10 + e.key.charCodeAt(0) - 'a'.charCodeAt(0));
+    else if(e.key==='A') setAdmin(!state.admin);   // Shift+A: 관리자 토글
+    else if(e.key==='F') toggleFS();               // Shift+F: 전체화면 토글
     return;
   }
   if(state.editing) return;
