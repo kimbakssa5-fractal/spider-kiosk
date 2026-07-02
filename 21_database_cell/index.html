@@ -295,6 +295,15 @@ const ADMIN_PIN = '0000';          // 관리자 PIN (?admin=1 로도 진입)
 const SCREENS   = 3;               // 세로 스크린 대수 (1080×1920 ×3 = 3240×1920, 75" TV 3대)
 // TV 1대당 칸 수 단축키(순서 = 1~18칸): 1~9 그리고 상단 열 q w e r t y u i o
 const COL_KEYS  = ['1','2','3','4','5','6','7','8','9','q','w','e','r','t','y','u','i','o'];
+// 물리 키(e.code) 기준 매핑 — 한글 입력(IME) 상태에서도 동작하도록
+const COL_CODES = {KeyQ:10,KeyW:11,KeyE:12,KeyR:13,KeyT:14,KeyY:15,KeyU:16,KeyI:17,KeyO:18};
+function keyToPerScreen(e){
+  if(COL_CODES[e.code]) return COL_CODES[e.code];            // q~o = 10~18
+  const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code || '');  // 1~9 (상단/넘패드)
+  if(m) return +m[1];
+  if(/^[1-9]$/.test(e.key)) return +e.key;                   // 최후 보루
+  return 0;
+}
 const $ = s => document.querySelector(s);
 
 const state = {
@@ -788,13 +797,13 @@ addEventListener('keydown', e => {
   if($('#share').classList.contains('on')){ if(e.key==='Escape') $('#share').classList.remove('on'); return; }
   if(!$('#overlay').classList.contains('on')){
     // 칸 수: 1~9 = 1~9칸,  q w e r t y u i o = 10~18칸 (TV 1대당). 같은 값 재입력 시 자동 복귀.
-    const ci = COL_KEYS.indexOf(e.key.toLowerCase());
-    if(ci >= 0) setPerScreen(ci + 1);
-    else if(e.key==='z') setSpeed(1);              // 현재(기본) 속도
-    else if(e.key==='x') setSpeed(2);              // 2배속
-    else if(e.key==='c') setSpeed(4);              // 4배속
-    else if(e.key==='A') setAdmin(!state.admin);   // Shift+A: 관리자 토글
-    else if(e.key==='F') toggleFS();               // Shift+F: 전체화면 토글
+    const n = keyToPerScreen(e);                   // 물리 키 기준(IME 무관)
+    if(n) setPerScreen(n);
+    else if(e.code==='KeyZ') setSpeed(1);          // 현재(기본) 속도
+    else if(e.code==='KeyX') setSpeed(2);          // 2배속
+    else if(e.code==='KeyC') setSpeed(4);          // 4배속
+    else if(e.code==='KeyA' && e.shiftKey) setAdmin(!state.admin);  // Shift+A: 관리자
+    else if(e.code==='KeyF' && e.shiftKey) toggleFS();             // Shift+F: 전체화면
     return;
   }
   if(state.editing) return;
