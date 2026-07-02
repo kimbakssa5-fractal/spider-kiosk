@@ -180,6 +180,29 @@
   @keyframes bl{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1)}}
   #err{max-width:520px;text-align:center;font-size:14px;line-height:1.7;color:#9aa2ad;padding:0 20px;}
 
+  /* ─── 손 제스처 포인터 (손바닥 펴면 스냅 장착, 머무름 3·2·1 클릭) ─── */
+  #gcursor{position:fixed;left:0;top:0;z-index:95;width:72px;height:72px;margin:-36px 0 0 -36px;
+    pointer-events:none;display:none;}
+  #gcursor.on{display:block;}
+  #gcursor .dot{position:absolute;inset:26px;border-radius:50%;background:rgba(77,163,255,.95);
+    box-shadow:0 0 16px rgba(77,163,255,.85), 0 0 3px #fff inset;}
+  #gcursor .ring{position:absolute;inset:0;border-radius:50%;
+    -webkit-mask:radial-gradient(closest-side, transparent 66%, #000 68%);
+            mask:radial-gradient(closest-side, transparent 66%, #000 68%);
+    background:conic-gradient(rgba(255,255,255,.18) 0 100%);}
+  #gcursor .num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:30px;font-weight:800;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.9);opacity:0;transition:opacity .15s;}
+  #gcursor.count .num{opacity:1;}
+  #gcursor.count .dot{opacity:.3;}
+  #gcursor.snap{animation:gsnap .4s cubic-bezier(.2,.8,.3,1);}
+  @keyframes gsnap{0%{transform:scale(2.6);opacity:0}100%{transform:scale(1);opacity:1}}
+  /* 제스처 상태 배지: 켜짐=흐림, 손 추적 중=밝게 */
+  #gbadge{position:fixed;left:18px;bottom:96px;z-index:9;width:34px;height:34px;border-radius:50%;
+    display:none;align-items:center;justify-content:center;font-size:16px;opacity:.45;transition:.2s;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);}
+  #gbadge.on{display:flex;}
+  #gbadge.track{opacity:1;background:rgba(77,163,255,.25);border-color:rgba(77,163,255,.65);}
+
   /* 단축키(칸 수 등) 안내 토스트 */
   #toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:82;
     padding:16px 30px;border-radius:44px;background:rgba(18,20,25,.86);color:#fff;
@@ -225,6 +248,7 @@
   <div class="hint" id="hint">사진을 터치하면 확대되고 정보가 나타납니다</div>
   <div class="gear" id="gear" title="관리자">⚙</div>
   <div class="gear" id="fsBtn" title="전체화면 (F)">⛶</div>
+  <div id="gbadge" title="손 제스처 (M)">🖐</div>
 
   <!-- 확대 상세 -->
   <div id="overlay">
@@ -816,6 +840,7 @@ addEventListener('keydown', e => {
     else if(e.code==='KeyB') setSpeed(16);         // 16배속
     else if(e.code==='KeyA' && e.shiftKey) setAdmin(!state.admin);  // Shift+A: 관리자
     else if(e.code==='KeyF' && e.shiftKey) toggleFS();             // Shift+F: 전체화면
+    else if(e.code==='KeyM') toggleGesture();                        // M: 손 제스처 on/off
     else if(SCREEN_CODES[e.code]) setScreens(SCREEN_CODES[e.code]);  // a~l: TV 1~9대
     return;
   }
@@ -855,6 +880,134 @@ requestFS();
   let t; const show = () => { document.body.classList.remove('hide-cursor'); clearTimeout(t); t=setTimeout(hide, 4000); };
   show(); addEventListener('mousemove', show, {passive:true});
 })();
+
+/* ══════════ 손 제스처(웹캠·MediaPipe) ══════════
+   ① 손바닥을 펴면 포인터가 스냅 장착되어 손을 따라다님
+   ② 사진/버튼 위에 머무르면 3·2·1 카운트다운 후 터치
+   단축키 M 토글 · ?gesture=1 자동 · 모든 처리 브라우저 내(영상 전송 없음) */
+const gest = { on:false, loading:false, rec:null, video:null, stream:null, raf:0, last:0,
+  px:innerWidth/2, py:innerHeight/2, snapped:false, lastSeen:0,
+  tgt:null, tx:0, ty:0, t0:0, cooldown:0 };
+const G_CLICKABLE = '.card,.act,.nav,#close,#zoomClose,.gear,.cls,.exp,.hz';
+const G_DWELL = 3.0;                 // 머무름 시간(초) → 3·2·1 표시
+
+function gCursor(){
+  let c = $('#gcursor');
+  if(!c){
+    c = document.createElement('div'); c.id = 'gcursor';
+    c.innerHTML = '<div class="ring"></div><div class="dot"></div><div class="num"></div>';
+    document.body.appendChild(c);
+  }
+  return c;
+}
+function gRing(p, num){
+  const c = gCursor();
+  c.querySelector('.ring').style.background =
+    `conic-gradient(var(--accent) ${Math.round(p*100)}%, rgba(255,255,255,.18) 0)`;
+  c.querySelector('.num').textContent = num;
+}
+function gReset(){ gest.tgt = null; gCursor().classList.remove('count'); gRing(0,''); }
+
+/* 포인터 갱신 + 머무름 판정 (카메라 루프·테스트 공용) */
+function gPointer(x, y, present){
+  const cur = gCursor();
+  $('#gbadge').classList.toggle('track', present);
+  if(!present){ cur.classList.remove('on','count'); gReset(); return; }
+  if(!cur.classList.contains('on')){ cur.classList.add('on','snap'); setTimeout(()=>cur.classList.remove('snap'), 450); gest.px=x; gest.py=y; }
+  gest.px += (x - gest.px) * 0.42;   // EMA 스무딩(떨림 제거)
+  gest.py += (y - gest.py) * 0.42;
+  cur.style.left = gest.px + 'px'; cur.style.top = gest.py + 'px';
+
+  const now = performance.now()/1000;
+  if(now < gest.cooldown){ gReset(); return; }
+  // 흐르는 벽 대응: 카운트 중이던 타깃(카드)이 움직여도, 포인터가 그 카드 영역(+여유) 안이면 유지
+  let tgt = null;
+  if(gest.tgt && document.contains(gest.tgt)){
+    const b = gest.tgt.getBoundingClientRect(), M = 34;
+    if(gest.px >= b.left-M && gest.px <= b.right+M && gest.py >= b.top-M && gest.py <= b.bottom+M) tgt = gest.tgt;
+  }
+  if(!tgt){
+    const el = document.elementFromPoint(gest.px, gest.py);
+    tgt = el && el.closest(G_CLICKABLE);
+  }
+  if(!tgt){ gReset(); return; }
+  const moved = Math.hypot(gest.px - gest.tx, gest.py - gest.ty);
+  if(tgt !== gest.tgt || moved > 60){ gest.tgt = tgt; gest.tx = gest.px; gest.ty = gest.py; gest.t0 = now; }
+  const elapsed = now - gest.t0, remain = G_DWELL - elapsed;
+  cur.classList.add('count');
+  gRing(Math.min(1, elapsed/G_DWELL), String(Math.max(1, Math.ceil(remain))));  // 3→2→1
+  if(remain <= 0){
+    gest.cooldown = now + 1.6;       // 연속 오클릭 방지
+    const t = gest.tgt; gReset();
+    t.click();                        // 기존 터치와 동일 경로
+  }
+}
+
+async function enableGesture(){
+  if(gest.on || gest.loading) return;
+  gest.loading = true; toast('손 제스처 준비 중…');
+  try{
+    const mp = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+    const files = await mp.FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    gest.rec = await mp.GestureRecognizer.createFromOptions(files, {
+      baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task', delegate:'GPU' },
+      runningMode:'VIDEO', numHands:1 });
+    gest.stream = await navigator.mediaDevices.getUserMedia({ video:{ width:640, height:360 } });
+    gest.video = document.createElement('video');
+    gest.video.playsInline = true; gest.video.muted = true; gest.video.srcObject = gest.stream;
+    await gest.video.play();
+    gest.on = true; save('dbwall_gesture', 1);
+    $('#gbadge').classList.add('on');
+    toast('손 제스처 ON — 손바닥을 펴세요 🖐');
+    gest.raf = requestAnimationFrame(gLoop);
+  }catch(err){
+    console.warn('gesture init', err);
+    toast('카메라 또는 모델을 사용할 수 없습니다');
+    save('dbwall_gesture', 0);
+  }
+  gest.loading = false;
+}
+function disableGesture(){
+  if(!gest.on) return;
+  gest.on = false; save('dbwall_gesture', 0);
+  cancelAnimationFrame(gest.raf);
+  if(gest.stream) gest.stream.getTracks().forEach(t => t.stop());
+  gest.video = null; gest.snapped = false;
+  gPointer(0, 0, false);
+  $('#gbadge').classList.remove('on','track');
+  toast('손 제스처 OFF');
+}
+function toggleGesture(){ gest.on ? disableGesture() : enableGesture(); }
+$('#gbadge').addEventListener('click', toggleGesture);   // 배지 클릭(마우스/터치)으로도 토글
+
+function gLoop(t){
+  if(!gest.on) return;
+  gest.raf = requestAnimationFrame(gLoop);
+  if(t - gest.last < 50) return;     // 검출 ~20fps (벽 애니메이션과 경합 방지)
+  gest.last = t;
+  let res; try{ res = gest.rec.recognizeForVideo(gest.video, performance.now()); }catch(e){ return; }
+  const lms = res.landmarks && res.landmarks[0];
+  const cat = res.gestures && res.gestures[0] && res.gestures[0][0];
+  const palm = !!(cat && cat.categoryName === 'Open_Palm' && cat.score > 0.5);
+  const now = performance.now()/1000;
+  if(lms && (gest.snapped || palm)){
+    if(!gest.snapped) gest.snapped = true;          // 손바닥 확인 시 스냅 장착
+    gest.lastSeen = now;
+    let x=0, y=0; [0,5,9,13,17].forEach(i => { x += lms[i].x; y += lms[i].y; });  // 손바닥 중심
+    x = 1 - x/5; y = y/5;                            // 좌우 미러
+    const nx = Math.min(1, Math.max(0, (x - 0.15) / 0.70));   // 중앙영역 → 전체화면 매핑
+    const ny = Math.min(1, Math.max(0, (y - 0.20) / 0.60));
+    gPointer(nx * innerWidth, ny * innerHeight, true);
+  } else if(gest.snapped && now - gest.lastSeen > 0.8){
+    gest.snapped = false;                            // 손 사라짐 → 포인터 분리
+    gPointer(0, 0, false);
+  }
+}
+window.__gestTest = (x, y, p) => gPointer(x, y, p);   // 카메라 없는 환경 검증용
+
+if(new URLSearchParams(location.search).get('gesture') === '1' || load('dbwall_gesture', 0) == 1)
+  addEventListener('pointerdown', () => enableGesture(), { once:true });   // 첫 터치 시 자동 시작(권한 UX)
 
 boot();
 </script>
