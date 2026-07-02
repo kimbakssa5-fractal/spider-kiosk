@@ -292,11 +292,13 @@
    database/ 폴더의 사진을 자동 배치·흐름, 터치 확대·정보, 관리자 편집
    ════════════════════════════════════════════════════════════ */
 const ADMIN_PIN = '0000';          // 관리자 PIN (?admin=1 로도 진입)
-const SCREENS   = 3;               // 세로 스크린 대수 (1080×1920 ×3 = 3240×1920, 75" TV 3대)
+let   SCREENS   = load('dbwall_screens', 3);  // TV(세로 스크린) 대수 — 홈row a~l 로 1~9대 조절
 // TV 1대당 칸 수 단축키(순서 = 1~18칸): 1~9 그리고 상단 열 q w e r t y u i o
 const COL_KEYS  = ['1','2','3','4','5','6','7','8','9','q','w','e','r','t','y','u','i','o'];
 // 물리 키(e.code) 기준 매핑 — 한글 입력(IME) 상태에서도 동작하도록
 const COL_CODES = {KeyQ:10,KeyW:11,KeyE:12,KeyR:13,KeyT:14,KeyY:15,KeyU:16,KeyI:17,KeyO:18};
+// TV 대수 단축키(홈row): a=1 s=2 d=3 f=4 g=5 h=6 j=7 k=8 l=9
+const SCREEN_CODES = {KeyA:1,KeyS:2,KeyD:3,KeyF:4,KeyG:5,KeyH:6,KeyJ:7,KeyK:8,KeyL:9};
 function keyToPerScreen(e){
   if(COL_CODES[e.code]) return COL_CODES[e.code];            // q~o = 10~18
   const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code || '');  // 1~9 (상단/넘패드)
@@ -477,6 +479,12 @@ function markHotzone(){
 function setSpeed(m){
   state.speedMul = m; save('dbwall_speed', m);
   toast(m === 1 ? '기본 속도' : m + '배속');
+}
+/* TV(세로 스크린) 대수 — 홈row a~l = 1~9대 */
+function setScreens(n){
+  SCREENS = n; save('dbwall_screens', n);
+  buildWall(); flow.last = performance.now();
+  toast('TV ' + n + '대');
 }
 /* 상단 숨김 단축키 터치영역 18칸(1~9, q w e r t y u i o) 생성 */
 (function buildHotzones(){
@@ -808,6 +816,7 @@ addEventListener('keydown', e => {
     else if(e.code==='KeyB') setSpeed(16);         // 16배속
     else if(e.code==='KeyA' && e.shiftKey) setAdmin(!state.admin);  // Shift+A: 관리자
     else if(e.code==='KeyF' && e.shiftKey) toggleFS();             // Shift+F: 전체화면
+    else if(SCREEN_CODES[e.code]) setScreens(SCREEN_CODES[e.code]);  // a~l: TV 1~9대
     return;
   }
   if(state.editing) return;
