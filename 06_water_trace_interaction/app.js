@@ -1061,7 +1061,7 @@
   const vkbd = document.getElementById("vkbd");
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
-    ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
+    ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
     ["KeyY", "윤슬 Y"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
@@ -1121,6 +1121,14 @@
       applySens(+this.value);
       showHud("센싱 민감도  " + this.value + "  (임계 " + MOTION_DIFF_T + ")");
     });
+  }
+  // 민감도 단축키: p=올리기 / l=내리기 (5씩, 슬라이더와 동기)
+  function stepSens(dir) {
+    const cur = sensSlider ? +sensSlider.value : 40;
+    const v = clamp(cur + dir * 5, 0, 100);
+    if (sensSlider) sensSlider.value = v;
+    applySens(v);
+    showHud("센싱 민감도  " + v + "  (임계 " + MOTION_DIFF_T + ")");
   }
 
   // ---------------------------------------------------------------
@@ -1188,6 +1196,8 @@
       case "KeyC": if (e.repeat) return; e.preventDefault(); toggleCamera(); break;
       case "KeyX": if (e.repeat) return; e.preventDefault(); toggleXray(); break;
       case "KeyA": if (e.repeat) return; e.preventDefault(); toggleCamFlip(); break;
+      case "KeyP": e.preventDefault(); stepSens(+1); break;   // 캠 민감도 올리기
+      case "KeyL": e.preventDefault(); stepSens(-1); break;   // 캠 민감도 내리기
       case "KeyV": if (e.repeat) return; e.preventDefault(); toggleVideoBg(); break;
       case "KeyW": if (e.repeat) return; e.preventDefault(); toggleCamMonitor(); break;
       case "KeyT": if (e.repeat) return; e.preventDefault(); toggleKoiGroup(); break;
