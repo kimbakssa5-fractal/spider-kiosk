@@ -1078,9 +1078,10 @@
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
   if (fishMinusBtn) fishMinusBtn.addEventListener("click", function () { setFishCount(-1); });
 
-  // 카메라 센싱 민감도 슬라이더: 값 0(둔감)~100(예민) → MOTION_DIFF_T 58~8 (클수록 둔감)
+  // 카메라 센싱 민감도 슬라이더: 값 0(매우 둔감)~100(매우 예민) → MOTION_DIFF_T 150~3 (클수록 둔감)
+  //  프로젝터 바닥 투사처럼 화면 자체가 밝아 오작동하면 왼쪽으로 내려 크게 둔감화.
   const sensSlider = document.getElementById("sensSlider");
-  function applySens(v) { MOTION_DIFF_T = Math.round(58 - v * 0.5); }
+  function applySens(v) { MOTION_DIFF_T = Math.max(3, Math.round(150 - v * 1.47)); }
   if (sensSlider) {
     applySens(+sensSlider.value);
     sensSlider.addEventListener("input", function () {
