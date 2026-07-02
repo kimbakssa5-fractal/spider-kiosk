@@ -512,7 +512,7 @@ function markHotzone(){
 /* 흐름 속도 배율(z=1, x=2, c=4) */
 function setSpeed(m){
   state.speedMul = m; save('dbwall_speed', m);
-  toast(m === 1 ? '기본 속도' : m + '배속');
+  toast(m === 0 ? '정지' : m === 1 ? '기본 속도' : m + '배속');
 }
 /* TV(세로 스크린) 대수 — 홈row a~l = 1~9대 */
 function setScreens(n){
@@ -844,11 +844,12 @@ addEventListener('keydown', e => {
     // 칸 수: 1~9 = 1~9칸,  q w e r t y u i o = 10~18칸 (TV 1대당). 같은 값 재입력 시 자동 복귀.
     const n = keyToPerScreen(e);                   // 물리 키 기준(IME 무관)
     if(n) setPerScreen(n);
-    else if(e.code==='KeyZ') setSpeed(1);          // 현재(기본) 속도
-    else if(e.code==='KeyX') setSpeed(2);          // 2배속
-    else if(e.code==='KeyC') setSpeed(4);          // 4배속
-    else if(e.code==='KeyV') setSpeed(8);          // 8배속
-    else if(e.code==='KeyB') setSpeed(16);         // 16배속
+    else if(e.code==='KeyZ') setSpeed(0);          // 정지
+    else if(e.code==='KeyX') setSpeed(1);          // 기본 속도
+    else if(e.code==='KeyC') setSpeed(2);          // 2배속
+    else if(e.code==='KeyV') setSpeed(4);          // 4배속
+    else if(e.code==='KeyB') setSpeed(8);          // 8배속
+    else if(e.code==='KeyN') setSpeed(16);         // 16배속
     else if(e.code==='KeyA' && e.shiftKey) setAdmin(!state.admin);  // Shift+A: 관리자
     else if(e.code==='KeyF' && e.shiftKey) toggleFS();             // Shift+F: 전체화면
     else if(e.code==='KeyM') toggleGesture();                        // M: 손 제스처 on/off
