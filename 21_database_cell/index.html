@@ -180,6 +180,14 @@
   @keyframes bl{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1)}}
   #err{max-width:520px;text-align:center;font-size:14px;line-height:1.7;color:#9aa2ad;padding:0 20px;}
 
+  /* 단축키(칸 수 등) 안내 토스트 */
+  #toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:82;
+    padding:16px 30px;border-radius:44px;background:rgba(18,20,25,.86);color:#fff;
+    font-size:22px;font-weight:600;letter-spacing:.02em;opacity:0;pointer-events:none;
+    transition:opacity .18s;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    box-shadow:0 14px 44px rgba(0,0,0,.5);}
+  #toast.show{opacity:1;}
+
   @media (max-width:820px){
     .panel h2{font-size:21px;} .panel .desc{max-height:18vh;} .panel{padding:16px 18px;}
     .brand{font-size:17px;top:16px;right:18px;}
@@ -275,6 +283,7 @@ const state = {
   userLikes: load('dbwall_likes', {}),       // 방문자 좋아요 {id:delta}
   admin: false, cur: -1, fromEl: null, editing: false,
   touch: {x:0, y:0}, imgW: 0, imgH: 0,   // 터치 지점 · 확대 사진 표시크기
+  perScreen: load('dbwall_perscreen', null),   // TV 1대당 칸 수(1~9, null=자동)
 };
 function load(k, d){ try{ return JSON.parse(localStorage.getItem(k)) || d; }catch(e){ return d; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -327,8 +336,14 @@ function buildWall(){
   flow.cols = [];
   const W = innerWidth, H = innerHeight;
   const gap = Math.max(5, Math.round(W/300));
-  const target = W < 700 ? 116 : 132;                 // 목표 컬럼 폭(px) → 촘촘한 벽
-  const nCols = Math.max(4, Math.round(W / target));
+  // TV 1대당 칸 수: 단축키 1~9로 지정(state.perScreen) → 없으면 폭 기준 자동
+  let nCols;
+  if(state.perScreen){
+    nCols = SCREENS * state.perScreen;                // 스크린 수 × TV당 칸 수 (심에 정확히 정렬)
+  } else {
+    const target = W < 700 ? 116 : 132;               // 목표 컬럼 폭(px) → 촘촘한 벽
+    nCols = Math.max(4, Math.round(W / target));
+  }
   const realColW = W / nCols;
 
   // 셔플된 사진을 여러 컬럼에 순환 배치
@@ -414,6 +429,21 @@ let rzTmr;
 addEventListener('resize', () => { clearTimeout(rzTmr); rzTmr = setTimeout(() => {
   buildWall(); flow.last = performance.now();
 }, 220); });
+
+/* TV 1대당 칸 수 지정(단축키 1~9). 다시 같은 숫자를 누르면 자동으로 복귀. */
+function setPerScreen(n){
+  state.perScreen = (state.perScreen === n) ? null : n;
+  save('dbwall_perscreen', state.perScreen);
+  buildWall(); flow.last = performance.now();
+  toast(state.perScreen ? `TV 1대당 ${n}칸` : '칸 수 자동');
+}
+let toastTmr;
+function toast(msg){
+  let el = $('#toast');
+  if(!el){ el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTmr); toastTmr = setTimeout(() => el.classList.remove('show'), 1300);
+}
 
 /* ══════════ 카드 클릭 → 확대 ══════════ */
 $('#cols').addEventListener('click', e => {
@@ -712,6 +742,7 @@ addEventListener('keydown', e => {
   if(!$('#overlay').classList.contains('on')){
     if(e.key.toLowerCase()==='a') setAdmin(!state.admin);   // 관리자 토글 단축키
     if(e.key.toLowerCase()==='f') toggleFS();               // 전체화면 토글
+    if(e.key>='1' && e.key<='9') setPerScreen(parseInt(e.key));  // TV당 칸 수 1~9
     return;
   }
   if(state.editing) return;
