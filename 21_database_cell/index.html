@@ -49,8 +49,8 @@
 
   /* ─── 상단 브랜드 / 하단 힌트 ─── */
   .brand{position:fixed;top:26px;right:34px;z-index:8;font-weight:300;font-size:22px;
-    letter-spacing:.01em;color:#e9eef5;pointer-events:none;
-    text-shadow:0 2px 12px rgba(0,0,0,.8);}
+    letter-spacing:.01em;color:#e9eef5;cursor:pointer;
+    text-shadow:0 2px 12px rgba(0,0,0,.8);}   /* 터치 시 단축키 패널 */
   .brand b{font-weight:800;}
   .brand .bar{display:inline-block;width:2px;height:20px;background:#fff;
     margin-left:10px;vertical-align:-3px;opacity:.85;}
@@ -212,6 +212,29 @@
     font-size:13px;font-weight:600;color:#fff;background:rgba(10,12,16,.8);
     padding:7px 11px;border-radius:8px;border:1px solid var(--line);white-space:nowrap;}
   #ghud.show{display:block;}
+
+  /* ─── 단축키 패널(M/제목 터치) & 제스처 매뉴얼(Space) ─── */
+  #keypanel,#gmanual{position:fixed;inset:0;z-index:88;display:none;align-items:center;justify-content:center;
+    background:rgba(3,4,6,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+  #keypanel.show,#gmanual.show{display:flex;}
+  .kp,.gm{background:rgba(15,17,22,.97);border:1px solid var(--line);border-radius:18px;
+    padding:22px 26px;max-width:min(92vw,780px);max-height:84vh;overflow:auto;
+    box-shadow:0 30px 90px rgba(0,0,0,.65);}
+  .kp h3,.gm h3{font-size:18px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:20px;}
+  .kp .sec{margin-top:15px;}
+  .kp .sec label{display:block;font-size:12px;letter-spacing:.12em;color:var(--muted);margin-bottom:7px;}
+  .kp .sec > div{display:flex;flex-wrap:wrap;gap:7px;}
+  .kbtn{font-family:inherit;font-size:14px;font-weight:600;color:#e8edf4;background:rgba(255,255,255,.07);
+    border:1px solid var(--line);border-radius:30px;padding:9px 14px;cursor:pointer;transition:.15s;}
+  .kbtn:hover{background:rgba(255,255,255,.15);}
+  .kbtn.cur{background:var(--accent);color:#07121f;border-color:transparent;}
+  .kbtn.x{font-size:13px;font-weight:500;}
+  .kp .foot{margin-top:16px;font-size:12px;color:var(--muted);line-height:1.5;}
+  .gm table{border-collapse:collapse;margin-top:12px;}
+  .gm td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:15px;vertical-align:middle;}
+  .gm td:first-child{font-size:24px;}
+  .gm td:nth-child(2){font-weight:600;white-space:nowrap;}
+  .gm td:last-child{color:#aab3bf;font-weight:300;line-height:1.5;}
 
   /* 단축키(칸 수 등) 안내 토스트 */
   #toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:82;
@@ -622,18 +645,33 @@ function scatter(cx, cy, on){
   });
 }
 
-/* FLIP: 카드 위치/크기에서 확대 사진으로 자라나기 */
+/* FLIP: 카드 위치/크기에서 확대 사진으로 자라나기 + TCB 탄성 정착
+   (Tension·Continuity·Bias 느낌의 감쇠 진동: 105→94→103→97→101→99.6→100%,
+    각 진동의 시간 간격도 점차 짧아지며 '또요요용~' 하고 멎음) */
+function elasticSettle(el){
+  el.animate([
+    {transform:'scale(1)',     offset:0},
+    {transform:'scale(1.05)',  offset:0.14},   // overshoot (Bias: 앞쪽 쏠림)
+    {transform:'scale(0.94)',  offset:0.32},
+    {transform:'scale(1.03)',  offset:0.50},   // 진폭·주기 감쇠 (Tension)
+    {transform:'scale(0.97)',  offset:0.66},
+    {transform:'scale(1.012)', offset:0.80},
+    {transform:'scale(0.996)', offset:0.90},   // 부드러운 수렴 (Continuity)
+    {transform:'scale(1)',     offset:1}
+  ], {duration:640, easing:'linear'});
+}
 function flipIn(fromRect){
   const img = $('#bigImg');
   const run = () => {
-    if(!fromRect) return;
     const last = img.getBoundingClientRect(); if(!last.width) return;
+    if(!fromRect){ elasticSettle(img); return; }        // 딥링크 진입도 탄성만
     const dx=fromRect.left-last.left, dy=fromRect.top-last.top;
     const sx=fromRect.width/last.width, sy=fromRect.height/last.height;
-    img.animate(
+    const a = img.animate(
       [{transformOrigin:'top left', transform:`translate(${dx}px,${dy}px) scale(${sx},${sy})`, opacity:.55},
        {transform:'none', opacity:1}],
-      {duration:460, easing:'cubic-bezier(.2,.85,.25,1)'});
+      {duration:330, easing:'cubic-bezier(.3,.9,.4,1)'});
+    a.onfinish = () => elasticSettle(img);              // 성장 후 쫄깃한 정착
   };
   if(img.complete) run(); else img.onload = run;
 }
@@ -840,6 +878,11 @@ $('#next').addEventListener('click', () => step(1));
 $('#backdrop').addEventListener('click', closePhoto);
 addEventListener('keydown', e => {
   if($('#share').classList.contains('on')){ if(e.key==='Escape') $('#share').classList.remove('on'); return; }
+  if(!state.editing){
+    if(e.code==='Space'){ e.preventDefault(); toggleManual(); return; }        // Space: 제스처 매뉴얼
+    if(e.code==='KeyM'){ toggleKeyPanel(); return; }                           // M: 단축키 패널
+    if(e.code==='Digit0' || e.code==='Numpad0'){ toggleGesture(); return; }    // 0: 카메라(손 제스처)
+  }
   if(!$('#overlay').classList.contains('on')){
     // 칸 수: 1~9 = 1~9칸,  q w e r t y u i o = 10~18칸 (TV 1대당). 같은 값 재입력 시 자동 복귀.
     const n = keyToPerScreen(e);                   // 물리 키 기준(IME 무관)
@@ -852,7 +895,6 @@ addEventListener('keydown', e => {
     else if(e.code==='KeyN') setSpeed(16);         // 16배속
     else if(e.code==='KeyA' && e.shiftKey) setAdmin(!state.admin);  // Shift+A: 관리자
     else if(e.code==='KeyF' && e.shiftKey) toggleFS();             // Shift+F: 전체화면
-    else if(e.code==='KeyM') toggleGesture();                        // M: 손 제스처 on/off
     else if(SCREEN_CODES[e.code]) setScreens(SCREEN_CODES[e.code]);  // a~l: TV 1~9대
     return;
   }
@@ -899,7 +941,10 @@ requestFS();
    단축키 M 토글 · ?gesture=1 자동 · 모든 처리 브라우저 내(영상 전송 없음) */
 const gest = { on:false, loading:false, rec:null, video:null, stream:null, raf:0, last:0,
   px:innerWidth/2, py:innerHeight/2, snapped:false, lastSeen:0,
-  tgt:null, tx:0, ty:0, t0:0, cooldown:0 };
+  tgt:null, tx:0, ty:0, t0:0, cooldown:0,
+  multi:false, two:false, twoD0:0, twoS0:1,        // 양손 줌
+  trail:[], swipeCool:0,                            // 스와이프 판정
+  pinchOn:false, fistT0:0, fistCool:0 };            // 핀치/주먹
 const G_CLICKABLE = '.card,.act,.nav,#close,#zoomClose,.gear,.cls,.exp,.hz';
 const G_DWELL = 1.0;                 // 머무름 시간(초) — 3·2·1 이 1초 안에 지나감
 
@@ -926,15 +971,15 @@ function gPointer(x, y, present){
   $('#gbadge').classList.toggle('track', present);
   if(!present){ cur.classList.remove('on','count'); gReset(); return; }
   if(!cur.classList.contains('on')){ cur.classList.add('on','snap'); setTimeout(()=>cur.classList.remove('snap'), 450); gest.px=x; gest.py=y; }
-  // 가속 스무딩: 손이 빠르면 즉각 따라가고(가속), 느리면 강하게 필터링(정밀)
+  // 가속 스무딩: 손이 빠르면 즉각 따라가고(급가속), 느리면 강하게 필터링(정밀)
   const gdist = Math.hypot(x - gest.px, y - gest.py);
-  const ga = Math.min(0.95, 0.10 + gdist / 130);
+  const ga = Math.min(1, 0.12 + gdist / 40);
   gest.px += (x - gest.px) * ga;
   gest.py += (y - gest.py) * ga;
   cur.style.left = gest.px + 'px'; cur.style.top = gest.py + 'px';
 
   const now = performance.now()/1000;
-  if(now < gest.cooldown){ gReset(); return; }
+  if(now < gest.cooldown || gest.multi){ gReset(); return; }   // 쿨다운/양손 줌 중엔 머무름 판정 없음
   // 흐르는 벽 대응: 카운트 중이던 타깃(카드)이 움직여도, 포인터가 그 카드 영역(+여유) 안이면 유지
   let tgt = null;
   if(gest.tgt && document.contains(gest.tgt)){
@@ -988,7 +1033,7 @@ async function enableGesture(){
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
     const opts = (delegate) => ({
       baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate },
-      runningMode:'VIDEO', numHands:1,
+      runningMode:'VIDEO', numHands:2,
       minHandDetectionConfidence:0.3, minHandPresenceConfidence:0.3, minTrackingConfidence:0.3 });
     try{ gest.rec = await mp.HandLandmarker.createFromOptions(files, opts('GPU')); }
     catch(e){ console.warn('GPU 실패 → CPU', e); gest.rec = await mp.HandLandmarker.createFromOptions(files, opts('CPU')); }
@@ -1042,33 +1087,186 @@ function gLoop(t){
   const vw = gest.video.videoWidth || 0;
   if(vw === 0){ gHud(null, 0, vw); return; }         // 카메라 프레임 아직 없음
   let res; try{ res = gest.rec.detectForVideo(gest.video, performance.now()); }catch(e){ return; }
-  const lms = res.landmarks && res.landmarks[0];
-  let ext = 0;                                        // 펴진 손가락 수(진단용)
+  const hands = res.landmarks || [];
+  const lms = hands[0];
+  const now = performance.now()/1000;
+  if(hands.length) lastAct = now;                     // 손 감지 = 상호작용(유휴 환원 방지)
+
+  // 첫 손: 펴진 손가락 수 + 핀치(엄지·검지 맞닿음) 판정
+  let ext = 0, pinch = false;
   if(lms){
     const w = lms[0];
     [[8,6],[12,10],[16,14],[20,18]].forEach(p => {
       if(Math.hypot(lms[p[0]].x-w.x, lms[p[0]].y-w.y) > Math.hypot(lms[p[1]].x-w.x, lms[p[1]].y-w.y)*1.05) ext++;
     });
+    const hs = Math.hypot(lms[9].x-w.x, lms[9].y-w.y) || 1e-3;   // 손 크기(거리 무관 비율용)
+    pinch = Math.hypot(lms[4].x-lms[8].x, lms[4].y-lms[8].y) / hs < 0.38;
   }
   gHud(res, ext, vw);
-  // 현장 확인용 상태: 배지(주황=손 감지, 파랑=장착) + 미리보기 테두리색
   $('#gbadge').classList.toggle('seen', !!lms && !gest.snapped);
   if(gest.video) gest.video.style.borderColor =
     gest.snapped ? 'rgba(77,163,255,.9)' : (lms ? 'rgba(255,190,60,.85)' : 'rgba(255,255,255,.25)');
-  const now = performance.now()/1000;
-  if(lms){                                            // 손이 감지되면 즉시 포인터 장착(관대)
+  gest.multi = hands.length >= 2;
+
+  // ── 🙌 양손 벌리기/오므리기(확대 보기 중) = 확대/축소 ──
+  if(gest.multi && $('#overlay').classList.contains('on')){
+    const c = [0,1].map(i => { let X=0,Y=0; [0,5,9,13,17].forEach(k=>{X+=hands[i][k].x;Y+=hands[i][k].y;}); return {x:X/5,y:Y/5}; });
+    const d = Math.hypot(c[0].x-c[1].x, c[0].y-c[1].y);
+    if(!gest.two){
+      gest.two = true; gest.twoD0 = d;
+      if(!$('#stage').classList.contains('zoom')) enterZoom();
+      gest.twoS0 = zoom.scale || 1;
+    } else {
+      zoom.scale = Math.min(6, Math.max(1, gest.twoS0 * d / gest.twoD0)); applyZoom();
+    }
+  } else gest.two = false;
+
+  if(lms){                                            // 손이 감지되면 즉시 포인터 장착
     if(!gest.snapped) gest.snapped = true;
     gest.lastSeen = now;
     let x=0, y=0; [0,5,9,13,17].forEach(i => { x += lms[i].x; y += lms[i].y; });  // 손바닥 중심
-    x = 1 - x/5; y = y/5;                            // 좌우 미러
+    x = 1 - x/5; y = y/5;                             // 좌우 미러
     const nx = Math.min(1, Math.max(0, (x - 0.15) / 0.70));   // 중앙영역 → 전체화면 매핑
     const ny = Math.min(1, Math.max(0, (y - 0.20) / 0.60));
-    gPointer(nx * innerWidth, ny * innerHeight, true);
+    const rx = nx * innerWidth, ry = ny * innerHeight;
+
+    // ── 👉 스와이프(확대 보기 중, 한 손): 좌=다음 · 우=이전 ──
+    gest.trail.push({t:now, x:rx});
+    while(gest.trail.length && now - gest.trail[0].t > 0.30) gest.trail.shift();
+    if(!gest.multi && $('#overlay').classList.contains('on') && now > gest.swipeCool && gest.trail.length >= 3){
+      const dx = rx - gest.trail[0].x;
+      if(Math.abs(dx) > innerWidth * 0.28){
+        step(dx < 0 ? 1 : -1);
+        gest.swipeCool = now + 1.0; gest.trail.length = 0; gReset();
+      }
+    }
+
+    // ── 🤏 핀치 = 즉시 터치 ──
+    if(pinch && !gest.pinchOn && now > gest.cooldown && !gest.multi){
+      const el = document.elementFromPoint(gest.px, gest.py);
+      const tgt = el && el.closest(G_CLICKABLE);
+      if(tgt){ gest.cooldown = now + 1.0; gReset(); gPulse(); tgt.click(); }
+    }
+    gest.pinchOn = pinch;
+
+    // ── ✊ 주먹(0.4초 유지) = 닫기 ──
+    if(ext === 0 && !pinch){
+      if(!gest.fistT0) gest.fistT0 = now;
+      if(now - gest.fistT0 > 0.4 && now > gest.fistCool){
+        gest.fistCool = now + 1.5; gest.fistT0 = 0;
+        const gm = $('#gmanual'), kp = $('#keypanel');
+        if(gm && gm.classList.contains('show')) gm.classList.remove('show');
+        else if(kp && kp.classList.contains('show')) kp.classList.remove('show');
+        else if($('#share').classList.contains('on')) $('#share').classList.remove('on');
+        else if($('#stage').classList.contains('zoom')) exitZoom();
+        else if($('#overlay').classList.contains('on')) closePhoto();
+      }
+    } else gest.fistT0 = 0;
+
+    gPointer(rx, ry, true);
   } else if(gest.snapped && now - gest.lastSeen > 0.8){
-    gest.snapped = false;                            // 손 사라짐 → 포인터 분리
+    gest.snapped = false; gest.trail.length = 0;      // 손 사라짐 → 포인터 분리
     gPointer(0, 0, false);
   }
 }
+function gPulse(){                                     // 핀치 클릭 시 포인터 펄스
+  const c = gCursor();
+  c.animate([{transform:'scale(1.6)', opacity:.7},{transform:'scale(1)', opacity:1}], {duration:240, easing:'ease-out'});
+}
+/* ══════════ 단축키 패널(M / '미디어 월' 터치) & 제스처 매뉴얼(Space) ══════════ */
+function setPerScreenDirect(n){                        // 토글 없는 직접 지정(패널·환원용)
+  state.perScreen = n; save('dbwall_perscreen', n);
+  buildWall(); flow.last = performance.now(); markHotzone();
+}
+function toggleKeyPanel(){
+  let p = $('#keypanel');
+  if(p && p.classList.contains('show')){ p.classList.remove('show'); return; }
+  if(!p){
+    p = document.createElement('div'); p.id = 'keypanel'; document.body.appendChild(p);
+    p.addEventListener('click', e => {
+      if(e.target === p){ p.classList.remove('show'); return; }
+      const b = e.target.closest('.kbtn'); if(!b) return;
+      const a = b.dataset.act.split(':'), fn = a[0], v = a[1];
+      if(fn==='tv') setScreens(+v);
+      else if(fn==='col'){ setPerScreenDirect(v==='auto' ? null : +v); toast(v==='auto' ? '칸 수 자동' : `TV 1대당 ${v}칸`); }
+      else if(fn==='spd') setSpeed(+v);
+      else if(fn==='cam') toggleGesture();
+      else if(fn==='man'){ p.classList.remove('show'); toggleManual(); return; }
+      else if(fn==='fs') toggleFS();
+      else if(fn==='adm') setAdmin(!state.admin);
+      else if(fn==='x'){ p.classList.remove('show'); return; }
+      buildKeyPanel(p);                                // 현재값 하이라이트 갱신
+    });
+  }
+  buildKeyPanel(p); p.classList.add('show');
+  const gm = $('#gmanual'); if(gm) gm.classList.remove('show');
+}
+function buildKeyPanel(p){
+  const chip = (label, act, cur) => `<button class="kbtn${cur?' cur':''}" data-act="${act}">${label}</button>`;
+  let h = `<div class="kp"><h3>단축키 · 설정 <button class="kbtn x" data-act="x:">✕ 닫기</button></h3>`;
+  h += `<div class="sec"><label>TV 대수 — 키 a s d f g h j k l</label><div>`;
+  for(let i=1;i<=9;i++) h += chip(i+'대', 'tv:'+i, SCREENS===i);
+  h += `</div></div><div class="sec"><label>TV당 칸 수 — 키 1~9, q w e r t y u i o</label><div>`;
+  h += chip('자동', 'col:auto', state.perScreen==null);
+  for(let i=1;i<=18;i++) h += chip(i+'칸', 'col:'+i, state.perScreen===i);
+  h += `</div></div><div class="sec"><label>흐름 속도 — 키 z x c v b n</label><div>`;
+  [['정지',0],['1배',1],['2배',2],['4배',4],['8배',8],['16배',16]].forEach(s => h += chip(s[0], 'spd:'+s[1], state.speedMul===s[1]));
+  h += `</div></div><div class="sec"><label>카메라 손 제스처 — 키 0</label><div>`;
+  h += chip(gest.on ? '켜짐 — 끄기' : '꺼짐 — 켜기', 'cam:', gest.on);
+  h += chip('제스처 매뉴얼 (Space)', 'man:');
+  h += `</div></div><div class="sec"><label>기타</label><div>`;
+  h += chip('전체화면 (Shift+F)', 'fs:');
+  h += chip((state.admin?'관리자 끄기':'관리자 켜기')+' (Shift+A)', 'adm:', state.admin);
+  h += `</div></div><div class="foot">2분간 조작이 없으면 TV 3대 · 5칸 · 기본 속도 · 카메라 꺼짐으로 자동 환원됩니다</div></div>`;
+  p.innerHTML = h;
+}
+function toggleManual(){
+  let p = $('#gmanual');
+  if(!p){
+    p = document.createElement('div'); p.id = 'gmanual';
+    p.innerHTML = `<div class="gm"><h3>손 제스처 매뉴얼 <button class="kbtn x">✕ 닫기</button></h3><table>
+      <tr><td>🖐</td><td>손 들기</td><td>포인터가 손에 장착 — 빠르게 움직이면 가속, 천천히 움직이면 정밀</td></tr>
+      <tr><td>⏱</td><td>1초 머무름</td><td>사진·버튼 위에 멈추면 3·2·1 후 터치</td></tr>
+      <tr><td>🤏</td><td>핀치(엄지+검지)</td><td>즉시 터치</td></tr>
+      <tr><td>👉</td><td>스와이프 (확대 중)</td><td>왼쪽=다음 사진 · 오른쪽=이전 사진</td></tr>
+      <tr><td>✊</td><td>주먹 0.4초</td><td>닫기 (확대·공유·매뉴얼)</td></tr>
+      <tr><td>🙌</td><td>양손 벌리기·오므리기 (확대 중)</td><td>크게 확대 / 축소</td></tr>
+      <tr><td>⌨</td><td>0 키 / 🖐 배지</td><td>카메라 켜기·끄기</td></tr></table></div>`;
+    document.body.appendChild(p);
+    p.addEventListener('click', e => { if(e.target === p || e.target.closest('.kbtn')) p.classList.remove('show'); });
+  }
+  p.classList.toggle('show');
+  const kp = $('#keypanel'); if(kp) kp.classList.remove('show');
+}
+document.querySelector('.brand').addEventListener('click', toggleKeyPanel);   // '미디어 월' 터치로도 패널
+
+/* ══════════ 유휴 자동 환원: 2분 무조작 → TV3대 · 5칸 · 1배속 · 카메라 꺼짐 ══════════ */
+const IDLE_RESET_S = 120;
+let lastAct = performance.now()/1000;
+['pointerdown','pointermove','keydown','wheel','touchstart'].forEach(ev =>
+  addEventListener(ev, () => { lastAct = performance.now()/1000; }, {passive:true, capture:true}));
+function idleReset(){
+  const isDefault = SCREENS===3 && state.perScreen===5 && state.speedMul===1 && !gest.on
+    && !$('#overlay').classList.contains('on') && !$('#share').classList.contains('on');
+  if(isDefault) return false;
+  $('#share').classList.remove('on');
+  const gm=$('#gmanual'); if(gm) gm.classList.remove('show');
+  const kp=$('#keypanel'); if(kp) kp.classList.remove('show');
+  if($('#overlay').classList.contains('on')) closePhoto();
+  SCREENS = 3; save('dbwall_screens', 3);
+  state.speedMul = 1; save('dbwall_speed', 1);
+  if(gest.on) disableGesture();
+  setPerScreenDirect(5);
+  toast('자동 환원 — TV 3대 · 5칸 · 기본 속도 · 카메라 꺼짐');
+  return true;
+}
+setInterval(() => {
+  const now = performance.now()/1000;
+  if(now - lastAct < IDLE_RESET_S) return;
+  idleReset();
+  lastAct = now;
+}, 5000);
+
 window.__gestTest = (x, y, p) => gPointer(x, y, p);   // 카메라 없는 환경 검증용
 
 if(new URLSearchParams(location.search).get('gesture') === '1' || load('dbwall_gesture', 0) == 1){
