@@ -201,24 +201,50 @@ function showQuote(){
 showQuote(); setInterval(showQuote, 30000);
 
 /* ───────────────── 패럴랙스 파이프라인 ─────────────────
-   입력(머리 위치 or 마우스) → 정규화 → 게인/소프트리밋 → 스무딩 → transform
+   입력(머리 위치 or 마우스) → 정규화 → 게인/소프트리밋 → One Euro 필터 → transform
    실측 웹캠 신호는 진폭이 작으므로(±0.1~0.2) 게인을 크게 두고
-   tanh 소프트리밋으로 과도한 이동을 막는다. 마우스 데모도 같은 경로를 지난다. */
+   tanh 소프트리밋으로 과도한 이동을 막는다. 마우스 데모도 같은 경로를 지난다.
+   One Euro: 정지 시엔 낮은 컷오프로 떨림을 죽이고, 움직임 속도에 비례해
+   컷오프를 올려 이동 시작이 즉각 반응하도록 한다. */
+class OneEuro{
+  constructor(minCutoff = 1.2, beta = 1.8, dCutoff = 1.0){
+    this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff;
+    this.xPrev = null; this.dxPrev = 0; this.tPrev = 0;
+  }
+  static alpha(cutoff, dt){
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dt);
+  }
+  filter(x, tMs){
+    const t = tMs / 1000;
+    if(this.xPrev === null){ this.xPrev = x; this.tPrev = t; return x; }
+    const dt = Math.max(t - this.tPrev, 1e-3);
+    this.tPrev = t;
+    const dx = (x - this.xPrev) / dt;
+    const aD = OneEuro.alpha(this.dCutoff, dt);
+    this.dxPrev = this.dxPrev + aD * (dx - this.dxPrev);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dxPrev);
+    const a = OneEuro.alpha(cutoff, dt);
+    this.xPrev = this.xPrev + a * (x - this.xPrev);
+    return this.xPrev;
+  }
+}
 const vid = $('bgvid');
 const BASE_SCALE = 1.18;
-let target = {x:0, y:0, z:0};     // 정규화 목표값(-1..1)
-let cur    = {x:0, y:0, z:0};     // 스무딩 현재값
+let target = {x:0, y:0, z:0};     // 필터 통과한 목표값(-1..1)
+let cur    = {x:0, y:0, z:0};     // 렌더 보간값
 const GAIN = { cam:{x:5.0, y:4.0, z:2.5}, mouse:{x:1.6, y:1.4, z:0} };
+const euro = { x:new OneEuro(), y:new OneEuro(), z:new OneEuro(1.0, 1.0) };
 let camActive = false;
 
 function drive(nx, ny, nz, src){
-  const g = GAIN[src];
-  target.x = Math.tanh(nx * g.x);
-  target.y = Math.tanh(ny * g.y);
-  target.z = Math.tanh(nz * g.z);
+  const g = GAIN[src], t = performance.now();
+  target.x = euro.x.filter(Math.tanh(nx * g.x), t);
+  target.y = euro.y.filter(Math.tanh(ny * g.y), t);
+  target.z = euro.z.filter(Math.tanh(nz * g.z), t);
 }
 function animate(){
-  const a = 0.10;                                  // 지수 스무딩
+  const a = 0.4;      // One Euro가 안정화를 담당하므로 렌더 보간은 빠르게
   cur.x += (target.x - cur.x) * a;
   cur.y += (target.y - cur.y) * a;
   cur.z += (target.z - cur.z) * a;
