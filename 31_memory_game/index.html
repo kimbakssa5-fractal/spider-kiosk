@@ -1084,6 +1084,16 @@ function idleKick(){
 document.addEventListener('pointerdown', () => { if(AC && AC.state === 'suspended') AC.resume(); });
 idleKick();
 
+/* 브라우저로 열면 첫 터치에 풀스크린 진입, 풀리면 다음 터치에 재진입 (exe는 자체 풀스크린) */
+const IS_ELECTRON = navigator.userAgent.includes('Electron');
+document.addEventListener('pointerdown', () => {
+  if(IS_ELECTRON || document.fullscreenElement) return;
+  try{
+    const p = document.documentElement.requestFullscreen();
+    if(p && p.catch) p.catch(() => {});
+  }catch(e){}
+});
+
 /* 부팅 시 상시 화면 = 데모 반복 상영 */
 startAttract();
 </script>
