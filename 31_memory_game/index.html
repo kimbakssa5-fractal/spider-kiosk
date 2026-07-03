@@ -325,6 +325,40 @@
   }
   #memo-tip.on{ display:block; }
 
+  /* ===== password gate ===== */
+  #gate{
+    position:fixed; inset:0; z-index:100;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(180deg,#fffaf5 0%,#fdeee6 100%);
+  }
+  #gate.ok{ opacity:0; transition:opacity .35s ease; pointer-events:none; }
+  .gate-card{
+    display:flex; flex-direction:column; align-items:center; gap:20px;
+    padding:42px 50px; background:#fff; border-radius:32px;
+    box-shadow:0 16px 40px rgba(90,60,50,.16);
+  }
+  .gate-title{ color:var(--ink); font-size:24px; font-weight:900; letter-spacing:.06em; }
+  .gate-dots{ display:flex; gap:16px; }
+  .gate-dots span{
+    width:16px; height:16px; border-radius:50%;
+    border:2px solid #d8c3ba; transition:background .1s;
+  }
+  .gate-dots span.on{ background:var(--accent); border-color:var(--accent); }
+  .gate-keys{ display:grid; grid-template-columns:repeat(3, 84px); gap:12px; }
+  .gate-keys button{
+    height:84px; border-radius:16px; border:none; cursor:pointer;
+    background:var(--pink); color:var(--ink);
+    font-size:30px; font-weight:700; font-family:inherit;
+  }
+  .gate-keys button:active{ background:#f6cfc2; }
+  .gate-msg{ color:var(--accent); font-size:16px; height:20px; font-weight:500; }
+  #gate.err .gate-dots{ animation:gshake .45s; }
+  @keyframes gshake{
+    0%,100%{ transform:translateX(0); }
+    20%{ transform:translateX(-9px); } 40%{ transform:translateX(9px); }
+    60%{ transform:translateX(-6px); } 80%{ transform:translateX(6px); }
+  }
+
   /* ===== result overlay ===== */
   #overlay{
     position:absolute; inset:0; z-index:20; display:none;
@@ -494,6 +528,21 @@
 
   <!-- attract mode join button -->
   <button id="btn-join">👆 게임 참여하기</button>
+</div>
+
+<!-- 첫 진입 비밀번호 게이트 (1회만, 비번 변경 시 기존 통과 기록 자동 무효화) -->
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-title">비밀번호 4자리</div>
+    <div class="gate-dots"><span></span><span></span><span></span><span></span></div>
+    <div class="gate-keys">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <span></span><button data-k="0">0</button><button data-k="del">&#9003;</button>
+    </div>
+    <div class="gate-msg"></div>
+  </div>
 </div>
 
 <script>
@@ -1094,8 +1143,52 @@ document.addEventListener('pointerdown', () => {
   }catch(e){}
 });
 
-/* 부팅 시 상시 화면 = 데모 반복 상영 */
-startAttract();
+/* ================= 비밀번호 게이트 (최초 1회) ================= */
+/* 부팅: 게이트 통과(또는 이미 통과 기록)가 있어야 데모 상영 시작 */
+(function(){
+  var CODE = "1412";               // ← 비밀번호(다른 프로젝트와 동일). 바꾸면 기존 통과 기록 무효화.
+  var KEY = "memory31_access";     // 통과 기록(입력 비번 저장 → CODE 와 일치해야 통과)
+  var gate = document.getElementById("gate");
+  if(localStorage.getItem(KEY) === CODE){ gate.remove(); startAttract(); return; }
+  var entry = "";
+  var dots = gate.querySelectorAll(".gate-dots span");
+  var msg = gate.querySelector(".gate-msg");
+  function render(){ for(var i = 0; i < dots.length; i++) dots[i].classList.toggle("on", i < entry.length); }
+  function check(){
+    if(entry.length < 4) return;
+    if(entry === CODE){
+      try{ localStorage.setItem(KEY, CODE); }catch(e){}
+      gate.classList.add("ok");
+      // 진짜 제스처인 이 순간 전체화면 진입 (합성 이벤트로는 막힘)
+      try{
+        var el = document.documentElement;
+        var p = (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el);
+        if(p && p.catch) p.catch(function(){});
+      }catch(e){}
+      setTimeout(function(){ if(gate.parentNode) gate.remove(); }, 350);
+      startAttract();
+    }else{
+      gate.classList.add("err"); msg.textContent = "비밀번호가 틀렸습니다";
+      setTimeout(function(){ gate.classList.remove("err"); msg.textContent = ""; entry = ""; render(); }, 550);
+    }
+  }
+  function press(k){
+    sfx.tap();
+    if(k === "del") entry = entry.slice(0, -1);
+    else if(entry.length < 4) entry += k;
+    render(); check();
+  }
+  var keys = gate.querySelectorAll(".gate-keys button");
+  for(var i = 0; i < keys.length; i++){
+    keys[i].addEventListener("click", function(){ press(this.getAttribute("data-k")); });
+  }
+  window.addEventListener("keydown", function(e){
+    if(!gate.parentNode) return;
+    if(/^[0-9]$/.test(e.key)) press(e.key);
+    else if(e.key === "Backspace") press("del");
+  });
+  render();
+})();
 </script>
 </body>
 </html>
