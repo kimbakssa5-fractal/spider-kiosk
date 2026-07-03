@@ -514,7 +514,9 @@ function drawIcon(ctx, id, s) {
   ctx.restore();
 }
 
-/* 타겟/칩 공용: 파스텔 원 배경 + 아이콘을 오프스크린 캔버스로 */
+/* 타겟/칩 공용: 파스텔 원 배경 + 아이콘을 오프스크린 캔버스로
+   원작 3D 아이콘 PNG(assets/<id>.png)가 로드되면 그것을 사용, 전이면 벡터 폴백 */
+const ICON_IMG = {};
 function paintIcon(c, id, chip) {
   const px = c.width;
   const ctx = c.getContext('2d');
@@ -523,7 +525,16 @@ function paintIcon(c, id, chip) {
   ctx.translate(px/2, px/2);
   ctx.fillStyle = chip;
   ctx.beginPath(); ctx.arc(0,0,px/2-2,0,7); ctx.fill();
-  drawIcon(ctx, id, px*.30);
+  const img = ICON_IMG[id];
+  if (img) {
+    const r = px/2 - 2;
+    // 원 안에 대각선이 들어가도록 축소(원형 범퍼 밖으로 삐져나오지 않게)
+    const s = (2*r*.94) / Math.hypot(img.width, img.height);
+    const w = img.width*s, h = img.height*s;
+    ctx.drawImage(img, -w/2, -h/2, w, h);
+  } else {
+    drawIcon(ctx, id, px*.30);
+  }
 }
 const allIconCanvases = [];
 function makeIconCanvas(id, chip, px) {
@@ -536,6 +547,15 @@ function makeIconCanvas(id, chip, px) {
 /* 웹폰트('H' 글자 등) 로드 후 아이콘 재도장 */
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(()=>allIconCanvases.forEach(({c,id,chip})=>paintIcon(c,id,chip)));
+}
+/* 원작 3D 아이콘 로드 → 도착한 것부터 재도장 */
+for (const e of ENERGY) {
+  const img = new Image();
+  img.onload = ()=>{
+    ICON_IMG[e.id] = img;
+    allIconCanvases.forEach(({c,id,chip})=>{ if (id === e.id) paintIcon(c,id,chip); });
+  };
+  img.src = 'assets/' + e.id + '.png';
 }
 
 /* =====================================================================
