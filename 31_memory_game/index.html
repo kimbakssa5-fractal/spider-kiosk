@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>기억력 퍼즐 — MEMORY | HANAM MUSEUM OF HISTORY</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#4a3b36;
+    --ink-soft:#8a746c;
+    --accent:#e8604c;
+    --accent-deep:#c94a38;
+    --cream:#fff8f3;
+    --pink:#fdeae4;
+    --card-back-1:#5b8f8a;
+    --card-back-2:#487370;
+    --p1:#4a90d9;
+    --p2:#e8834a;
+    --good:#57a773;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:var(--cream); touch-action:manipulation; }
+  body{ font-family:'Noto Sans KR', 'Malgun Gothic', sans-serif; color:var(--ink); }
+
+  /* ===== 1920x1080 stage, scaled to fit any screen ===== */
+  #stage{
+    position:absolute; left:50%; top:50%;
+    width:1920px; height:1080px;
+    transform-origin:center center;
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #fff3ea 0%, transparent 60%),
+      radial-gradient(900px 600px at 8% 108%, #fdeade 0%, transparent 55%),
+      radial-gradient(900px 600px at 92% 108%, #fce4dc 0%, transparent 55%),
+      linear-gradient(180deg, #fffaf5 0%, #fdeee6 100%);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  /* soft confetti dots */
+  #stage::before{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background-image:
+      radial-gradient(circle 7px at 6% 22%, #f6c7bb 99%, transparent),
+      radial-gradient(circle 5px at 13% 74%, #b9d8d4 99%, transparent),
+      radial-gradient(circle 6px at 90% 30%, #f3d9a7 99%, transparent),
+      radial-gradient(circle 5px at 95% 78%, #f0b9ac 99%, transparent),
+      radial-gradient(circle 4px at 27% 12%, #c6cdea 99%, transparent),
+      radial-gradient(circle 4px at 78% 10%, #bcd9c4 99%, transparent);
+    opacity:.8;
+  }
+
+  /* ===== header / footer ===== */
+  header{ position:relative; text-align:center; padding:34px 0 10px; flex:0 0 auto; z-index:2; }
+  .h-tag{
+    display:inline-block; font-size:22px; font-weight:500; letter-spacing:.14em;
+    color:#fff; background:var(--accent); border-radius:999px; padding:6px 26px 9px; line-height:1.35;
+    box-shadow:0 4px 14px rgba(232,96,76,.35); margin-bottom:14px;
+  }
+  h1{ font-size:66px; font-weight:900; letter-spacing:.04em; line-height:1.05; }
+  h1 .q{ color:var(--accent); font-weight:900; }
+  .h-en{ margin-top:8px; font-size:20px; font-weight:500; letter-spacing:.85em; text-indent:.85em; color:var(--ink-soft); }
+  footer{
+    flex:0 0 auto; text-align:center; padding:14px 0 22px; z-index:2;
+    font-size:16px; font-weight:500; letter-spacing:.32em; text-indent:.32em; color:#b39a90;
+  }
+  footer b{ color:var(--accent); font-weight:700; }
+
+  main{ position:relative; flex:1 1 auto; z-index:2; }
+  .screen{ position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; }
+  .screen.on{ display:flex; }
+
+  .step-label{ font-size:30px; font-weight:700; color:var(--ink-soft); margin-bottom:36px; }
+  .step-label b{ color:var(--accent); }
+
+  /* ===== big choice buttons ===== */
+  .choice-row{ display:flex; gap:44px; }
+  .big-btn{
+    width:430px; height:330px; border:none; cursor:pointer;
+    background:#fff; border-radius:34px; padding:30px;
+    box-shadow:0 12px 30px rgba(90,60,50,.13), 0 2px 0 #fff inset;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+    font-family:inherit; color:var(--ink);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .big-btn:active{ transform:scale(.95); }
+  .big-btn .ico{ font-size:92px; line-height:1; }
+  .big-btn .t{ font-size:42px; font-weight:900; }
+  .big-btn .d{ font-size:21px; font-weight:500; color:var(--ink-soft); }
+
+  .diff-btn{ width:360px; height:340px; }
+  .diff-btn .badge{
+    width:110px; height:110px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:52px; font-weight:900; color:#fff;
+  }
+  .diff-btn[data-diff=easy]   .badge{ background:#57a773; box-shadow:0 6px 16px rgba(87,167,115,.4); }
+  .diff-btn[data-diff=normal] .badge{ background:#e8a13c; box-shadow:0 6px 16px rgba(232,161,60,.4); }
+  .diff-btn[data-diff=hard]   .badge{ background:#e8604c; box-shadow:0 6px 16px rgba(232,96,76,.4); }
+
+  #btn-demo{
+    margin-top:46px; border:none; cursor:pointer; font-family:inherit;
+    font-size:26px; font-weight:700; color:var(--ink);
+    background:#fff; border-radius:999px; padding:18px 46px;
+    box-shadow:0 8px 20px rgba(90,60,50,.13);
+    transition:transform .12s;
+  }
+  #btn-demo:active{ transform:scale(.95); }
+
+  #demo-cap{
+    position:absolute; left:50%; bottom:-14px; transform:translateX(-50%);
+    background:var(--ink); color:#fff; font-size:29px; font-weight:700;
+    border-radius:999px; padding:15px 44px 17px; white-space:nowrap; z-index:6;
+    box-shadow:0 10px 26px rgba(40,20,15,.3); display:none;
+  }
+  #demo-cap.on{ display:block; animation:pop .3s ease; }
+
+  /* ===== attract mode (idle demo loop) ===== */
+  #btn-join{
+    position:absolute; left:50%; bottom:22px; transform:translateX(-50%);
+    z-index:15; display:none; border:none; cursor:pointer; font-family:inherit;
+    font-size:34px; font-weight:900; color:#fff;
+    background:linear-gradient(160deg, #f07a5e, var(--accent-deep));
+    border-radius:999px; padding:22px 64px 24px;
+    box-shadow:0 10px 28px rgba(232,96,76,.5);
+    animation:joinblink 1.1s ease-in-out infinite;
+  }
+  #stage.attract #btn-join{ display:block; }
+  #stage.attract .hud .ctrl{ display:none; }
+  #stage.attract #demo-cap{ bottom:auto; top:-14px; }
+  #stage.attract footer{ visibility:hidden; }
+  @keyframes joinblink{
+    0%,100%{ transform:translateX(-50%) scale(1); box-shadow:0 10px 28px rgba(232,96,76,.5); opacity:1; }
+    50%{ transform:translateX(-50%) scale(1.07); box-shadow:0 14px 40px rgba(232,96,76,.85); opacity:.88; }
+  }
+
+  .back-btn{
+    position:absolute; left:60px; top:18px;
+    border:none; cursor:pointer; font-family:inherit;
+    font-size:24px; font-weight:700; color:var(--ink-soft);
+    background:#fff; border-radius:999px; padding:14px 34px;
+    box-shadow:0 6px 16px rgba(90,60,50,.12);
+  }
+  .back-btn:active{ transform:scale(.94); }
+
+  /* ===== category grid ===== */
+  .cat-grid{ display:grid; grid-template-columns:repeat(6, 236px); gap:22px 22px; }
+  .cat-btn{
+    border:none; cursor:pointer; font-family:inherit; color:var(--ink);
+    background:#fff; border-radius:26px; padding:16px 14px 14px;
+    box-shadow:0 10px 22px rgba(90,60,50,.12);
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    transition:transform .12s ease;
+  }
+  .cat-btn:active{ transform:scale(.94); }
+  .cat-btn .thumb{
+    width:168px; height:168px; border-radius:18px;
+    background-color:var(--pink); background-size:cover; background-position:center;
+    box-shadow:0 0 0 1px rgba(90,60,50,.07) inset;
+  }
+  .cat-btn .name{ font-size:22px; font-weight:700; }
+  .cat-btn.random .thumb{
+    display:flex; align-items:center; justify-content:center; font-size:86px;
+    background:linear-gradient(145deg,#ffe9d9,#ffd7cc);
+  }
+  .cat-btn.random .name{ color:var(--accent); }
+
+  /* ===== today's ranking (always visible) ===== */
+  #screen-mode, #screen-diff, #screen-cat{ padding-right:380px; }
+  #rankbox{
+    position:absolute; right:44px; top:50%; transform:translateY(-50%);
+    width:330px; z-index:3;
+    background:#fff; border-radius:30px; padding:26px 24px 18px;
+    box-shadow:0 12px 26px rgba(90,60,50,.12);
+  }
+  .rk-title{ font-size:26px; font-weight:900; text-align:center; margin-bottom:12px; }
+  ol.rk-list{ list-style:none; }
+  ol.rk-list li{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 4px; border-bottom:1px dashed #f0ded6; font-size:20px;
+  }
+  ol.rk-list li:last-child{ border-bottom:none; }
+  ol.rk-list .medal{ width:34px; flex:0 0 auto; text-align:center; font-size:22px; font-weight:900; color:var(--ink-soft); }
+  ol.rk-list .pts{ font-weight:900; font-size:22px; white-space:nowrap; }
+  ol.rk-list .meta{ margin-left:auto; font-size:15px; color:var(--ink-soft); font-weight:500; text-align:right; line-height:1.3; white-space:nowrap; }
+  ol.rk-list .empty{ width:100%; text-align:center; color:var(--ink-soft); font-size:18px; padding:14px 0; line-height:1.5; }
+
+  /* ===== coin toss (2P first-player draw) ===== */
+  #coin-overlay{
+    position:absolute; inset:0; z-index:30; display:none;
+    flex-direction:column; align-items:center; justify-content:center; gap:44px;
+    background:rgba(74,59,54,.45); backdrop-filter:blur(4px);
+  }
+  #coin-overlay.on{ display:flex; }
+  #coin{ width:210px; height:210px; position:relative; transform-style:preserve-3d; }
+  #coin.spin{ transition:transform 1.6s cubic-bezier(.25,.7,.3,1); }
+  #coin .cf{
+    position:absolute; inset:0; border-radius:50%;
+    backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    display:flex; align-items:center; justify-content:center;
+    font-size:100px; font-weight:900; color:#fff; border:10px solid #fff;
+    box-shadow:0 14px 34px rgba(40,20,15,.35);
+  }
+  #coin .f1{ background:radial-gradient(circle at 32% 28%, #7db2ec 0%, var(--p1) 70%); }
+  #coin .f2{ background:radial-gradient(circle at 32% 28%, #f2a878 0%, var(--p2) 70%); transform:rotateY(180deg); }
+  #coin-txt{
+    font-size:42px; font-weight:900; color:#fff;
+    text-shadow:0 4px 14px rgba(40,20,15,.4);
+  }
+
+  /* ===== game screen ===== */
+  #screen-game{ justify-content:flex-start; }
+  .hud{
+    flex:0 0 auto; display:flex; align-items:center; gap:18px;
+    margin:2px 0 18px; height:86px;
+  }
+  .hud .ctrl{
+    border:none; cursor:pointer; font-family:inherit;
+    background:#fff; border-radius:999px; padding:13px 22px;
+    box-shadow:0 6px 16px rgba(90,60,50,.1);
+    font-size:21px; font-weight:700; color:var(--ink-soft);
+    transition:transform .12s;
+  }
+  .hud .ctrl:active{ transform:scale(.93); }
+  .hud .ctrl.quit{ color:var(--accent); }
+  .hud .pill{
+    background:#fff; border-radius:999px; padding:12px 30px;
+    box-shadow:0 6px 16px rgba(90,60,50,.1);
+    font-size:24px; font-weight:700; color:var(--ink-soft);
+    display:flex; align-items:center; gap:12px;
+  }
+  .hud .pill b{ color:var(--ink); font-size:26px; }
+  #timer-wrap{
+    background:#fff; border-radius:999px; padding:12px 26px;
+    box-shadow:0 6px 16px rgba(90,60,50,.1);
+    display:flex; align-items:center; gap:18px;
+  }
+  #timer-txt{ font-size:34px; font-weight:900; min-width:118px; text-align:center; font-variant-numeric:tabular-nums; }
+  #timer-bar{ width:300px; height:18px; border-radius:9px; background:#f3e2da; overflow:hidden; }
+  #timer-fill{ height:100%; width:100%; border-radius:9px; background:linear-gradient(90deg,#57a773,#8fc9a3); transition:width .25s linear; }
+  #timer-wrap.low #timer-txt{ color:var(--accent); animation:blink 1s steps(2,start) infinite; }
+  #timer-wrap.low #timer-fill{ background:linear-gradient(90deg,#e8604c,#f09a8b); }
+  @keyframes blink{ 50%{ opacity:.35; } }
+
+  .arena{ flex:1 1 auto; display:flex; align-items:stretch; justify-content:center; gap:34px; width:100%; padding:0 56px 14px; }
+  .side{ flex:0 0 300px; display:flex; align-items:center; justify-content:center; }
+  .score-panel{
+    width:100%; background:#fff; border-radius:30px; padding:30px 26px;
+    box-shadow:0 12px 26px rgba(90,60,50,.12);
+    text-align:center; border:5px solid transparent;
+    transition:border-color .2s, transform .2s;
+  }
+  .score-panel .who{ font-size:28px; font-weight:900; display:flex; align-items:center; justify-content:center; gap:10px; }
+  .score-panel .dot{ width:18px; height:18px; border-radius:50%; }
+  .score-panel[data-p="1"] .dot{ background:var(--p1); }
+  .score-panel[data-p="2"] .dot{ background:var(--p2); }
+  .score-panel .turn-chip{
+    display:none; margin:10px auto 0; width:fit-content;
+    font-size:19px; font-weight:700; color:#fff; background:var(--accent);
+    border-radius:999px; padding:4px 18px 5px;
+  }
+  .score-panel.active .turn-chip{ display:block; animation:pop .3s ease; }
+  .score-panel.active{ transform:scale(1.04); }
+  .score-panel[data-p="1"].active{ border-color:var(--p1); }
+  .score-panel[data-p="2"].active{ border-color:var(--p2); }
+  .score-panel .num{ font-size:76px; font-weight:900; line-height:1.1; margin-top:10px; }
+  .score-panel .cap{ font-size:20px; color:var(--ink-soft); font-weight:500; }
+  .score-panel .tries{ margin-top:14px; font-size:21px; color:var(--ink-soft); font-weight:500; }
+  .score-panel .tries b{ color:var(--ink); }
+
+  #board-wrap{ flex:1 1 auto; display:flex; align-items:center; justify-content:center; position:relative; }
+  #board{ display:grid; position:relative; }
+
+  .card{ position:relative; cursor:pointer; perspective:900px; }
+  .card .inner{
+    position:absolute; inset:0; transform-style:preserve-3d;
+    transition:transform .45s cubic-bezier(.35,1.3,.5,1);
+  }
+  .card.flipped .inner{ transform:rotateY(180deg); }
+  .card .face{
+    position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    border-radius:20px; box-shadow:0 8px 18px rgba(90,60,50,.16);
+  }
+  .card .back{
+    background:
+      radial-gradient(circle at 30% 25%, rgba(255,255,255,.16) 0 22%, transparent 23%),
+      radial-gradient(circle at 72% 70%, rgba(255,255,255,.1) 0 26%, transparent 27%),
+      linear-gradient(150deg, var(--card-back-1), var(--card-back-2));
+    display:flex; align-items:center; justify-content:center;
+    border:5px solid #fff;
+  }
+  .card .back::after{ content:"?"; font-size:56px; font-weight:900; color:rgba(255,255,255,.92); }
+  .card .front{
+    transform:rotateY(180deg);
+    background-color:var(--pink); background-size:400% 400%;
+    border:5px solid #fff;
+  }
+  .card.matched{ cursor:default; }
+  .card.matched .inner{ animation:pop .45s ease; }
+  .card.matched .front{ box-shadow:0 0 0 5px var(--good), 0 8px 18px rgba(90,60,50,.16); }
+  .card.matched.by-p1 .front{ box-shadow:0 0 0 5px var(--p1), 0 8px 18px rgba(90,60,50,.16); }
+  .card.matched.by-p2 .front{ box-shadow:0 0 0 5px var(--p2), 0 8px 18px rgba(90,60,50,.16); }
+  .card.shake{ animation:shake .4s ease; }
+  @keyframes pop{ 0%{transform:scale(1)} 45%{transform:scale(1.13)} 100%{transform:scale(1)} }
+  @keyframes shake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-7px)} 50%{transform:translateX(7px)} 75%{transform:translateX(-4px)} }
+  .card.dealt{ animation:deal .35s ease backwards; }
+  @keyframes deal{ from{ opacity:0; transform:translateY(26px) scale(.85); } }
+
+  /* countdown overlay on board */
+  #countdown{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    pointer-events:none; z-index:5;
+  }
+  #countdown.on{ display:flex; }
+  #countdown span{
+    font-size:200px; font-weight:900; color:var(--accent);
+    text-shadow:0 10px 30px rgba(232,96,76,.35), 0 0 0 6px #fff;
+    -webkit-text-stroke:8px #fff; paint-order:stroke fill;
+    animation:pop .9s ease infinite;
+  }
+  #memo-tip{
+    position:absolute; left:50%; bottom:-8px; transform:translateX(-50%);
+    background:var(--ink); color:#fff; font-size:23px; font-weight:700;
+    border-radius:999px; padding:10px 30px 12px; white-space:nowrap; z-index:5; display:none;
+  }
+  #memo-tip.on{ display:block; }
+
+  /* ===== result overlay ===== */
+  #overlay{
+    position:absolute; inset:0; z-index:20; display:none;
+    align-items:center; justify-content:center;
+    background:rgba(74,59,54,.45); backdrop-filter:blur(4px);
+  }
+  #overlay.on{ display:flex; }
+  .result-card{
+    background:#fff; border-radius:44px; padding:60px 90px 50px; text-align:center;
+    box-shadow:0 30px 70px rgba(40,20,15,.35); animation:pop .45s ease;
+    min-width:760px;
+  }
+  .result-card .emo{ font-size:100px; line-height:1; }
+  .result-card h2{ font-size:62px; font-weight:900; margin:14px 0 8px; }
+  .result-card h2.win{ color:var(--good); }
+  .result-card h2.lose{ color:var(--accent); }
+  .result-card .sub{ font-size:26px; color:var(--ink-soft); font-weight:500; }
+  .result-stats{ display:flex; justify-content:center; gap:26px; margin:34px 0 40px; }
+  .result-stats .st{
+    background:var(--cream); border-radius:22px; padding:20px 38px; min-width:180px;
+  }
+  .result-stats .st .v{ font-size:44px; font-weight:900; }
+  .result-stats .st .k{ font-size:19px; color:var(--ink-soft); font-weight:500; margin-top:2px; }
+  .result-stats .st.p1 .v{ color:var(--p1); }
+  .result-stats .st.p2 .v{ color:var(--p2); }
+  .result-btns{ display:flex; gap:24px; justify-content:center; }
+  .result-btns button{
+    border:none; cursor:pointer; font-family:inherit;
+    font-size:30px; font-weight:900; border-radius:999px; padding:22px 56px;
+    transition:transform .12s;
+  }
+  .result-btns button:active{ transform:scale(.94); }
+  #btn-retry{ background:var(--accent); color:#fff; box-shadow:0 8px 20px rgba(232,96,76,.4); }
+  #btn-home{ background:#f0e4dd; color:var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <header>
+    <div class="h-tag">같은 카드 뒤집기</div>
+    <h1>기억력 <span class="q">퍼즐</span></h1>
+    <div class="h-en">MEMORY</div>
+  </header>
+
+  <main>
+    <!-- 1) mode -->
+    <section class="screen on" id="screen-mode">
+      <div class="step-label">몇 명이서 즐길까요?</div>
+      <div class="choice-row">
+        <button class="big-btn" data-mode="1">
+          <span class="ico">🙋</span>
+          <span class="t">1인용</span>
+          <span class="d">혼자 기록에 도전!</span>
+        </button>
+        <button class="big-btn" data-mode="2">
+          <span class="ico">🙋🙋‍♀️</span>
+          <span class="t">2인용</span>
+          <span class="d">한 번씩 번갈아 뒤집으며 대결!</span>
+        </button>
+      </div>
+      <button id="btn-demo">🎬 이 게임은 어떻게 하는 건가요?</button>
+    </section>
+
+    <!-- 2) difficulty -->
+    <section class="screen" id="screen-diff">
+      <button class="back-btn" data-goto="screen-mode">← 이전</button>
+      <div class="step-label">난이도를 골라 주세요</div>
+      <div class="choice-row">
+        <button class="big-btn diff-btn" data-diff="easy">
+          <span class="badge">하</span>
+          <span class="t">쉬움</span>
+          <span class="d">카드 12장 · 2분</span>
+        </button>
+        <button class="big-btn diff-btn" data-diff="normal">
+          <span class="badge">중</span>
+          <span class="t">보통</span>
+          <span class="d">카드 16장 · 3분</span>
+        </button>
+        <button class="big-btn diff-btn" data-diff="hard">
+          <span class="badge">상</span>
+          <span class="t">어려움</span>
+          <span class="d">카드 24장 · 4분</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 3) category -->
+    <section class="screen" id="screen-cat">
+      <button class="back-btn" data-goto="screen-diff">← 이전</button>
+      <div class="step-label">어떤 그림으로 놀아 볼까요? <b id="cat-diff-label"></b></div>
+      <div class="cat-grid" id="cat-grid"></div>
+    </section>
+
+    <!-- 4) game -->
+    <section class="screen" id="screen-game">
+      <div class="hud">
+        <div class="pill" id="hud-info"><span id="hud-cat">과일</span></div>
+        <div id="timer-wrap">
+          <div id="timer-txt">2:00</div>
+          <div id="timer-bar"><div id="timer-fill"></div></div>
+        </div>
+        <div class="pill">찾은 짝 <b id="hud-pairs">0 / 6</b></div>
+        <button class="ctrl" id="gc-restart">↺ 다시 시작</button>
+        <button class="ctrl" id="gc-back">← 그림 선택</button>
+        <button class="ctrl quit" id="gc-quit">✕ 그만하기</button>
+      </div>
+      <div class="arena">
+        <div class="side" id="side-left">
+          <div class="score-panel" data-p="1" id="panel-1">
+            <div class="who"><span class="dot"></span><span id="p1-name">나의 점수</span></div>
+            <div class="turn-chip">내 차례!</div>
+            <div class="num" id="p1-score">0</div>
+            <div class="cap">찾은 짝</div>
+            <div class="tries">뒤집기 <b id="p1-tries">0</b>회</div>
+          </div>
+        </div>
+        <div id="board-wrap">
+          <div id="board"></div>
+          <div id="countdown"><span>5</span></div>
+          <div id="memo-tip">그림 위치를 기억하세요!</div>
+          <div id="demo-cap"></div>
+        </div>
+        <div class="side" id="side-right">
+          <div class="score-panel" data-p="2" id="panel-2">
+            <div class="who"><span class="dot"></span><span>플레이어 2</span></div>
+            <div class="turn-chip">내 차례!</div>
+            <div class="num" id="p2-score">0</div>
+            <div class="cap">찾은 짝</div>
+            <div class="tries">뒤집기 <b id="p2-tries">0</b>회</div>
+          </div>
+          <div class="score-panel" id="rank-game-panel" style="display:none">
+            <div class="rk-title">🏆 오늘의 순위</div>
+            <ol class="rk-list" id="rank-game"></ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- today's ranking (selection screens) -->
+    <aside id="rankbox">
+      <div class="rk-title">🏆 오늘의 순위</div>
+      <ol class="rk-list" id="rank-home"></ol>
+    </aside>
+  </main>
+
+  <footer><b>BRAIN TRAINING ACADEMY</b></footer>
+
+  <!-- result -->
+  <div id="overlay">
+    <div class="result-card">
+      <div class="emo" id="res-emo">🎉</div>
+      <h2 id="res-title" class="win">참 잘했어요!</h2>
+      <div class="sub" id="res-sub">모든 짝을 찾았습니다</div>
+      <div class="result-stats" id="res-stats"></div>
+      <div class="result-btns">
+        <button id="btn-retry">다시 하기</button>
+        <button id="btn-home">처음으로</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- coin toss -->
+  <div id="coin-overlay">
+    <div id="coin"><div class="cf f1">1</div><div class="cf f2">2</div></div>
+    <div id="coin-txt">동전 던지기로 선공을 정해요!</div>
+  </div>
+
+  <!-- attract mode join button -->
+  <button id="btn-join">👆 게임 참여하기</button>
+</div>
+
+<script>
+/* ================= config ================= */
+const DATA = {
+  easy:   { label:'하 (쉬움)',  time:120, pairs:6,  cols:4, rows:3, preview:5, cats:[
+            ['fruits','과일'],['sea','바다 동물'],['insects','곤충'],['instruments','악기'],['safari','사파리 동물'],
+            ['sports','스포츠'],['dessert','달콤한 간식'],['bunsik','분식'],['flowers','꽃'],['daily','생활 소품']]},
+  normal: { label:'중 (보통)',  time:180, pairs:8,  cols:4, rows:4, preview:5, cats:[
+            ['animals','귀여운 동물'],['reptiles','파충류'],['tradition','전통 문화'],['dogs','강아지'],['pets','반려동물'],
+            ['vehicles','탈것'],['flowers2','여러 가지 꽃'],['cafe','카페'],['landmarks','세계 명소'],['school','학용품']]},
+  hard:   { label:'상 (어려움)', time:240, pairs:12, cols:6, rows:4, preview:6, cats:[
+            ['senior','실버 용품'],['faces','사람 얼굴'],['dinos','공룡'],['art','미술 도구'],['chicks','병아리와 닭'],
+            ['grains','곡식과 씨앗'],['billiards','당구'],['tropical','열대 과일'],['leisure','레저 스포츠'],['fruityoga','과일 요가']]},
+};
+const sheetURL = (diff, id) => `data/${diff}/${id}.jpg`;
+
+/* ================= stage fit (1920x1080 -> any screen) ================= */
+const stage = document.getElementById('stage');
+function fit(){
+  const s = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+  stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+}
+window.addEventListener('resize', fit); fit();
+
+/* ================= tiny synth sounds ================= */
+let AC = null;
+function ac(){ if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); return AC; }
+function tone(freq, dur=0.12, type='sine', vol=0.15, when=0){
+  try{
+    const ctx = ac(), t = ctx.currentTime + when;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }catch(e){}
+}
+/* 오답 효과음: 방귀/트림 합성 (파일 없이 WebAudio) */
+function noiseBuffer(ctx, dur){
+  const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+  const d = b.getChannelData(0);
+  for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
+function sndFart(){ // 부르르 떨리는 저음 방귀
+  try{
+    const ctx = ac(), t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + .45);
+    const lfo = ctx.createOscillator(); lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(30, t);
+    lfo.frequency.linearRampToValueAtTime(16, t + .45);
+    const lg = ctx.createGain(); lg.gain.value = .5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(.28, t);
+    g.gain.exponentialRampToValueAtTime(.01, t + .5);
+    lfo.connect(lg).connect(g.gain);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320;
+    o.connect(lp).connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + .5); lfo.start(t); lfo.stop(t + .5);
+  }catch(e){}
+}
+function sndBurp(){ // 꺼어억 트림
+  try{
+    const ctx = ac(), t = ctx.currentTime;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70, t);
+    o.frequency.linearRampToValueAtTime(135, t + .12);
+    o.frequency.exponentialRampToValueAtTime(55, t + .42);
+    const v = ctx.createOscillator(); v.type = 'square'; v.frequency.value = 38;
+    const vg = ctx.createGain(); vg.gain.value = 24;
+    v.connect(vg).connect(o.frequency);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(.001, t);
+    g.gain.exponentialRampToValueAtTime(.3, t + .06);
+    g.gain.exponentialRampToValueAtTime(.01, t + .45);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 2;
+    o.connect(lp).connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + .5); v.start(t); v.stop(t + .5);
+  }catch(e){}
+}
+function sndPfft(){ // 짧게 피식 새는 소리
+  try{
+    const ctx = ac(), t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, .3);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.5;
+    bp.frequency.setValueAtTime(420, t);
+    bp.frequency.exponentialRampToValueAtTime(150, t + .25);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(.38, t);
+    g.gain.exponentialRampToValueAtTime(.01, t + .28);
+    src.connect(bp).connect(g).connect(ctx.destination);
+    src.start(t);
+    tone(70, .2, 'sawtooth', .12); // 저음 부르르 곁들임
+  }catch(e){}
+}
+const failSounds = [sndFart, sndBurp, sndPfft];
+
+const sfx = {
+  flip:  () => tone(640, .08, 'triangle', .1),
+  match: () => { tone(523, .12, 'sine', .16); tone(784, .2, 'sine', .16, .1); },
+  fail:  () => failSounds[Math.floor(Math.random() * failSounds.length)](),
+  tick:  () => tone(880, .05, 'square', .05),
+  win:   () => [523,659,784,1047].forEach((f,i)=>tone(f, .22, 'sine', .16, i*.13)),
+  lose:  () => { tone(330, .25, 'sine', .14); tone(247, .4, 'sine', .14, .22); },
+  tap:   () => tone(520, .06, 'triangle', .08),
+  /* 타이머 경과음: 평상시 잔잔한 똑·딱 → 15초 이하 긴박한 틱 → 5초 이하 이중 비프 */
+  tock:    even => tone(even ? 480 : 396, .05, 'triangle', .04),
+  urgent:  () => tone(920, .07, 'square', .1),
+  urgent2: () => { tone(1150, .06, 'square', .13); tone(1150, .06, 'square', .13, .14); },
+};
+
+/* ================= state ================= */
+const S = {
+  mode:1, diff:'easy', catId:null, catName:'', random:false,
+  deck:[], flipped:[], lock:true, pairsFound:0, totalPairs:6,
+  cur:1, score:[0,0], tries:[0,0],
+  timeLeft:0, timerId:null, lastTickSec:-1, playing:false,
+};
+
+/* ================= screens ================= */
+const screens = document.querySelectorAll('.screen');
+function show(id){
+  screens.forEach(s => s.classList.toggle('on', s.id === id));
+  document.getElementById('overlay').classList.remove('on');
+  document.getElementById('rankbox').style.display = (id === 'screen-game') ? 'none' : 'block';
+}
+document.querySelectorAll('.back-btn').forEach(b =>
+  b.addEventListener('click', () => { sfx.tap(); show(b.dataset.goto); }));
+
+document.querySelectorAll('[data-mode]').forEach(b =>
+  b.addEventListener('click', () => { sfx.tap(); S.mode = +b.dataset.mode; show('screen-diff'); }));
+
+document.querySelectorAll('[data-diff]').forEach(b =>
+  b.addEventListener('click', () => { sfx.tap(); S.diff = b.dataset.diff; buildCatGrid(); show('screen-cat'); }));
+
+/* ================= category grid ================= */
+function buildCatGrid(){
+  const d = DATA[S.diff];
+  document.getElementById('cat-diff-label').textContent = `난이도 ${d.label}`;
+  const grid = document.getElementById('cat-grid');
+  grid.innerHTML = '';
+
+  const rnd = document.createElement('button');
+  rnd.className = 'cat-btn random';
+  rnd.innerHTML = `<div class="thumb">🎲</div><div class="name">랜덤 선택</div>`;
+  rnd.addEventListener('click', () => {
+    const pick = d.cats[Math.floor(Math.random()*d.cats.length)];
+    startGame(pick[0], pick[1], true);
+  });
+  grid.appendChild(rnd);
+
+  d.cats.forEach(([id, name]) => {
+    const b = document.createElement('button');
+    b.className = 'cat-btn';
+    b.innerHTML = `<div class="thumb" style="background-image:url('${sheetURL(S.diff,id)}')"></div><div class="name">${name}</div>`;
+    b.addEventListener('click', () => startGame(id, name, false));
+    grid.appendChild(b);
+  });
+}
+
+/* ================= game ================= */
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function stopGame(){
+  clearInterval(S.timerId);
+  clearInterval(S.previewId);
+  clearTimeout(S.previewTo);
+  S.playing = false; S.lock = true; S.demo = false;
+  document.getElementById('countdown').classList.remove('on');
+  document.getElementById('memo-tip').classList.remove('on');
+  document.getElementById('demo-cap').classList.remove('on');
+}
+
+/* ================= how-to demo (self-playing) ================= */
+const demoWait = ms => new Promise(r => setTimeout(r, ms));
+function demoCaption(txt){
+  const el = document.getElementById('demo-cap');
+  el.textContent = txt;
+  el.classList.remove('on');
+  void el.offsetWidth;              // restart pop animation
+  el.classList.add('on');
+}
+async function demoScript(){
+  stopGame();
+  const d = DATA.easy;
+  Object.assign(S, {
+    mode:1, diff:'easy', catId:'fruits', catName:'과일 (데모)', random:false,
+    flipped:[], lock:true, pairsFound:0, totalPairs:d.pairs,
+    cur:1, score:[0,0], tries:[0,0], timeLeft:d.time, playing:false, demo:true,
+  });
+  const icons = shuffle([...Array(16).keys()]).slice(0, d.pairs);
+  S.deck = shuffle(icons.flatMap(i => [i, i]));
+  buildBoard(); updateHud(); updatePanels(); renderTime();
+  show('screen-game');
+
+  const cards = [...document.querySelectorAll('#board .card')];
+  const byIcon = {};
+  cards.forEach(c => { (byIcon[c.dataset.icon] = byIcon[c.dataset.icon] || []).push(c); });
+  const groups = Object.values(byIcon);
+  const [m1, m2] = groups[0];                    // 짝이 맞는 두 장
+  const w1 = groups[1][0], w2 = groups[2][0];    // 서로 다른 두 장
+  const step = async (fn, ms) => { if(!S.demo) return false; fn(); await demoWait(ms); return S.demo; };
+
+  if(!await step(() => demoCaption('같은 그림 카드 2장을 찾는 게임이에요'), 2400)) return false;
+  // 시작 힌트: 모든 카드가 잠깐 공개된다는 설명
+  if(!await step(() => {
+    demoCaption('게임을 시작하면 모든 카드가 잠깐 공개돼요');
+    cards.forEach(c => c.classList.add('flipped'));
+    sfx.flip();
+  }, 2400)) return false;
+  if(!await step(() => demoCaption('힌트! 이때 그림 위치를 기억해 두세요 🧠'), 2400)) return false;
+  if(!await step(() => {
+    cards.forEach(c => c.classList.remove('flipped'));
+    sfx.flip();
+  }, 1100)) return false;
+  if(!await step(() => demoCaption('카드를 눌러 한 장씩 뒤집어 보세요'), 1500)) return false;
+  if(!await step(() => { m1.classList.add('flipped'); sfx.flip(); }, 1100)) return false;
+  if(!await step(() => { m2.classList.add('flipped'); sfx.flip(); }, 900)) return false;
+  if(!await step(() => {
+    m1.classList.add('matched'); m2.classList.add('matched'); sfx.match();
+    S.pairsFound = 1; S.score[0] = 1; S.tries[0] = 1; updateHud(); updatePanels();
+    demoCaption('짝을 맞히면 점수를 얻어요! 🎉');
+  }, 2500)) return false;
+  if(!await step(() => { w1.classList.add('flipped'); sfx.flip(); }, 1100)) return false;
+  if(!await step(() => { w2.classList.add('flipped'); sfx.flip(); }, 900)) return false;
+  if(!await step(() => {
+    w1.classList.add('shake'); w2.classList.add('shake'); sfx.fail();
+    demoCaption('그림이 다르면 다시 뒤집혀요 — 위치를 기억하세요!');
+  }, 900)) return false;
+  if(!await step(() => {
+    w1.classList.remove('flipped','shake'); w2.classList.remove('flipped','shake');
+    S.tries[0] = 2; updatePanels();
+  }, 2200)) return false;
+  if(!await step(() => demoCaption('제한 시간 안에 모든 짝을 찾으면 성공!'), 2600)) return false;
+  if(!await step(() => { demoCaption('이제 직접 해볼까요? 😊'); sfx.win(); }, 2600)) return false;
+  return true;
+}
+
+/* 첫 화면의 수동 데모: 1회 재생 후 모드 선택으로 복귀 */
+async function runDemo(){
+  sfx.tap();
+  const done = await demoScript();
+  if(done){ stopGame(); show('screen-mode'); }
+}
+document.getElementById('btn-demo').addEventListener('click', runDemo);
+
+/* ================= attract mode: 대기 중 데모 반복 상영 ================= */
+async function startAttract(){
+  if(S.attract) return;
+  S.attract = true;
+  stage.classList.add('attract');
+  while(S.attract){
+    await demoScript();
+    if(!S.attract) break;
+    await demoWait(1400);
+  }
+}
+function exitAttract(){
+  S.attract = false;
+  stage.classList.remove('attract');
+  stopGame();
+  show('screen-mode');
+}
+document.getElementById('btn-join').addEventListener('click', () => { sfx.tap(); exitAttract(); });
+
+function startGame(catId, catName, isRandom){
+  sfx.tap();
+  stopGame();
+  const d = DATA[S.diff];
+  Object.assign(S, {
+    catId, catName, random:isRandom,
+    flipped:[], lock:true, pairsFound:0, totalPairs:d.pairs,
+    cur:1, score:[0,0], tries:[0,0],
+    timeLeft:d.time, lastTickSec:-1, playing:false,
+  });
+  clearInterval(S.timerId);
+
+  // pick d.pairs icons out of 16, duplicate, shuffle
+  const icons = shuffle([...Array(16).keys()]).slice(0, d.pairs);
+  S.deck = shuffle(icons.flatMap(i => [i, i]));
+
+  buildBoard();
+  updateHud(); updatePanels(); renderTime();
+  show('screen-game');
+
+  // 2P: coin toss decides who goes first, then preview countdown
+  const begin = async () => {
+    if(S.mode === 2){ await coinToss(); updatePanels(); }
+    runPreview(d.preview);
+  };
+  const img = new Image();
+  img.onload = begin;
+  img.onerror = begin;
+  img.src = sheetURL(S.diff, catId);
+}
+
+function coinToss(){
+  return new Promise(res => {
+    const ov = document.getElementById('coin-overlay');
+    const coin = document.getElementById('coin');
+    const txt = document.getElementById('coin-txt');
+    const winner = Math.random() < .5 ? 1 : 2;
+    txt.textContent = '동전 던지기로 선공을 정해요!';
+    coin.classList.remove('spin');
+    coin.style.transform = 'rotateY(0deg)';
+    ov.classList.add('on');
+    [0,.2,.4,.6,.8].forEach(w => tone(680 + Math.random()*260, .06, 'triangle', .07, w));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      coin.classList.add('spin');
+      coin.style.transform = `rotateY(${1800 + (winner === 2 ? 180 : 0)}deg)`;
+    }));
+    setTimeout(() => {
+      S.cur = winner;
+      txt.textContent = `플레이어 ${winner} 선공!`;
+      sfx.match();
+    }, 1700);
+    setTimeout(() => { ov.classList.remove('on'); res(); }, 2900);
+  });
+}
+
+function buildBoard(){
+  const d = DATA[S.diff];
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  // board area inside 1920 stage: arena minus side panels
+  const availW = 1920 - 56*2 - 34*2 - 300*2, availH = 660, gap = 18;
+  const size = Math.floor(Math.min(
+    (availW - (d.cols-1)*gap) / d.cols,
+    (availH - (d.rows-1)*gap) / d.rows));
+  board.style.gridTemplateColumns = `repeat(${d.cols}, ${size}px)`;
+  board.style.gridAutoRows = `${size}px`;
+  board.style.gap = gap + 'px';
+
+  const url = sheetURL(S.diff, S.catId);
+  S.deck.forEach((iconIdx, i) => {
+    const col = iconIdx % 4, row = Math.floor(iconIdx / 4);
+    const el = document.createElement('div');
+    el.className = 'card dealt';
+    el.style.animationDelay = (i * 0.03) + 's';
+    el.dataset.icon = iconIdx;
+    el.innerHTML = `<div class="inner">
+        <div class="face back"></div>
+        <div class="face front" style="background-image:url('${url}');background-position:${col*100/3}% ${row*100/3}%"></div>
+      </div>`;
+    el.addEventListener('click', () => onCard(el));
+    board.appendChild(el);
+  });
+}
+
+function runPreview(sec){
+  const cd = document.getElementById('countdown');
+  const tip = document.getElementById('memo-tip');
+  document.querySelectorAll('#board .card').forEach(c => c.classList.add('flipped'));
+  cd.classList.add('on'); tip.classList.add('on');
+  let n = sec;
+  cd.firstElementChild.textContent = n;
+  sfx.tick();
+  S.previewId = setInterval(() => {
+    n--;
+    if(n <= 0){
+      clearInterval(S.previewId);
+      cd.classList.remove('on'); tip.classList.remove('on');
+      document.querySelectorAll('#board .card').forEach(c => c.classList.remove('flipped'));
+      S.previewTo = setTimeout(() => { S.lock = false; S.playing = true; updatePanels(); startTimer(); }, 500);
+    }else{
+      cd.firstElementChild.textContent = n;
+      sfx.tick();
+    }
+  }, 1000);
+}
+
+/* ================= timer ================= */
+function startTimer(){
+  const started = Date.now(), base = S.timeLeft;
+  clearInterval(S.timerId);
+  S.timerId = setInterval(() => {
+    S.timeLeft = Math.max(0, base - (Date.now() - started)/1000);
+    renderTime();
+    const sec = Math.ceil(S.timeLeft);
+    if(sec !== S.lastTickSec){
+      S.lastTickSec = sec;
+      if(sec > 0){
+        if(S.timeLeft > 15)     sfx.tock(sec % 2 === 0);
+        else if(S.timeLeft > 5) sfx.urgent();
+        else                    sfx.urgent2();
+      }
+    }
+    if(S.timeLeft <= 0){ clearInterval(S.timerId); endGame(false); }
+  }, 200);
+}
+function renderTime(){
+  const d = DATA[S.diff];
+  const t = Math.ceil(S.timeLeft);
+  document.getElementById('timer-txt').textContent =
+    Math.floor(t/60) + ':' + String(t%60).padStart(2,'0');
+  document.getElementById('timer-fill').style.width = (S.timeLeft / d.time * 100) + '%';
+  document.getElementById('timer-wrap').classList.toggle('low', S.playing && S.timeLeft <= 15);
+}
+
+/* ================= play ================= */
+function onCard(el){
+  if(S.lock || !S.playing) return;
+  if(el.classList.contains('flipped') || el.classList.contains('matched')) return;
+  sfx.flip();
+  el.classList.add('flipped');
+  S.flipped.push(el);
+  if(S.flipped.length < 2) return;
+
+  S.lock = true;
+  S.tries[S.cur-1]++;
+  updatePanels();
+  const [a, b] = S.flipped;
+  if(a.dataset.icon === b.dataset.icon){
+    setTimeout(() => {
+      a.classList.add('matched', 'by-p' + S.cur);
+      b.classList.add('matched', 'by-p' + S.cur);
+      sfx.match();
+      S.score[S.cur-1]++;
+      S.pairsFound++;
+      S.flipped = [];
+      updateHud(); updatePanels();
+      if(S.pairsFound >= S.totalPairs){ endGame(true); }
+      else{
+        // 맞혀도 차례는 한 번씩 교대
+        if(S.mode === 2){ S.cur = S.cur === 1 ? 2 : 1; updatePanels(); }
+        S.lock = false;
+      }
+    }, 350);
+  }else{
+    setTimeout(() => {
+      a.classList.add('shake'); b.classList.add('shake');
+      sfx.fail();
+      setTimeout(() => {
+        a.classList.remove('flipped','shake');
+        b.classList.remove('flipped','shake');
+        S.flipped = [];
+        if(S.mode === 2){ S.cur = S.cur === 1 ? 2 : 1; updatePanels(); }
+        S.lock = false;
+      }, 550);
+    }, 650);
+  }
+}
+
+function updateHud(){
+  document.getElementById('hud-cat').textContent =
+    `${S.catName} · 난이도 ${DATA[S.diff].label}` + (S.random ? ' · 🎲' : '');
+  document.getElementById('hud-pairs').textContent = `${S.pairsFound} / ${S.totalPairs}`;
+}
+function updatePanels(){
+  document.getElementById('p1-name').textContent = S.mode === 2 ? '플레이어 1' : '나의 점수';
+  document.getElementById('panel-2').style.display = S.mode === 2 ? '' : 'none';
+  document.getElementById('rank-game-panel').style.display = S.mode === 2 ? 'none' : '';
+  document.getElementById('p1-score').textContent = S.score[0];
+  document.getElementById('p2-score').textContent = S.score[1];
+  document.getElementById('p1-tries').textContent = S.tries[0];
+  document.getElementById('p2-tries').textContent = S.tries[1];
+  document.getElementById('panel-1').classList.toggle('active', S.mode === 2 && S.cur === 1 && S.playing);
+  document.getElementById('panel-2').classList.toggle('active', S.mode === 2 && S.cur === 2 && S.playing);
+}
+
+/* ================= end / result ================= */
+function endGame(cleared){
+  S.playing = false; S.lock = true;
+  clearInterval(S.timerId);
+  updatePanels();
+
+  const d = DATA[S.diff];
+  const emo = document.getElementById('res-emo');
+  const title = document.getElementById('res-title');
+  const sub = document.getElementById('res-sub');
+  const stats = document.getElementById('res-stats');
+  const used = Math.round(d.time - S.timeLeft);
+  const mmss = s => Math.floor(s/60) + '분 ' + (s%60) + '초';
+
+  // score = pairs x difficulty points (+ time bonus when cleared solo)
+  const pts = PTS[S.diff];
+  const dShort = { easy:'하', normal:'중', hard:'상' }[S.diff];
+  const now = new Date();
+  const hm = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+  if(S.mode === 1){
+    if(cleared){
+      emo.textContent = '🎉'; title.textContent = '참 잘했어요!'; title.className = 'win';
+      sub.textContent = '모든 짝을 찾았습니다';
+      sfx.win();
+    }else{
+      emo.textContent = '⏰'; title.textContent = '시간 초과!'; title.className = 'lose';
+      sub.textContent = '아쉬워요, 한 번 더 도전해 보세요';
+      sfx.lose();
+    }
+    const sc = S.score[0] * pts + (cleared ? Math.ceil(S.timeLeft) * 5 : 0);
+    const rank = saveRank(sc, `${dShort}·1인·${hm}`);
+    stats.innerHTML = `
+      <div class="st"><div class="v">${sc.toLocaleString()}점</div><div class="k">점수 · 오늘 ${rank}위</div></div>
+      <div class="st"><div class="v">${S.score[0]} / ${S.totalPairs}</div><div class="k">찾은 짝 (${S.tries[0]}회)</div></div>
+      <div class="st"><div class="v">${mmss(used)}</div><div class="k">걸린 시간</div></div>`;
+  }else{
+    let msg;
+    if(S.score[0] > S.score[1]){ msg = '플레이어 1 승리!'; }
+    else if(S.score[1] > S.score[0]){ msg = '플레이어 2 승리!'; }
+    else{ msg = '무승부!'; }
+    emo.textContent = cleared ? '🏆' : '⏰';
+    title.textContent = msg;
+    title.className = 'win';
+    sub.textContent = cleared ? '모든 짝을 찾았습니다' : '시간이 다 되었어요';
+    (cleared ? sfx.win : sfx.lose)();
+    const sc1 = S.score[0] * pts, sc2 = S.score[1] * pts;
+    saveRank(sc1, `${dShort}·2인·${hm}`);
+    saveRank(sc2, `${dShort}·2인·${hm}`);
+    stats.innerHTML = `
+      <div class="st p1"><div class="v">${S.score[0]}짝</div><div class="k">플레이어 1 · ${sc1.toLocaleString()}점</div></div>
+      <div class="st p2"><div class="v">${S.score[1]}짝</div><div class="k">플레이어 2 · ${sc2.toLocaleString()}점</div></div>
+      <div class="st"><div class="v">${mmss(used)}</div><div class="k">걸린 시간</div></div>`;
+  }
+  setTimeout(() => document.getElementById('overlay').classList.add('on'), cleared ? 700 : 300);
+}
+
+document.getElementById('btn-retry').addEventListener('click', () => {
+  startGame(S.catId, S.catName, S.random);
+});
+document.getElementById('btn-home').addEventListener('click', () => {
+  sfx.tap(); stopGame(); show('screen-mode');
+});
+
+/* in-game controls */
+document.getElementById('gc-restart').addEventListener('click', () => {
+  startGame(S.catId, S.catName, S.random);
+});
+document.getElementById('gc-back').addEventListener('click', () => {
+  sfx.tap(); stopGame(); show('screen-cat');
+});
+document.getElementById('gc-quit').addEventListener('click', () => {
+  sfx.tap(); stopGame(); show('screen-mode');
+});
+
+/* ================= today's ranking ================= */
+const PTS = { easy:100, normal:150, hard:200 };
+function rankKey(){
+  const d = new Date();
+  return 'memoryRank_' + d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function loadRanks(){
+  try{ return JSON.parse(localStorage.getItem(rankKey())) || []; }catch(e){ return []; }
+}
+function saveRank(score, meta){
+  const arr = loadRanks();
+  const entry = { s:score, m:meta };
+  arr.push(entry);
+  arr.sort((a,b) => b.s - a.s);
+  const top = arr.slice(0, 20);
+  try{
+    // 지난 날짜 기록 정리
+    Object.keys(localStorage).forEach(k => {
+      if(k.indexOf('memoryRank_') === 0 && k !== rankKey()) localStorage.removeItem(k);
+    });
+    localStorage.setItem(rankKey(), JSON.stringify(top));
+  }catch(e){}
+  renderRanks();
+  const idx = top.indexOf(entry);
+  return idx === -1 ? top.length + 1 : idx + 1;
+}
+function renderRanks(){
+  const arr = loadRanks().slice(0, 5);
+  const medals = ['🥇','🥈','🥉','4','5'];
+  const html = arr.length
+    ? arr.map((e,i) =>
+        `<li><span class="medal">${medals[i]}</span><span class="pts">${e.s.toLocaleString()}점</span><span class="meta">${e.m}</span></li>`).join('')
+    : '<li><span class="empty">아직 오늘의 기록이 없어요<br>첫 도전자가 되어 보세요!</span></li>';
+  document.getElementById('rank-home').innerHTML = html;
+  document.getElementById('rank-game').innerHTML = html;
+}
+renderRanks();
+
+/* ================= kiosk idle reset ================= */
+let idleT = null;
+function idleKick(){
+  clearTimeout(idleT);
+  idleT = setTimeout(() => {
+    if(!S.attract) startAttract();   // 30초 무입력 -> 데모 반복 상영으로 복귀
+  }, 30000);
+}
+['pointerdown','keydown'].forEach(ev => document.addEventListener(ev, idleKick));
+document.addEventListener('pointerdown', () => { if(AC && AC.state === 'suspended') AC.resume(); });
+idleKick();
+
+/* 부팅 시 상시 화면 = 데모 반복 상영 */
+startAttract();
+</script>
+</body>
+</html>
