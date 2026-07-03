@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Window — 디지털 창문</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --wood-dark:#3d2b1f; --wood-mid:#5a3f2e; --wood-light:#7a5741;
+  --ui-white:rgba(255,255,255,.92);
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Noto Sans KR',sans-serif;}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;}
+
+/* ── 배경 영상(패럴랙스 레이어) ── */
+#stage{position:fixed;inset:0;overflow:hidden;}
+#bgvid{
+  position:absolute;left:50%;top:50%;
+  min-width:100%;min-height:100%;width:auto;height:auto;
+  transform:translate(-50%,-50%) scale(1.18);
+  will-change:transform;
+  object-fit:cover;
+}
+
+/* ── 창틀(나무 프레임) ── */
+#frame{position:fixed;inset:0;pointer-events:none;z-index:5;}
+.wood{
+  position:absolute;
+  background:
+    repeating-linear-gradient(92deg, rgba(0,0,0,.14) 0 2px, transparent 2px 7px, rgba(255,255,255,.05) 7px 9px, transparent 9px 14px),
+    linear-gradient(180deg, var(--wood-light), var(--wood-mid) 30%, var(--wood-dark) 95%);
+  box-shadow:inset 0 0 6px rgba(0,0,0,.55);
+}
+.wood.v{
+  background:
+    repeating-linear-gradient(2deg, rgba(0,0,0,.14) 0 2px, transparent 2px 7px, rgba(255,255,255,.05) 7px 9px, transparent 9px 14px),
+    linear-gradient(90deg, var(--wood-light), var(--wood-mid) 30%, var(--wood-dark) 95%);
+}
+#f-top{top:0;left:0;right:0;height:34px;}
+#f-bottom{bottom:0;left:0;right:0;height:44px;}
+#f-left{top:0;bottom:0;left:0;width:34px;}
+#f-right{top:0;bottom:0;right:0;width:34px;}
+#f-mid{top:0;bottom:0;left:50%;width:26px;margin-left:-13px;}
+#f-sill{bottom:36px;left:0;right:0;height:10px;
+  background:linear-gradient(180deg,#8a6a52,#4a3526);box-shadow:0 3px 6px rgba(0,0,0,.5);}
+.knob{position:absolute;width:14px;height:14px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#e8cf9a,#9a7b3f 60%,#5d4520);
+  box-shadow:0 1px 3px rgba(0,0,0,.6);}
+#knob-l{left:calc(50% - 30px);top:52%;}
+#knob-r{left:calc(50% + 17px);top:52%;}
+/* 유리 반사 */
+.glass{position:absolute;top:34px;bottom:44px;pointer-events:none;
+  background:linear-gradient(115deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,0) 24%, rgba(255,255,255,0) 76%, rgba(255,255,255,.06) 100%);}
+#glass-l{left:34px;right:calc(50% + 13px);}
+#glass-r{left:calc(50% + 13px);right:34px;}
+body.noframe #frame{display:none;}
+
+/* ── Digital Window 오버레이 UI ── */
+#overlay{position:fixed;inset:0;z-index:8;pointer-events:none;color:var(--ui-white);
+  text-shadow:0 1px 8px rgba(0,0,0,.45), 0 0 2px rgba(0,0,0,.35);}
+#info{position:absolute;left:8%;top:26%;}
+#title{font-size:clamp(26px,4.2vw,54px);font-weight:700;letter-spacing:.5px;}
+#subtitle{font-size:clamp(10px,1.1vw,14px);font-weight:400;opacity:.85;margin:-4px 0 6px 4px;}
+#clockrow{display:flex;align-items:flex-start;gap:10px;}
+#hhmm{font-size:clamp(54px,8.5vw,110px);font-weight:900;line-height:.95;letter-spacing:1px;}
+#clockside{display:flex;flex-direction:column;align-items:flex-start;margin-top:8px;}
+#ampm{font-size:clamp(20px,2.6vw,34px);font-weight:700;}
+#sec{font-size:clamp(20px,2.6vw,34px);font-weight:500;opacity:.9;}
+#daterow{display:flex;align-items:baseline;gap:18px;margin:6px 0 10px 6px;}
+#handle{font-size:clamp(10px,1.1vw,14px);opacity:.8;}
+#date{font-size:clamp(14px,1.8vw,24px);font-weight:500;}
+#cal{border-collapse:collapse;margin-left:6px;}
+#cal th{font-size:clamp(9px,1vw,13px);font-weight:700;padding:2px 8px;opacity:.9;}
+#cal td{font-size:clamp(9px,1vw,13px);font-weight:400;padding:2px 8px;text-align:center;opacity:.85;}
+#cal td.today{position:relative;font-weight:900;opacity:1;}
+#cal td.today::after{content:'';position:absolute;inset:-1px -3px;border:1.5px solid var(--ui-white);border-radius:6px;}
+#quote{position:absolute;right:7%;bottom:22%;max-width:30%;text-align:right;}
+#qtext{font-size:clamp(12px,1.5vw,20px);font-weight:500;line-height:1.5;}
+#qauthor{font-size:clamp(12px,1.5vw,20px);font-weight:900;font-style:italic;margin-top:10px;}
+body.noui #overlay{display:none;}
+
+/* ── 컨트롤 바 ── */
+#controls{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+  display:flex;gap:8px;z-index:20;transition:opacity .4s;opacity:0;pointer-events:none;}
+body.showctl #controls{opacity:1;pointer-events:auto;}
+#controls button, #controls select{
+  background:rgba(15,18,24,.82);color:#dfe7ef;border:1px solid rgba(255,255,255,.18);
+  border-radius:10px;padding:9px 14px;font-size:14px;font-weight:500;cursor:pointer;
+  backdrop-filter:blur(6px);
+}
+#controls button:hover{background:rgba(45,52,64,.9);}
+#controls button.on{background:#0e7490;border-color:#22d3ee;color:#fff;}
+#status{position:fixed;right:14px;top:12px;z-index:20;font-size:12px;color:#9fd8e8;
+  background:rgba(10,14,18,.6);padding:5px 10px;border-radius:8px;
+  opacity:0;transition:opacity .4s;pointer-events:none;}
+body.showctl #status{opacity:1;}
+#hint{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:20;
+  font-size:12px;color:rgba(255,255,255,.55);background:rgba(10,14,18,.45);
+  padding:5px 12px;border-radius:8px;pointer-events:none;transition:opacity .6s;}
+</style>
+</head>
+<body class="showctl">
+
+<div id="stage">
+  <video id="bgvid" autoplay muted loop playsinline src="video/sea_day.mp4"></video>
+</div>
+
+<div id="frame">
+  <div class="glass" id="glass-l"></div>
+  <div class="glass" id="glass-r"></div>
+  <div class="wood v" id="f-left"></div>
+  <div class="wood v" id="f-right"></div>
+  <div class="wood v" id="f-mid"></div>
+  <div class="wood" id="f-top"></div>
+  <div id="f-sill"></div>
+  <div class="wood" id="f-bottom"></div>
+  <div class="knob" id="knob-l"></div>
+  <div class="knob" id="knob-r"></div>
+</div>
+
+<div id="overlay">
+  <div id="info">
+    <div id="title">Digital Window</div>
+    <div id="subtitle">Powered by Web Browser</div>
+    <div id="clockrow">
+      <div id="hhmm">--:--</div>
+      <div id="clockside"><div id="ampm">--</div><div id="sec">:--</div></div>
+    </div>
+    <div id="daterow"><span id="handle">@kimbakssa5</span><span id="date">----/--/--</span></div>
+    <table id="cal"><thead><tr id="cal-head"></tr></thead><tbody id="cal-body"></tbody></table>
+  </div>
+  <div id="quote"><div id="qtext"></div><div id="qauthor"></div></div>
+</div>
+
+<div id="hint">마우스를 움직여 보세요 · 시선 추적을 켜면 머리 움직임으로 창밖을 봅니다</div>
+<div id="status">대기</div>
+
+<div id="controls">
+  <button id="btn-track">👁 시선 추적</button>
+  <select id="sel-scene">
+    <option value="sea_day">☀️ 한낮의 바다</option>
+    <option value="rocks">🪨 바위 해안</option>
+    <option value="sunset">🌇 일몰</option>
+    <option value="sunrise">🌅 일출</option>
+  </select>
+  <button id="btn-frame" class="on">🪟 창틀</button>
+  <button id="btn-ui" class="on">🕐 시계</button>
+  <button id="btn-full">⛶ 전체화면</button>
+</div>
+
+<script type="module">
+/* ───────────────── 시계 · 달력 · 명언 ───────────────── */
+const $ = id => document.getElementById(id);
+
+function tick(){
+  const n = new Date();
+  let h = n.getHours();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  $('hhmm').textContent = String(h).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
+  $('ampm').textContent = ampm;
+  $('sec').textContent = ':' + String(n.getSeconds()).padStart(2,'0');
+  $('date').textContent = `${n.getFullYear()}/${String(n.getMonth()+1).padStart(2,'0')}/${String(n.getDate()).padStart(2,'0')}`;
+}
+setInterval(tick, 250); tick();
+
+function buildCalendar(){
+  const n = new Date(), y = n.getFullYear(), m = n.getMonth();
+  const names = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  $('cal-head').innerHTML = names.map(d=>`<th>${d}</th>`).join('');
+  const first = new Date(y, m, 1);
+  const offset = (first.getDay() + 6) % 7;           // 월요일 시작
+  const days = new Date(y, m+1, 0).getDate();
+  let html = '', cell = 0, row = '<tr>';
+  for(let i=0;i<offset;i++){ row += '<td></td>'; cell++; }
+  for(let d=1; d<=days; d++){
+    row += `<td${d===n.getDate() ? ' class="today"' : ''}>${d}</td>`;
+    if(++cell % 7 === 0){ html += row + '</tr>'; row = '<tr>'; }
+  }
+  if(cell % 7) html += row + '</tr>';
+  $('cal-body').innerHTML = html;
+}
+buildCalendar();
+setInterval(buildCalendar, 60*60*1000);
+
+const QUOTES = [
+  ["It is not the strongest of the species that survives, nor the most intelligent, but the one most responsive to change.","Charles Darwin"],
+  ["An expert is a person who has made all the mistakes that can be made in a very narrow field.","Niels Bohr"],
+  ["The best way to predict the future is to invent it.","Alan Kay"],
+  ["Simplicity is the ultimate sophistication.","Leonardo da Vinci"],
+  ["Stay hungry, stay foolish.","Steve Jobs"],
+  ["The sea, once it casts its spell, holds one in its net of wonder forever.","Jacques Cousteau"],
+];
+let qi = Math.floor(Math.random()*QUOTES.length);
+function showQuote(){
+  const [t,a] = QUOTES[qi % QUOTES.length]; qi++;
+  $('qtext').textContent = '"' + t + '"';
+  $('qauthor').textContent = a;
+}
+showQuote(); setInterval(showQuote, 30000);
+
+/* ───────────────── 패럴랙스 파이프라인 ─────────────────
+   입력(머리 위치 or 마우스) → 정규화 → 게인/소프트리밋 → 스무딩 → transform
+   실측 웹캠 신호는 진폭이 작으므로(±0.1~0.2) 게인을 크게 두고
+   tanh 소프트리밋으로 과도한 이동을 막는다. 마우스 데모도 같은 경로를 지난다. */
+const vid = $('bgvid');
+const BASE_SCALE = 1.18;
+let target = {x:0, y:0, z:0};     // 정규화 목표값(-1..1)
+let cur    = {x:0, y:0, z:0};     // 스무딩 현재값
+const GAIN = { cam:{x:5.0, y:4.0, z:2.5}, mouse:{x:1.6, y:1.4, z:0} };
+let camActive = false;
+
+function drive(nx, ny, nz, src){
+  const g = GAIN[src];
+  target.x = Math.tanh(nx * g.x);
+  target.y = Math.tanh(ny * g.y);
+  target.z = Math.tanh(nz * g.z);
+}
+function animate(){
+  const a = 0.10;                                  // 지수 스무딩
+  cur.x += (target.x - cur.x) * a;
+  cur.y += (target.y - cur.y) * a;
+  cur.z += (target.z - cur.z) * a;
+  const scale = BASE_SCALE + cur.z * 0.10;         // 가까이 오면 축소(시야 확대)
+  const availX = (scale - 1) / 2 * window.innerWidth  * 0.9;
+  const availY = (scale - 1) / 2 * window.innerHeight * 0.9;
+  // 먼 배경은 관찰자와 같은 방향으로 따라온다(근경 창틀 기준 시차)
+  const tx = cur.x * availX, ty = cur.y * availY;
+  vid.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(${scale})`;
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* 마우스 데모(추적 꺼짐/실패 시) — 동일 파이프라인 사용 */
+window.addEventListener('mousemove', e=>{
+  if(camActive) return;
+  const nx = (e.clientX / window.innerWidth  - 0.5) * 2;
+  const ny = (e.clientY / window.innerHeight - 0.5) * 2;
+  drive(nx, ny, 0, 'mouse');
+});
+
+/* ───────────────── 웹캠 얼굴 추적 (MediaPipe) ───────────────── */
+let detector = null, camStream = null, camVideo = null, rafCam = 0;
+let baseFaceW = 0;   // 기준 얼굴 크기(z 추정용) — 시작 직후 자동 캘리브레이션
+
+async function startTracking(){
+  $('status').textContent = '모델 로딩 중…';
+  try{
+    const mp = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+    const fileset = await mp.FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    detector = await mp.FaceDetector.createFromOptions(fileset, {
+      baseOptions:{
+        modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+        delegate:'GPU'
+      },
+      runningMode:'VIDEO'
+    });
+    $('status').textContent = '카메라 여는 중…';
+    camStream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}});
+    camVideo = document.createElement('video');
+    camVideo.srcObject = camStream; camVideo.playsInline = true;
+    await camVideo.play();
+    camActive = true; baseFaceW = 0;
+    $('btn-track').classList.add('on');
+    $('status').textContent = '👁 추적 중';
+    $('hint').style.opacity = 0;
+    loopCam();
+  }catch(err){
+    console.error(err);
+    $('status').textContent = '카메라 사용 불가 — 마우스 모드';
+    stopTracking(false);
+  }
+}
+function loopCam(){
+  if(!camActive) return;
+  if(camVideo.readyState >= 2){
+    const res = detector.detectForVideo(camVideo, performance.now());
+    const det = res.detections && res.detections[0];
+    if(det){
+      const bb = det.boundingBox;
+      const cx = (bb.originX + bb.width/2)  / camVideo.videoWidth;
+      const cy = (bb.originY + bb.height/2) / camVideo.videoHeight;
+      const fw = bb.width / camVideo.videoWidth;
+      if(!baseFaceW) baseFaceW = fw;
+      // 미러: 관찰자가 오른쪽으로 → 화면상 얼굴은 왼쪽(x 작아짐)
+      const nx = (0.5 - cx) * 2;
+      const ny = (cy - 0.5) * 2;
+      const nz = (fw - baseFaceW) / baseFaceW;   // + = 가까움
+      drive(nx, ny, nz, 'cam');
+    }
+  }
+  rafCam = requestAnimationFrame(loopCam);
+}
+function stopTracking(resetStatus = true){
+  camActive = false;
+  cancelAnimationFrame(rafCam);
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+  $('btn-track').classList.remove('on');
+  if(resetStatus) $('status').textContent = '마우스 모드';
+}
+$('btn-track').addEventListener('click', ()=> camActive ? stopTracking() : startTracking());
+
+/* ───────────────── 컨트롤 ───────────────── */
+$('sel-scene').addEventListener('change', e=>{
+  vid.src = 'video/' + e.target.value + '.mp4';
+  vid.play().catch(()=>{});
+});
+$('btn-frame').addEventListener('click', e=>{
+  document.body.classList.toggle('noframe');
+  e.target.classList.toggle('on');
+});
+$('btn-ui').addEventListener('click', e=>{
+  document.body.classList.toggle('noui');
+  e.target.classList.toggle('on');
+});
+$('btn-full').addEventListener('click', ()=>{
+  if(document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(()=>{});
+});
+
+/* 컨트롤 자동 숨김(키오스크) */
+let hideTimer = 0;
+function poke(){
+  document.body.classList.add('showctl');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(()=> document.body.classList.remove('showctl'), 4000);
+}
+window.addEventListener('mousemove', poke);
+window.addEventListener('touchstart', poke);
+poke();
+setTimeout(()=> $('hint').style.opacity = 0, 8000);
+</script>
+</body>
+</html>
