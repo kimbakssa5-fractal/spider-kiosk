@@ -263,6 +263,21 @@
     border-radius:999px; padding:4px 18px 5px;
   }
   .score-panel.active .turn-chip{ display:block; animation:pop .3s ease; }
+  .turn-timer{
+    display:none; position:relative; height:24px; border-radius:12px;
+    background:#f3e2da; margin-top:12px; overflow:hidden;
+  }
+  .score-panel.active .turn-timer{ display:block; }
+  .turn-fill{
+    position:absolute; inset:0; width:100%; border-radius:12px;
+    background:linear-gradient(90deg,#57a773,#8fc9a3);
+    transition:width .1s linear;
+  }
+  .turn-fill.low{ background:linear-gradient(90deg,#e8604c,#f09a8b); }
+  .turn-sec{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:900; color:var(--ink);
+  }
   .score-panel.active{ transform:scale(1.04); }
   .score-panel[data-p="1"].active{ border-color:var(--p1); }
   .score-panel[data-p="2"].active{ border-color:var(--p2); }
@@ -419,7 +434,7 @@
         <button class="big-btn" data-mode="2">
           <span class="ico">🙋🙋‍♀️</span>
           <span class="t">2인용</span>
-          <span class="d">한 번씩 번갈아 뒤집으며 대결!</span>
+          <span class="d">번갈아 한 번씩 · 한 턴 10초!</span>
         </button>
       </div>
       <button id="btn-demo">🎬 이 게임은 어떻게 하는 건가요?</button>
@@ -473,6 +488,7 @@
           <div class="score-panel" data-p="1" id="panel-1">
             <div class="who"><span class="dot"></span><span id="p1-name">나의 점수</span></div>
             <div class="turn-chip">내 차례!</div>
+            <div class="turn-timer"><div class="turn-fill"></div><span class="turn-sec">10</span></div>
             <div class="num" id="p1-score">0</div>
             <div class="cap">찾은 짝</div>
             <div class="tries">뒤집기 <b id="p1-tries">0</b>회</div>
@@ -488,6 +504,7 @@
           <div class="score-panel" data-p="2" id="panel-2">
             <div class="who"><span class="dot"></span><span>플레이어 2</span></div>
             <div class="turn-chip">내 차례!</div>
+            <div class="turn-timer"><div class="turn-fill"></div><span class="turn-sec">10</span></div>
             <div class="num" id="p2-score">0</div>
             <div class="cap">찾은 짝</div>
             <div class="tries">뒤집기 <b id="p2-tries">0</b>회</div>
@@ -716,6 +733,7 @@ function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.rand
 function stopGame(){
   clearInterval(S.timerId);
   clearInterval(S.previewId);
+  clearInterval(S.turnTimerId);
   clearTimeout(S.previewTo);
   S.playing = false; S.lock = true; S.demo = false;
   document.getElementById('countdown').classList.remove('on');
@@ -913,7 +931,7 @@ function runPreview(sec){
       clearInterval(S.previewId);
       cd.classList.remove('on'); tip.classList.remove('on');
       document.querySelectorAll('#board .card').forEach(c => c.classList.remove('flipped'));
-      S.previewTo = setTimeout(() => { S.lock = false; S.playing = true; updatePanels(); startTimer(); }, 500);
+      S.previewTo = setTimeout(() => { S.lock = false; S.playing = true; updatePanels(); startTimer(); startTurnTimer(); }, 500);
     }else{
       cd.firstElementChild.textContent = n;
       sfx.tick();
@@ -949,6 +967,48 @@ function renderTime(){
   document.getElementById('timer-wrap').classList.toggle('low', S.playing && S.timeLeft <= 15);
 }
 
+/* ================= 2인용 턴 제한 타이머 ================= */
+const TURN_TIME = 10; // 한 턴 제한(초)
+function startTurnTimer(){
+  clearInterval(S.turnTimerId);
+  if(S.mode !== 2 || !S.playing) return;
+  const deadline = Date.now() + TURN_TIME * 1000;
+  S.lastTurnSec = TURN_TIME + 1;
+  renderTurnTimer(TURN_TIME);
+  S.turnTimerId = setInterval(() => {
+    const left = Math.max(0, (deadline - Date.now()) / 1000);
+    renderTurnTimer(left);
+    const sec = Math.ceil(left);
+    if(sec !== S.lastTurnSec){
+      S.lastTurnSec = sec;
+      if(sec <= 3 && sec > 0) tone(760, .06, 'square', .07);
+    }
+    if(left <= 0){ clearInterval(S.turnTimerId); onTurnTimeout(); }
+  }, 100);
+}
+function stopTurnTimer(){ clearInterval(S.turnTimerId); }
+function renderTurnTimer(left){
+  const panel = document.getElementById('panel-' + S.cur);
+  const fill = panel.querySelector('.turn-fill');
+  if(!fill) return;
+  fill.style.width = (left / TURN_TIME * 100) + '%';
+  fill.classList.toggle('low', left <= 3);
+  panel.querySelector('.turn-sec').textContent = Math.ceil(left);
+}
+function onTurnTimeout(){
+  if(!S.playing || S.mode !== 2 || S.lock) return;
+  S.lock = true;
+  tone(430, .15, 'sawtooth', .09); tone(300, .25, 'sawtooth', .09, .12);
+  S.flipped.forEach(c => c.classList.remove('flipped')); // 뒤집다 만 카드 원위치
+  S.flipped = [];
+  setTimeout(() => {
+    S.cur = S.cur === 1 ? 2 : 1;
+    updatePanels();
+    S.lock = false;
+    startTurnTimer();
+  }, 500);
+}
+
 /* ================= play ================= */
 function onCard(el){
   if(S.lock || !S.playing) return;
@@ -959,6 +1019,7 @@ function onCard(el){
   if(S.flipped.length < 2) return;
 
   S.lock = true;
+  stopTurnTimer();
   S.tries[S.cur-1]++;
   updatePanels();
   const [a, b] = S.flipped;
@@ -976,6 +1037,7 @@ function onCard(el){
         // 맞혀도 차례는 한 번씩 교대
         if(S.mode === 2){ S.cur = S.cur === 1 ? 2 : 1; updatePanels(); }
         S.lock = false;
+        startTurnTimer();
       }
     }, 350);
   }else{
@@ -988,6 +1050,7 @@ function onCard(el){
         S.flipped = [];
         if(S.mode === 2){ S.cur = S.cur === 1 ? 2 : 1; updatePanels(); }
         S.lock = false;
+        startTurnTimer();
       }, 550);
     }, 650);
   }
@@ -1014,6 +1077,7 @@ function updatePanels(){
 function endGame(cleared){
   S.playing = false; S.lock = true;
   clearInterval(S.timerId);
+  clearInterval(S.turnTimerId);
   updatePanels();
 
   const d = DATA[S.diff];
