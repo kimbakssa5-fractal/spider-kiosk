@@ -30,6 +30,27 @@
   .screen { position:absolute; inset:0; display:none; }
   .screen.on { display:block; }
 
+  /* ---------- START flash ---------- */
+  #startFlash {
+    position:absolute; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0;
+  }
+  #startFlash span {
+    font-size:280px; font-weight:900; letter-spacing:.12em; text-indent:.12em;
+    color:#e8604c; -webkit-text-stroke:8px #fff;
+    text-shadow:0 18px 50px rgba(232,96,76,.45);
+    transform:scale(.2);
+  }
+  #startFlash.go { animation:startFlashBox 1s ease forwards; }
+  #startFlash.go span { animation:startFlashTxt 1s cubic-bezier(.2,1.4,.35,1) forwards; }
+  @keyframes startFlashBox { 0%{opacity:0} 8%{opacity:1} 72%{opacity:1} 100%{opacity:0} }
+  @keyframes startFlashTxt {
+    0%   { transform:scale(.2); }
+    45%  { transform:scale(1.12); }
+    62%  { transform:scale(1); }
+    100% { transform:scale(1.06); }
+  }
+
   /* ---------- INTRO ---------- */
   #intro .panel {
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
@@ -81,7 +102,7 @@
     background:#fdf6ee; color:#8d8172; border-radius:26px; padding:20px 44px 16px;
     font-size:30px; font-weight:900; line-height:1.1; transition:all .14s ease;
   }
-  .stage-opt span { display:block; font-size:16px; font-weight:700; letter-spacing:.24em; color:#c5b6a2; margin-top:4px; }
+  .stage-opt span { display:block; font-size:17px; font-weight:700; letter-spacing:.02em; color:#c5b6a2; margin-top:4px; white-space:nowrap; }
   .stage-opt.on { background:#e8604c; border-color:#e8604c; color:#fff; box-shadow:0 10px 24px rgba(232,96,76,.32); }
   .stage-opt.on span { color:#ffe0d7; }
   .intro-best {
@@ -216,6 +237,7 @@
 <body>
 <div id="stage">
   <div class="dots-bg"></div>
+  <div id="startFlash"><span>START</span></div>
 
   <!-- ========== INTRO ========== -->
   <section id="intro" class="screen">
@@ -231,8 +253,8 @@
       <div class="stage-pick">
         <div class="stage-pick-label">스테이지 선택</div>
         <div class="stage-toggle">
-          <button class="stage-opt" data-set="a">작은 에너지원<span>SMALL</span></button>
-          <button class="stage-opt" data-set="c">큰 에너지원<span>BIG</span></button>
+          <button class="stage-opt" data-set="a">작은 에너지원<span>Small element</span></button>
+          <button class="stage-opt" data-set="c">큰 에너지원<span>Big element</span></button>
         </div>
       </div>
       <button class="btn btn-primary" id="startBtn">시 작 하 기</button>
@@ -664,10 +686,13 @@ const Sound = {
   hit()     { this.tone(340, .07, 'triangle', .16, 0, 60); },
   collect() { [523,659,784,1047].forEach((f,i)=>this.tone(f,.16,'triangle',.2,i*.07)); },
   sprout()  { this.tone(880,.09,'sine',.2); this.tone(1320,.14,'sine',.18,.08); },
-  oil()     { this.tone(220,.14,'sawtooth',.13,0,-90); this.tone(150,.2,'sawtooth',.11,.1,-60); },
+  // 기름: "흑!..." 하고 풀 죽는 슬픈 하강음
+  oil()     { this.tone(392,.14,'sine',.16,0,-40); this.tone(330,.16,'triangle',.14,.10,-70); this.tone(233,.34,'sine',.13,.24,-70); },
   lose()    { this.tone(300,.5,'sawtooth',.12,0,-220); },
   clear()   { [523,659,784,1047,1319,1568].forEach((f,i)=>this.tone(f,.3,'triangle',.2,i*.12)); },
   over()    { [392,330,262].forEach((f,i)=>this.tone(f,.32,'triangle',.16,i*.18)); },
+  // 시작: 팡파레(상승 아르페지오 + 밝은 톤)
+  start()   { [523,659,784,1047].forEach((f,i)=>this.tone(f,.18,'triangle',.22,i*.05)); this.tone(1568,.4,'triangle',.16,.2); },
 };
 
 /* =====================================================================
@@ -1255,6 +1280,13 @@ function startGame() {
   Sound.ensure();
   resetGame(false);
   show('game');
+  flashStart();
+}
+/* 화면 중앙에 'START' 팍 + 시작 효과음 */
+function flashStart() {
+  Sound.start();
+  const el = $('#startFlash');
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
 }
 function startDemo() {
   resetGame(true);
