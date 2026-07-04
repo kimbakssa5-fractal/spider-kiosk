@@ -93,6 +93,16 @@
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 10px 34px rgba(0,0,0,.45);}
   #zoomClose:hover{background:rgba(30,33,40,.66);color:#fff;}
   #overlay.zoomed #zoomClose{display:inline-flex;}
+  /* 전체화면 확대 중 상단에 뜨는 파일 제목 (확대 오버레이 위 z70) */
+  #zoomTitle{position:fixed;left:50%;top:26px;transform:translateX(-50%);z-index:70;display:none;
+    max-width:90vw;padding:10px 24px;border-radius:40px;text-align:center;
+    border:1px solid rgba(255,255,255,.16);background:rgba(18,20,25,.5);color:#eef2f7;
+    font-family:inherit;font-size:19px;font-weight:600;letter-spacing:.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    box-shadow:0 10px 34px rgba(0,0,0,.45);text-shadow:0 2px 12px rgba(0,0,0,.8);}
+  #overlay.zoomed #zoomTitle{display:block;}
+  #overlay.zoomed #zoomTitle:empty{display:none;}   /* 제목 없으면 표시 안 함 */
 
   /* 정보 패널 (포커스 사진 옆에 붙는 반투명 카드) */
   .panel{flex:0 0 auto;width:300px;max-width:88vw;color:#eef2f7;
@@ -288,6 +298,7 @@
       </div>
     </div>
     <!-- 전체화면 확대 중에만 뜨는 하단 닫기 버튼 -->
+    <div id="zoomTitle"></div>
     <button id="zoomClose" aria-label="확대 닫기">화면의 아무 곳을 누르면 창을 닫습니다</button>
   </div>
 
@@ -655,6 +666,7 @@ function renderDetail(){
   const p = state.byId[state.order[state.cur]];
   $('#bigImg').src = p.full; $('#bigImg').alt = p.title;
   $('#pTitle').textContent = p.title;
+  $('#zoomTitle').textContent = p.title || '';   // 전체화면 확대 중 상단 제목
   $('#pIdx').textContent = `${state.cur+1} / ${state.order.length}`;
   const d = $('#pDesc');
   if(p.content && p.content.trim()){ d.textContent = p.content; d.classList.remove('empty'); }
@@ -891,15 +903,9 @@ requestFS();
 ['pointerdown','touchstart','keydown','click'].forEach(ev =>
   window.addEventListener(ev, requestFS, {once:true, capture:true}));
 
-/* 마우스 커서 숨김 — 키오스크(?kiosk=1)는 항상 숨김, 그 외엔 4초 무동작 시 숨김.
-   (회전 디스플레이에서 하드웨어 손가락/화살표 커서가 세로로 짜부러져 보이는 현상 대응) */
-(function(){
-  const kiosk = new URLSearchParams(location.search).get('kiosk') === '1';
-  const hide = () => document.body.classList.add('hide-cursor');
-  if(kiosk){ hide(); return; }
-  let t; const show = () => { document.body.classList.remove('hide-cursor'); clearTimeout(t); t=setTimeout(hide, 4000); };
-  show(); addEventListener('mousemove', show, {passive:true});
-})();
+/* 마우스 커서 항상 표시 (사용자 요청: 포인터가 사라지지 않게).
+   이전의 키오스크 항상숨김 / 4초 무동작 자동숨김 로직 제거함. */
+(function(){ document.body.classList.remove('hide-cursor'); })();
 
 /* ══════════ 단축키 패널(M / '미디어 월' 터치) ══════════ */
 function setPerScreenDirect(n){                        // 토글 없는 직접 지정(패널·환원용)
