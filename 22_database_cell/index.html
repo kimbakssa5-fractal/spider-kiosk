@@ -494,6 +494,18 @@ function setPerScreen(n){
   markHotzone();
   toast(state.perScreen ? `TV 1대당 ${n}칸` : '칸 수 자동');
 }
+/* + / - : TV 1대당 칸 수를 하나씩 증감. 자동 상태면 현재 화면의 자동 칸수에서 시작. */
+function stepPerScreen(delta){
+  let cur = state.perScreen;
+  if(!cur){                                        // 자동 → 현재 자동 칸수에서 TV당 칸수 추정
+    const W = innerWidth, target = W < 700 ? 116 : 132;
+    cur = Math.max(1, Math.round(Math.max(4, Math.round(W / target)) / SCREENS));
+  }
+  const n = Math.min(18, Math.max(1, cur + delta));
+  state.perScreen = n; save('dbwall_perscreen', n);
+  buildWall(); flow.last = performance.now(); markHotzone();
+  toast(`TV 1대당 ${n}칸`);
+}
 function markHotzone(){
   document.querySelectorAll('#hotzones .hz').forEach(c =>
     c.classList.toggle('sel', +c.dataset.val === state.perScreen));
@@ -857,6 +869,8 @@ addEventListener('keydown', e => {
     else if(e.code==='KeyV') setSpeed(4);          // 4배속
     else if(e.code==='KeyB') setSpeed(8);          // 8배속
     else if(e.code==='KeyN') setSpeed(16);         // 16배속
+    else if(e.code==='Equal' || e.code==='NumpadAdd') stepPerScreen(1);        // + : TV당 칸 하나 늘림
+    else if(e.code==='Minus' || e.code==='NumpadSubtract') stepPerScreen(-1);  // - : TV당 칸 하나 줄임
     else if(e.code==='KeyA' && e.shiftKey) setAdmin(!state.admin);  // Shift+A: 관리자
     else if(e.code==='KeyF' && e.shiftKey) toggleFS();             // Shift+F: 전체화면
     else if(SCREEN_CODES[e.code]) setScreens(SCREEN_CODES[e.code]);  // a~l: TV 1~9대
@@ -889,15 +903,9 @@ requestFS();
 ['pointerdown','touchstart','keydown','click'].forEach(ev =>
   window.addEventListener(ev, requestFS, {once:true, capture:true}));
 
-/* 마우스 커서 숨김 — 키오스크(?kiosk=1)는 항상 숨김, 그 외엔 4초 무동작 시 숨김.
-   (회전 디스플레이에서 하드웨어 손가락/화살표 커서가 세로로 짜부러져 보이는 현상 대응) */
-(function(){
-  const kiosk = new URLSearchParams(location.search).get('kiosk') === '1';
-  const hide = () => document.body.classList.add('hide-cursor');
-  if(kiosk){ hide(); return; }
-  let t; const show = () => { document.body.classList.remove('hide-cursor'); clearTimeout(t); t=setTimeout(hide, 4000); };
-  show(); addEventListener('mousemove', show, {passive:true});
-})();
+/* 마우스 커서 항상 표시 (사용자 요청: 포인터가 사라지지 않게).
+   이전의 키오스크 항상숨김 / 4초 무동작 자동숨김 로직 제거함. */
+(function(){ document.body.classList.remove('hide-cursor'); })();
 
 /* ══════════ 단축키 패널(M / '미디어 월' 터치) ══════════ */
 function setPerScreenDirect(n){                        // 토글 없는 직접 지정(패널·환원용)
