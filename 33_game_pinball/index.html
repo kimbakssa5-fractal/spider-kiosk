@@ -331,32 +331,36 @@ const LS_ACCESS = 'pinball33_access';
 const LS_BEST   = 'pinball33_best';
 const PIN_CODE  = '1412';
 
-/* 게스트 1회 체험 링크: URL ?g=<토큰>. 비번(1412)은 링크·소스 어디에도 없음.
+/* 게스트 체험 링크: URL ?g=<토큰>. 비번(1412)은 링크·소스 어디에도 없음.
    토큰의 SHA-256만 저장 → 토큰조차 소스에서 역추적 불가.
-   허용은 sessionStorage(탭 닫으면=폰 끄면 소멸) + localStorage 'burn'(한 기기 1회). */
-const GUEST_HASH = '9be0485ba2c8106ee05703250fec0a304439363dff94d9d7e98a3d70f45d9434';
-const SS_GUEST   = 'pinball33_guest';   // 세션 통행증
-const LS_BURN    = 'pinball33_burn';    // 이미 쓴 토큰 해시 목록
+   모바일은 세션(sessionStorage)이 폰 재시작 시에도 복원될 수 있어 신뢰 불가 →
+   대신 localStorage에 '첫 접속 시각'을 박아, 첫 탭 후 GUEST_WINDOW 동안만 허용하고 이후 영구 차단. */
+const GUEST_HASH   = '9be0485ba2c8106ee05703250fec0a304439363dff94d9d7e98a3d70f45d9434';
+const LS_GUEST_REC = 'pinball33_guest';       // {h, exp} 첫 접속 기록
+const GUEST_WINDOW = 15 * 60 * 1000;          // 첫 접속 후 유효 시간(15분)
+let guestActive = false;                       // 이번 로드에서 게스트로 통과했는지
 
-function hasAccess() {
-  return !!localStorage.getItem(LS_ACCESS) || sessionStorage.getItem(SS_GUEST) === '1';
-}
+function hasAccess() { return !!localStorage.getItem(LS_ACCESS) || guestActive; }
 async function sha256hex(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-/* URL 게스트 토큰 검사 → 통과 시 세션 통행증 발급(+토큰 소각). 결과 boolean */
+/* URL 게스트 토큰 검사 → 유효 창 안이면 입장 허용. 결과 boolean */
 async function tryGuestToken() {
   const t = new URLSearchParams(location.search).get('g');
   if (!t) return false;
-  // 이미 이 세션에서 입장했으면 새로고침도 허용
-  if (sessionStorage.getItem(SS_GUEST) === '1') return true;
   let h; try { h = await sha256hex(t); } catch(e) { return false; }
   if (h !== GUEST_HASH) return false;
-  const burned = JSON.parse(localStorage.getItem(LS_BURN) || '[]');
-  if (burned.includes(h)) return false;           // 이 기기에서 이미 1회 사용함
-  burned.push(h); localStorage.setItem(LS_BURN, JSON.stringify(burned));
-  sessionStorage.setItem(SS_GUEST, '1');          // 세션 통행증(탭 닫으면 소멸)
+  const now = Date.now();
+  let rec; try { rec = JSON.parse(localStorage.getItem(LS_GUEST_REC) || 'null'); } catch(e) { rec = null; }
+  if (rec && rec.h === h) {
+    // 이 기기에서 이미 시작함 → 유효 창 안에서만 재입장, 지나면 영구 차단
+    if (now < rec.exp) { guestActive = true; return true; }
+    return false;
+  }
+  // 이 기기 첫 접속: 지금부터 GUEST_WINDOW 동안만 유효
+  localStorage.setItem(LS_GUEST_REC, JSON.stringify({ h, exp: now + GUEST_WINDOW }));
+  guestActive = true;
   return true;
 }
 
