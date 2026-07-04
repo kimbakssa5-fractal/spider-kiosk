@@ -2,11 +2,13 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Database Wall · 미디어 월</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="lib/qrcode.min.js"></script>
 <style>
   :root{
     --bg:#050506;
@@ -748,18 +750,9 @@ $('#qrClose').addEventListener('click', () => $('#share').classList.remove('on')
 $('#share').addEventListener('click', e => { if(e.target.id==='share') $('#share').classList.remove('on'); });
 
 function makeQR(box, url){
-  // 1) qrcodejs CDN → 2) qrserver 이미지 API → 3) 링크만
+  // 로컬 라이브러리(lib/qrcode.min.js)만 사용 — 외부 CDN/이미지API 호출 없음(완전 오프라인·격리).
   if(window.QRCode){ new QRCode(box, {text:url, width:220, height:220, correctLevel:QRCode.CorrectLevel.M}); return; }
-  const s = document.createElement('script');
-  s.src = 'https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js';
-  s.onload = () => { box.innerHTML=''; new QRCode(box, {text:url, width:220, height:220}); };
-  s.onerror = () => {
-    const img = new Image();
-    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(url);
-    img.onerror = () => box.innerHTML = '<div style="font-size:12px;color:#66707c">QR 생성 실패 — 아래 링크를 이용하세요</div>';
-    box.appendChild(img);
-  };
-  document.head.appendChild(s);
+  box.innerHTML = '<div style="font-size:12px;color:#66707c">QR 생성 실패 — 아래 링크를 이용하세요</div>';
 }
 
 /* 확대(줌/팬) — 전체화면 확대 시 하단 닫기 버튼 표시, 사진/빈곳 탭으로도 해제 */
