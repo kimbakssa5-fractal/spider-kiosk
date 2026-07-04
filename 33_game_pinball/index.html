@@ -343,23 +343,19 @@ function dailyCode() {
 }
 function adminValid() { return localStorage.getItem(LS_ACCESS) === todayStr(); }
 
-/* 인스턴트 1회 체험 링크: URL 끝에 ?g=instant. 비번 없이 바로 입장.
-   기기·프로젝트·날짜별로 하루 1회 15분 창(그 뒤 오늘은 차단, 내일 다시 1회). */
-const GUEST_WINDOW = 15 * 60 * 1000;
+/* 인스턴트 체험 링크: URL 끝에 ?g=ins. 비번 없이 바로 입장.
+   그날 자정까지 유효(하루 통행증), 매일 자동 리셋. 기기·프로젝트별. */
 let guestActive = false;
 function hasAccess() { return adminValid() || guestActive; }
-function tryGuestToken() {
-  const sp = new URLSearchParams(location.search);
-  if (sp.get('g') !== 'instant') return false;
-  const GK = 'guest_' + location.pathname, now = Date.now(), today = todayStr();
-  let rec; try { rec = JSON.parse(localStorage.getItem(GK) || 'null'); } catch(e) { rec = null; }
-  if (rec && rec.d === today) {                 // 오늘 이미 시작 → 15분 창 안에서만
-    if (now < rec.exp) { guestActive = true; return true; }
-    return false;
-  }
-  localStorage.setItem(GK, JSON.stringify({ d: today, exp: now + GUEST_WINDOW }));  // 새 날=새 15분
-  guestActive = true;
-  return true;
+function guestPassToday() {   // 오늘 발급된 인스턴트 통행증이 있으면 유효(자정까지)
+  try { const r = JSON.parse(localStorage.getItem('guest_' + location.pathname) || 'null');
+        return !!r && r.d === todayStr(); } catch(e) { return false; }
+}
+function tryGuestToken() {    // ?g=ins → 오늘 통행증 발급(이미 있으면 유지) → 자정까지 유효
+  if (new URLSearchParams(location.search).get('g') === 'ins')
+    localStorage.setItem('guest_' + location.pathname, JSON.stringify({ d: todayStr() }));
+  if (guestPassToday()) { guestActive = true; return true; }
+  return false;
 }
 
 const FIELD_W = 880, FIELD_H = 940;
