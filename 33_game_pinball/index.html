@@ -1082,16 +1082,18 @@ function render() {
         ctx.beginPath(); ctx.arc(0,0,20,0,7); ctx.fill();
       }
     } else {
-      // 기름: capsule.png 이미지, 꾸덕하게 위아래 스트레칭(부피 보존)
-      const st = 1 + .34*Math.sin(s.t*4.2);
+      // 기름: 사방으로 숨 쉬듯 꾸물꾸물 스케일 웨이브 (위아래 스트레칭 X)
+      const breath = 1 + .10*Math.sin(s.t*3.3);        // 전체 숨쉬기(등방 확대)
+      const sx = breath * (1 + .06*Math.sin(s.t*5.1 + 0.7)); // 가로 미세 꿈틀
+      const sy = breath * (1 + .06*Math.sin(s.t*4.3 + 2.1)); // 세로 미세 꿈틀(위상 다름)
+      ctx.scale(sx, sy);
       ctx.shadowColor='transparent';
       if (CAPSULE_IMG.complete && CAPSULE_IMG.naturalWidth) {
-        const h = 62*st, w = (h*CAPSULE_IMG.width/CAPSULE_IMG.height)/st;
+        const base = 60, w = base*CAPSULE_IMG.width/CAPSULE_IMG.height, h = base;
         ctx.drawImage(CAPSULE_IMG, -w/2, -h/2, w, h);
       } else {
-        ctx.scale(1/Math.sqrt(st), st);
         ctx.fillStyle = '#3a352f';
-        ctx.beginPath(); ctx.ellipse(0,0,12,22,0,0,7); ctx.fill();
+        ctx.beginPath(); ctx.arc(0,0,22,0,7); ctx.fill();
       }
     }
     ctx.restore();
