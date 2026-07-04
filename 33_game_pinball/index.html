@@ -329,7 +329,19 @@
 
 const LS_ACCESS = 'pinball33_access';
 const LS_BEST   = 'pinball33_best';
-const PIN_CODE  = '1412';
+
+/* 매일 바뀌는 비밀번호: 오늘 날짜 MMDD의 각 자리에 +1 (9는 0으로).
+   예) 07/04 → 1815, 07/09 → 1810. 접근은 '오늘'만 유효 → 내일이면 자동 재잠금(영구 개방 없음). */
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+function dailyCode() {
+  const d = new Date();
+  const mmdd = String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  return [...mmdd].map(c => (+c + 1) % 10).join('');
+}
+function adminValid() { return localStorage.getItem(LS_ACCESS) === todayStr(); }
 
 /* 게스트 체험 링크: URL ?g=<토큰>. 비번(1412)은 링크·소스 어디에도 없음.
    토큰의 SHA-256만 저장 → 토큰조차 소스에서 역추적 불가.
@@ -340,7 +352,7 @@ const LS_GUEST_REC = 'pinball33_guest';       // {h, exp} 첫 접속 기록
 const GUEST_WINDOW = 15 * 60 * 1000;          // 첫 접속 후 유효 시간(15분)
 let guestActive = false;                       // 이번 로드에서 게스트로 통과했는지
 
-function hasAccess() { return !!localStorage.getItem(LS_ACCESS) || guestActive; }
+function hasAccess() { return adminValid() || guestActive; }
 async function sha256hex(s) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -1409,8 +1421,8 @@ function renderPin() {
   }
 }
 function checkPin() {
-  if (pin === PIN_CODE) {
-    localStorage.setItem(LS_ACCESS, '1');
+  if (pin === dailyCode()) {
+    localStorage.setItem(LS_ACCESS, todayStr());   // 오늘만 유효(내일이면 재잠금)
     goFull();
     goIntro();
   } else {
@@ -1448,8 +1460,8 @@ function checkPin() {
   }
   $('#bestVal').textContent = best.toLocaleString();
 
-  // 게스트 링크(?g=토큰) → 비번 없이 1회 입장 / 아니면 관리자 비번 게이트
-  if (localStorage.getItem(LS_ACCESS)) {
+  // 오늘자 비번으로 이미 입장했으면 통과 / 게스트 링크(?g=) 1회 / 아니면 오늘의 비번 게이트
+  if (adminValid()) {
     goIntro();
   } else {
     show('gate');
