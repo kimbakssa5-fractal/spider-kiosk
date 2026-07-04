@@ -331,6 +331,35 @@ const LS_ACCESS = 'pinball33_access';
 const LS_BEST   = 'pinball33_best';
 const PIN_CODE  = '1412';
 
+/* 게스트 1회 체험 링크: URL ?g=<토큰>. 비번(1412)은 링크·소스 어디에도 없음.
+   토큰의 SHA-256만 저장 → 토큰조차 소스에서 역추적 불가.
+   허용은 sessionStorage(탭 닫으면=폰 끄면 소멸) + localStorage 'burn'(한 기기 1회). */
+const GUEST_HASH = '9be0485ba2c8106ee05703250fec0a304439363dff94d9d7e98a3d70f45d9434';
+const SS_GUEST   = 'pinball33_guest';   // 세션 통행증
+const LS_BURN    = 'pinball33_burn';    // 이미 쓴 토큰 해시 목록
+
+function hasAccess() {
+  return !!localStorage.getItem(LS_ACCESS) || sessionStorage.getItem(SS_GUEST) === '1';
+}
+async function sha256hex(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+/* URL 게스트 토큰 검사 → 통과 시 세션 통행증 발급(+토큰 소각). 결과 boolean */
+async function tryGuestToken() {
+  const t = new URLSearchParams(location.search).get('g');
+  if (!t) return false;
+  // 이미 이 세션에서 입장했으면 새로고침도 허용
+  if (sessionStorage.getItem(SS_GUEST) === '1') return true;
+  let h; try { h = await sha256hex(t); } catch(e) { return false; }
+  if (h !== GUEST_HASH) return false;
+  const burned = JSON.parse(localStorage.getItem(LS_BURN) || '[]');
+  if (burned.includes(h)) return false;           // 이 기기에서 이미 1회 사용함
+  burned.push(h); localStorage.setItem(LS_BURN, JSON.stringify(burned));
+  sessionStorage.setItem(SS_GUEST, '1');          // 세션 통행증(탭 닫으면 소멸)
+  return true;
+}
+
 const FIELD_W = 880, FIELD_H = 940;
 const BALL_R = 13, PADDLE_H = 26, PADDLE_Y = 878;
 const PADDLE_BASE = 210, PADDLE_MIN = 120, PADDLE_MAX = 320, PADDLE_STEP = 22;
@@ -1350,7 +1379,7 @@ addEventListener('keydown', e=>{
 let firstTouch = true;
 addEventListener('pointerdown', ()=>{
   Sound.ensure();
-  if (firstTouch && localStorage.getItem(LS_ACCESS)) { goFull(); firstTouch = false; }
+  if (firstTouch && hasAccess()) { goFull(); firstTouch = false; }
 }, true);
 
 /* ---- 비밀번호 게이트 ---- */
@@ -1414,8 +1443,13 @@ function checkPin() {
   }
   $('#bestVal').textContent = best.toLocaleString();
 
-  if (localStorage.getItem(LS_ACCESS)) goIntro();
-  else show('gate');
+  // 게스트 링크(?g=토큰) → 비번 없이 1회 입장 / 아니면 관리자 비번 게이트
+  if (localStorage.getItem(LS_ACCESS)) {
+    goIntro();
+  } else {
+    show('gate');
+    tryGuestToken().then(ok => { if (ok) { goFull(); goIntro(); } });
+  }
 
   requestAnimationFrame(loop);
 }
