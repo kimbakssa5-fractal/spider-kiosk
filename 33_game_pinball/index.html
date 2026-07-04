@@ -365,7 +365,7 @@ const BALL_R = 13, PADDLE_H = 26, PADDLE_Y = 878;
 const PADDLE_BASE = 210, PADDLE_MIN = 120, PADDLE_MAX = 320, PADDLE_STEP = 22;
 const START_BALLS = 4;
 const SCORE_FIRST = 300, SCORE_REPEAT = 50, SCORE_CLEAR = 3000;
-const SPEED_BASE = 8.5, SPEED_MAX = 14.5;
+const SPEED_BASE = 8.5, SPEED_MAX = 21;
 
 /* ------------------ 에너지원 정의 (11종) ------------------ */
 // 아이콘·위치·크기 모두 C-.psd 'Layer 12 copy'(실루엣 아웃라인 그대로)에서 추출.
@@ -934,7 +934,8 @@ function step(dt) {
     const sub = Math.ceil(G.speed*dt / 6);
     for (let i=0;i<sub;i++) stepBall(dt/sub);
   }
-  G.speed = Math.min(SPEED_MAX, SPEED_BASE + G.time*.04 + G.laps*.6);
+  // 시간이 지날수록 점점 빨라짐(선형+후반 가속). 캡 21까지 계속 상승
+  G.speed = Math.min(SPEED_MAX, SPEED_BASE + G.time*.075 + G.time*G.time*.00016 + G.laps*.6);
 
   // 낙하 아이템: 새싹(패들 커짐) / 기름(패들 작아짐)
   G.itemTimer -= dt/60;
