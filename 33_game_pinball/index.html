@@ -300,19 +300,20 @@ const SCORE_FIRST = 300, SCORE_REPEAT = 50, SCORE_CLEAR = 3000;
 const SPEED_BASE = 8.5, SPEED_MAX = 14.5;
 
 /* ------------------ 에너지원 정의 (11종) ------------------ */
-// 위치·크기는 C-.psd 목업(3840×2160 = 스테이지 2배)에서 검출해 필드 좌표(880×940)로 변환
+// 아이콘·위치·크기 모두 C-.psd 'Layer 12 copy'(실루엣 아웃라인 그대로)에서 추출.
+// 목업(3840×2160)=스테이지 2배 → field=(mockup-566,-140)/2
 const ENERGY = [
-  { id:'sun',    name:'태양열',        chip:'#ffe3b3', x:267, y:195, r:77 },
-  { id:'pv',     name:'태양광발전',    chip:'#cfe6ff', x:125, y:123, r:76 },
-  { id:'wind',   name:'풍력',          chip:'#dff1ff', x:533, y:168, r:82 },
-  { id:'h2',     name:'수소에너지',    chip:'#e6e0ff', x:387, y:336, r:77 },
-  { id:'bio',    name:'바이오매스',    chip:'#e2f3d1', x:725, y:308, r:71 },
-  { id:'fuel',   name:'연료전지',      chip:'#d9f2e6', x:351, y:551, r:77 },
-  { id:'coal',   name:'석탄액화가스화', chip:'#e8e3de', x:134, y:373, r:77 },
-  { id:'ocean',  name:'해양에너지',    chip:'#cce9f6', x:174, y:653, r:76 },
-  { id:'hydro',  name:'소수력',        chip:'#d4ecf9', x:722, y:138, r:67 },
-  { id:'geo',    name:'지열',          chip:'#ffdfd1', x:729, y:588, r:73 },
-  { id:'waste',  name:'폐기물에너지',  chip:'#e5f0d4', x:590, y:428, r:75 },
+  { id:'sun',    name:'태양열',        chip:'#ffe3b3', x:267, y:196, r:80 },
+  { id:'pv',     name:'태양광발전',    chip:'#cfe6ff', x:126, y:124, r:80 },
+  { id:'wind',   name:'풍력',          chip:'#dff1ff', x:533, y:168, r:85 },
+  { id:'h2',     name:'수소에너지',    chip:'#e6e0ff', x:388, y:336, r:81 },
+  { id:'bio',    name:'바이오매스',    chip:'#e2f3d1', x:725, y:307, r:73 },
+  { id:'fuel',   name:'연료전지',      chip:'#d9f2e6', x:352, y:551, r:79 },
+  { id:'coal',   name:'석탄액화가스화', chip:'#e8e3de', x:134, y:373, r:81 },
+  { id:'ocean',  name:'해양에너지',    chip:'#cce9f6', x:174, y:653, r:77 },
+  { id:'hydro',  name:'소수력',        chip:'#d4ecf9', x:722, y:138, r:70 },
+  { id:'geo',    name:'지열',          chip:'#ffdfd1', x:728, y:581, r:82 },
+  { id:'waste',  name:'폐기물에너지',  chip:'#e5f0d4', x:590, y:429, r:77 },
 ];
 
 /* =====================================================================
