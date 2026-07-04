@@ -591,7 +591,7 @@ for (const e of ENERGY) {
 const LEAF_IMG = new Image();
 LEAF_IMG.src = 'assets/leaf.png';
 const CAPSULE_IMG = new Image();
-CAPSULE_IMG.src = 'assets/capsule.png';
+CAPSULE_IMG.src = 'assets/oilstain.png';
 
 /* =====================================================================
    사운드 (WebAudio 신스)
@@ -977,21 +977,21 @@ function drawGlassBall(cx, cy, r) {
   // 구슬 클립
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.clip();
 
-  // 바탕 청록 유리 (깊이감)
-  const body = ctx.createRadialGradient(cx-r*.35, cy-r*.4, r*.1, cx+r*.15, cy+r*.25, r*1.25);
-  body.addColorStop(0,   '#a9f7ef');
-  body.addColorStop(.42, '#38d6cf');
-  body.addColorStop(.78, '#12a6b4');
-  body.addColorStop(1,   '#0b6d84');
+  // 바탕 청록 유리 (진하고 깊은 색)
+  const body = ctx.createRadialGradient(cx-r*.35, cy-r*.4, r*.08, cx+r*.15, cy+r*.25, r*1.3);
+  body.addColorStop(0,   '#2fb8ac');
+  body.addColorStop(.4,  '#0e8f92');
+  body.addColorStop(.74, '#046070');
+  body.addColorStop(1,   '#022f42');
   ctx.fillStyle = body;
   ctx.fillRect(cx-r, cy-r, r*2, r*2);
 
   // 굴절: 아래쪽에 뒤집힌 배경을 살짝 비침 (렌즈 느낌)
-  ctx.globalAlpha = .28;
+  ctx.globalAlpha = .22;
   ctx.globalCompositeOperation = 'screen';
   const refr = ctx.createRadialGradient(cx+r*.2, cy+r*.55, r*.05, cx+r*.2, cy+r*.55, r*.9);
-  refr.addColorStop(0, 'rgba(220,255,252,.9)');
-  refr.addColorStop(1, 'rgba(220,255,252,0)');
+  refr.addColorStop(0, 'rgba(120,240,225,.8)');
+  refr.addColorStop(1, 'rgba(120,240,225,0)');
   ctx.fillStyle = refr;
   ctx.fillRect(cx-r, cy-r, r*2, r*2);
   ctx.globalCompositeOperation = 'source-over';
@@ -999,11 +999,20 @@ function drawGlassBall(cx, cy, r) {
 
   // 하단 가장자리 내부 반사(카우스틱) — 밝은 청록 초승달
   ctx.globalCompositeOperation = 'screen';
-  const rim = ctx.createRadialGradient(cx, cy+r*.15, r*.55, cx, cy+r*.15, r);
-  rim.addColorStop(0, 'rgba(120,255,240,0)');
-  rim.addColorStop(.82, 'rgba(120,255,240,0)');
-  rim.addColorStop(1, 'rgba(180,255,248,.85)');
+  const rim = ctx.createRadialGradient(cx, cy+r*.15, r*.58, cx, cy+r*.15, r);
+  rim.addColorStop(0, 'rgba(60,220,205,0)');
+  rim.addColorStop(.84, 'rgba(60,220,205,0)');
+  rim.addColorStop(1, 'rgba(120,240,225,.7)');
   ctx.fillStyle = rim;
+  ctx.fillRect(cx-r, cy-r, r*2, r*2);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // 상단 내부 그늘로 깊이 강화
+  ctx.globalCompositeOperation = 'multiply';
+  const shade = ctx.createRadialGradient(cx+r*.25, cy+r*.35, r*.2, cx+r*.25, cy+r*.35, r*1.1);
+  shade.addColorStop(0, 'rgba(1,30,45,0)');
+  shade.addColorStop(1, 'rgba(1,30,45,.55)');
+  ctx.fillStyle = shade;
   ctx.fillRect(cx-r, cy-r, r*2, r*2);
   ctx.globalCompositeOperation = 'source-over';
 
@@ -1011,15 +1020,15 @@ function drawGlassBall(cx, cy, r) {
 
   // 테두리 링
   ctx.lineWidth = 1.4;
-  ctx.strokeStyle = 'rgba(255,255,255,.5)';
+  ctx.strokeStyle = 'rgba(180,240,230,.45)';
   ctx.beginPath(); ctx.arc(cx, cy, r-.7, 0, 7); ctx.stroke();
 
   // 상단 큰 하이라이트
-  ctx.fillStyle = 'rgba(255,255,255,.9)';
-  ctx.beginPath(); ctx.ellipse(cx-r*.32, cy-r*.42, r*.30, r*.20, -.6, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(230,255,252,.92)';
+  ctx.beginPath(); ctx.ellipse(cx-r*.32, cy-r*.42, r*.28, r*.18, -.6, 0, 7); ctx.fill();
   // 작은 스파클
-  ctx.fillStyle = 'rgba(255,255,255,.8)';
-  ctx.beginPath(); ctx.arc(cx+r*.28, cy-r*.28, r*.10, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(220,255,250,.75)';
+  ctx.beginPath(); ctx.arc(cx+r*.28, cy-r*.28, r*.09, 0, 7); ctx.fill();
 }
 
 function render() {
