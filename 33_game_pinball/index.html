@@ -99,12 +99,10 @@
   .stage-toggle { display:inline-flex; gap:16px; }
   .stage-opt {
     position:relative; cursor:pointer; font-family:inherit; border:3px solid #f0e2d2;
-    background:#fdf6ee; color:#8d8172; border-radius:26px; padding:20px 44px 16px;
-    font-size:30px; font-weight:900; line-height:1.1; transition:all .14s ease;
+    background:#fdf6ee; color:#8d8172; border-radius:26px; padding:20px 40px;
+    font-size:27px; font-weight:900; letter-spacing:.01em; white-space:nowrap; transition:all .14s ease;
   }
-  .stage-opt span { display:block; font-size:17px; font-weight:700; letter-spacing:.02em; color:#c5b6a2; margin-top:4px; white-space:nowrap; }
   .stage-opt.on { background:#e8604c; border-color:#e8604c; color:#fff; box-shadow:0 10px 24px rgba(232,96,76,.32); }
-  .stage-opt.on span { color:#ffe0d7; }
   .intro-best {
     margin-top:34px; font-size:26px; font-weight:700; color:#b9a893; letter-spacing:.08em;
   }
@@ -253,8 +251,8 @@
       <div class="stage-pick">
         <div class="stage-pick-label">스테이지 선택</div>
         <div class="stage-toggle">
-          <button class="stage-opt" data-set="a">작은 에너지원<span>Small element</span></button>
-          <button class="stage-opt" data-set="c">큰 에너지원<span>Big element</span></button>
+          <button class="stage-opt" data-set="a">Small element</button>
+          <button class="stage-opt" data-set="c">Big element</button>
         </div>
       </div>
       <button class="btn btn-primary" id="startBtn">시 작 하 기</button>
