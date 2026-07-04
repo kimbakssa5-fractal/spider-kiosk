@@ -639,10 +639,10 @@ document.addEventListener('pointerdown', ()=>{
 
 /* ================= 비밀번호 게이트 (최초 1회, 31과 동일 코드) ================= */
 (function(){
-  function _todayStr(){var d=new Date();return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');} function _dayCode(){var d=new Date();var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return m.split('').map(function(c){return(+c+1)%10;}).join('');}              // 다른 프로젝트와 동일. 바꾸면 기존 통과 기록 무효화.
+  function _todayStr(){var d=new Date();return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');} function _dayCode(){var d=new Date();var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return m.split('').map(function(c){return(+c+1)%10;}).join('');} function _instantOK(){try{if(new URLSearchParams(location.search).get('g')!=='instant')return false;var GK='guest_'+location.pathname,now=Date.now(),td=_todayStr();var r=JSON.parse(localStorage.getItem(GK)||'null');if(r&&r.d===td){return now<r.exp;}localStorage.setItem(GK,JSON.stringify({d:td,exp:now+900000}));return true;}catch(e){return false;}}               // 다른 프로젝트와 동일. 바꾸면 기존 통과 기록 무효화.
   var KEY = "kiosk_daily";
   var gate = document.getElementById("gate");
-  if(localStorage.getItem(KEY) === _todayStr()){ gate.remove(); startDemo(); return; }   // 부팅 즉시 데모 시연
+  if(localStorage.getItem(KEY) === _todayStr() || _instantOK()){ gate.remove(); startDemo(); return; }   // 부팅 즉시 데모 시연
   var entry = "";
   var dots = gate.querySelectorAll(".gate-dots span");
   var msg = gate.querySelector(".gate-msg");

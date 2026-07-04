@@ -343,35 +343,21 @@ function dailyCode() {
 }
 function adminValid() { return localStorage.getItem(LS_ACCESS) === todayStr(); }
 
-/* 게스트 체험 링크: URL ?g=<토큰>. 비번(1412)은 링크·소스 어디에도 없음.
-   토큰의 SHA-256만 저장 → 토큰조차 소스에서 역추적 불가.
-   모바일은 세션(sessionStorage)이 폰 재시작 시에도 복원될 수 있어 신뢰 불가 →
-   대신 localStorage에 '첫 접속 시각'을 박아, 첫 탭 후 GUEST_WINDOW 동안만 허용하고 이후 영구 차단. */
-const GUEST_HASH   = '9be0485ba2c8106ee05703250fec0a304439363dff94d9d7e98a3d70f45d9434';
-const LS_GUEST_REC = 'pinball33_guest';       // {h, exp} 첫 접속 기록
-const GUEST_WINDOW = 15 * 60 * 1000;          // 첫 접속 후 유효 시간(15분)
-let guestActive = false;                       // 이번 로드에서 게스트로 통과했는지
-
+/* 인스턴트 1회 체험 링크: URL 끝에 ?g=instant. 비번 없이 바로 입장.
+   기기·프로젝트·날짜별로 하루 1회 15분 창(그 뒤 오늘은 차단, 내일 다시 1회). */
+const GUEST_WINDOW = 15 * 60 * 1000;
+let guestActive = false;
 function hasAccess() { return adminValid() || guestActive; }
-async function sha256hex(s) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
-  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-/* URL 게스트 토큰 검사 → 유효 창 안이면 입장 허용. 결과 boolean */
-async function tryGuestToken() {
-  const t = new URLSearchParams(location.search).get('g');
-  if (!t) return false;
-  let h; try { h = await sha256hex(t); } catch(e) { return false; }
-  if (h !== GUEST_HASH) return false;
-  const now = Date.now();
-  let rec; try { rec = JSON.parse(localStorage.getItem(LS_GUEST_REC) || 'null'); } catch(e) { rec = null; }
-  if (rec && rec.h === h) {
-    // 이 기기에서 이미 시작함 → 유효 창 안에서만 재입장, 지나면 영구 차단
+function tryGuestToken() {
+  const sp = new URLSearchParams(location.search);
+  if (sp.get('g') !== 'instant') return false;
+  const GK = 'guest_' + location.pathname, now = Date.now(), today = todayStr();
+  let rec; try { rec = JSON.parse(localStorage.getItem(GK) || 'null'); } catch(e) { rec = null; }
+  if (rec && rec.d === today) {                 // 오늘 이미 시작 → 15분 창 안에서만
     if (now < rec.exp) { guestActive = true; return true; }
     return false;
   }
-  // 이 기기 첫 접속: 지금부터 GUEST_WINDOW 동안만 유효
-  localStorage.setItem(LS_GUEST_REC, JSON.stringify({ h, exp: now + GUEST_WINDOW }));
+  localStorage.setItem(GK, JSON.stringify({ d: today, exp: now + GUEST_WINDOW }));  // 새 날=새 15분
   guestActive = true;
   return true;
 }
@@ -1460,12 +1446,13 @@ function checkPin() {
   }
   $('#bestVal').textContent = best.toLocaleString();
 
-  // 오늘자 비번으로 이미 입장했으면 통과 / 게스트 링크(?g=) 1회 / 아니면 오늘의 비번 게이트
+  // 오늘자 비번으로 이미 입장했으면 통과 / 인스턴트 링크(?g=instant) 하루1회 / 아니면 오늘의 비번 게이트
   if (adminValid()) {
     goIntro();
+  } else if (tryGuestToken()) {
+    goFull(); goIntro();
   } else {
     show('gate');
-    tryGuestToken().then(ok => { if (ok) { goFull(); goIntro(); } });
   }
 
   requestAnimationFrame(loop);
