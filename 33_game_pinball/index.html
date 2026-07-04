@@ -72,7 +72,18 @@
   .btn-ghost {
     background:#f4ece2; color:#7d7263; font-size:30px; padding:20px 60px;
   }
-  #intro .btn-primary { margin-top:52px; }
+  #intro .btn-primary { margin-top:36px; }
+  .stage-pick { margin-top:40px; }
+  .stage-pick-label { font-size:22px; font-weight:900; letter-spacing:.3em; text-indent:.3em; color:#c5b6a2; margin-bottom:16px; }
+  .stage-toggle { display:inline-flex; gap:16px; }
+  .stage-opt {
+    position:relative; cursor:pointer; font-family:inherit; border:3px solid #f0e2d2;
+    background:#fdf6ee; color:#8d8172; border-radius:26px; padding:20px 44px 16px;
+    font-size:30px; font-weight:900; line-height:1.1; transition:all .14s ease;
+  }
+  .stage-opt span { display:block; font-size:16px; font-weight:700; letter-spacing:.24em; color:#c5b6a2; margin-top:4px; }
+  .stage-opt.on { background:#e8604c; border-color:#e8604c; color:#fff; box-shadow:0 10px 24px rgba(232,96,76,.32); }
+  .stage-opt.on span { color:#ffe0d7; }
   .intro-best {
     margin-top:34px; font-size:26px; font-weight:700; color:#b9a893; letter-spacing:.08em;
   }
@@ -217,6 +228,13 @@
         <b>새싹</b>을 받으면 패들이 커지고, <b>기름</b>을 받으면 작아져요!
       </div>
       <div class="energy-strip" id="energyStrip"></div>
+      <div class="stage-pick">
+        <div class="stage-pick-label">스테이지 선택</div>
+        <div class="stage-toggle">
+          <button class="stage-opt" data-set="a">작은 에너지원<span>SMALL</span></button>
+          <button class="stage-opt" data-set="c">큰 에너지원<span>BIG</span></button>
+        </div>
+      </div>
       <button class="btn btn-primary" id="startBtn">시 작 하 기</button>
       <div class="intro-best">최고점수 <b id="introBest">0</b></div>
     </div>
@@ -537,9 +555,42 @@ function drawIcon(ctx, id, s) {
    ICON_SET 'a' = icon2.png 일러스트, 원 배경 없이 자유 테두리 그대로 (기본)
    ICON_SET 'b' = icon.png 원작 3D 렌더, 파스텔 원형 칩 안에 표시 (보존용)
    PNG 로드 전에는 벡터 폴백, 로드/웹폰트 완료 시 재도장 */
-const ICON_SET = 'c';        // 'a'=일러스트 자유테두리, 'b'=3D렌더 원형칩, 'c'=글로시 게임아이콘
-const ICON_CIRCLE = ICON_SET === 'b';
+// 스테이지 세트: 'a'=작은 요소(일러스트), 'c'=큰 요소(글로시 3D). localStorage로 유지
+let ICON_SET = localStorage.getItem('pinball33_stage') || 'c';
+if (ICON_SET !== 'a' && ICON_SET !== 'c') ICON_SET = 'c';
+let ICON_CIRCLE = false;      // 'b'(원형칩)는 이제 미사용
 const ICON_IMG = {};
+
+// 세트별 배치(위치·크기). a=작은 요소 그리드 / c=C-.psd 목업 배치
+const LAYOUTS = {
+  a: {
+    sun:[128,158,56], pv:[330,122,58], wind:[552,142,58], h2:[762,158,54],
+    bio:[112,352,52], fuel:[308,308,50], coal:[528,330,52], ocean:[748,342,54],
+    hydro:[206,528,50], geo:[448,498,52], waste:[688,520,50],
+  },
+  c: {
+    sun:[267,196,80], pv:[126,124,80], wind:[533,168,85], h2:[388,336,81],
+    bio:[725,307,73], fuel:[352,551,79], coal:[134,373,81], ocean:[174,653,77],
+    hydro:[722,138,70], geo:[728,581,82], waste:[590,429,77],
+  },
+};
+// ENERGY의 x,y,r을 선택된 세트로 적용 + 아이콘 이미지 로드/재도장
+function applyStage(set) {
+  ICON_SET = set;
+  localStorage.setItem('pinball33_stage', set);
+  const lay = LAYOUTS[set];
+  for (const e of ENERGY) { const p = lay[e.id]; if (p) { e.x=p[0]; e.y=p[1]; e.r=p[2]; } }
+  // 해당 세트 아이콘 로드(도착하는 대로 재도장)
+  for (const e of ENERGY) {
+    const img = new Image();
+    img.onload = ()=>{
+      if (ICON_SET !== set) return;         // 그새 세트가 바뀌었으면 무시
+      ICON_IMG[e.id] = img;
+      allIconCanvases.forEach(({c,id,chip})=>{ if (id === e.id) paintIcon(c,id,chip); });
+    };
+    img.src = 'assets/' + set + '/' + e.id + '.png';
+  }
+}
 function paintIcon(c, id, chip) {
   const px = c.width;
   const ctx = c.getContext('2d');
@@ -579,15 +630,8 @@ function makeIconCanvas(id, chip, px) {
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(()=>allIconCanvases.forEach(({c,id,chip})=>paintIcon(c,id,chip)));
 }
-/* 원작 3D 아이콘 로드 → 도착한 것부터 재도장 */
-for (const e of ENERGY) {
-  const img = new Image();
-  img.onload = ()=>{
-    ICON_IMG[e.id] = img;
-    allIconCanvases.forEach(({c,id,chip})=>{ if (id === e.id) paintIcon(c,id,chip); });
-  };
-  img.src = 'assets/' + ICON_SET + '/' + e.id + '.png';
-}
+/* 선택된 스테이지 세트 아이콘 로드 */
+applyStage(ICON_SET);
 
 /* 낙하 아이템 이미지: 새싹 잎(leaf.png) / 기름 캡슐(capsule.png) */
 const LEAF_IMG = new Image();
@@ -657,8 +701,15 @@ fitStage();
 /* =====================================================================
    게임 본체
    ===================================================================== */
-const targets = ENERGY.map(e => ({ ...e, found:false, hitFlash:0, icon:makeIconCanvas(e.id, e.chip, e.r*2*2) }));
+const targets = ENERGY.map(e => ({ ...e, found:false, hitFlash:0, icon:makeIconCanvas(e.id, e.chip, 340) }));
 const chkEls = [];
+// ENERGY(선택 세트)의 위치·크기를 필드 타겟에 반영
+function syncTargets() {
+  for (const t of targets) {
+    const e = ENERGY.find(x => x.id === t.id);
+    if (e) { t.x = e.x; t.y = e.y; t.r = e.r; }
+  }
+}
 
 const G = {
   running:false, demo:false,
@@ -681,6 +732,7 @@ function resetGame(demo=false) {
   G.pops = []; G.parts = []; G.items = [];
   G.itemTimer = 6; G.speed = SPEED_BASE; G.time = 0; G.shake = 0; G.over = false;
   G.paddleX = FIELD_W/2; G.paddleW = PADDLE_BASE;
+  syncTargets();   // 선택된 스테이지 세트의 위치·크기 적용
   for (const t of targets) { t.found = false; t.hitFlash = 0; }
   dockBall();
   updateHud();
@@ -1209,6 +1261,21 @@ function startDemo() {
   show('game');
   $('#attractOverlay').classList.add('on');
 }
+
+/* 스테이지(에너지원 크기) 선택 */
+function refreshStageButtons() {
+  document.querySelectorAll('.stage-opt').forEach(b => b.classList.toggle('on', b.dataset.set === ICON_SET));
+}
+document.querySelectorAll('.stage-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (ICON_SET === btn.dataset.set) return;
+    Sound.ensure();
+    applyStage(btn.dataset.set);   // ENERGY 위치·크기 갱신 + 아이콘 재도장(칩 자동 반영)
+    syncTargets();                 // 필드 타겟에 새 위치·크기 반영
+    refreshStageButtons();
+  });
+});
+refreshStageButtons();
 
 $('#startBtn').addEventListener('click', startGame);
 $('#againBtn').addEventListener('click', startGame);
