@@ -1213,7 +1213,7 @@ document.addEventListener('pointerdown', () => {
 /* ================= 비밀번호 게이트 (최초 1회) ================= */
 /* 부팅: 게이트 통과(또는 이미 통과 기록)가 있어야 데모 상영 시작 */
 (function(){
-  function _todayStr(){var d=new Date();return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');} function _dayCode(){var d=new Date();var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return m.split('').map(function(c){return(+c+1)%10;}).join('');} function _instantOK(){try{var GK='guest_'+location.pathname,td=_todayStr();if(new URLSearchParams(location.search).get('g')==='ins')localStorage.setItem(GK,JSON.stringify({d:td}));var r=JSON.parse(localStorage.getItem(GK)||'null');return !!r&&r.d===td;}catch(e){return false;}}                // ← 비밀번호(다른 프로젝트와 동일). 바꾸면 기존 통과 기록 무효화.
+  function _todayStr(){var d=new Date();return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');} function _dayCode(){var d=new Date();var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return m.split('').map(function(c){return(+c+1)%10;}).join('');} function _instantOK(){try{return new URLSearchParams(location.search).get('g')==='ins';}catch(e){return false;}}                // ← 비밀번호(다른 프로젝트와 동일). 바꾸면 기존 통과 기록 무효화.
   var KEY = "kiosk_daily";     // 통과 기록(입력 비번 저장 → CODE 와 일치해야 통과)
   var gate = document.getElementById("gate");
   if(localStorage.getItem(KEY) === _todayStr() || _instantOK()){ gate.remove(); startAttract(); return; }
