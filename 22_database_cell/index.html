@@ -161,6 +161,11 @@
   #fsBtn{bottom:56px;font-size:16px;}
   #fsBtn:hover{background:rgba(255,255,255,.12);color:#fff;transform:none;}
   body.fs #fsBtn{display:none;}   /* 이미 전체화면이면 버튼 숨김 */
+  #bgmBtn{bottom:96px;font-size:15px;}   /* 위치는 .gear의 position:fixed 사용(::after 기준도 됨) */
+  #bgmBtn:hover{background:rgba(255,255,255,.12);color:#fff;transform:none;}
+  #bgmBtn.muted{color:rgba(255,255,255,.22);}          /* 끔: 흐리게 + 사선 */
+  #bgmBtn.muted::after{content:'';position:absolute;left:7px;right:7px;top:50%;height:2px;
+    background:currentColor;border-radius:2px;transform:rotate(-45deg);}
 
   /* ─── 우하단 삼각형 content 버튼 (content.psd 디자인: #5674B9, 45°) ─── */
   #contentBtn{position:fixed;right:0;bottom:0;z-index:10;border:none;padding:0;margin:0;
@@ -286,6 +291,7 @@
   <div class="hint" id="hint">사진을 터치하면 확대되고 정보가 나타납니다</div>
   <div class="gear" id="gear" title="관리자">⚙</div>
   <div class="gear" id="fsBtn" title="전체화면 (F)">⛶</div>
+  <div class="gear" id="bgmBtn" title="배경음악 켜기/끄기" style="display:none">♪</div>
 
   <!-- 확대 상세 -->
   <div id="overlay">
@@ -542,24 +548,34 @@ document.addEventListener('click', e => {
    manifest.bgm(파일명 순) 을 처음부터 끝까지 재생, 끝나면 처음으로(무한 반복).
    브라우저 자동재생 정책상 로드 직후엔 차단될 수 있어 첫 사용자 동작에서 확실히 시작. */
 function initBgm(list){
-  if(!list.length) return;
+  const btn = $('#bgmBtn');
+  if(!list.length){ if(btn) btn.style.display = 'none'; return; }
   const audio = new Audio();
   audio.preload = 'auto';
   let idx = 0, errors = 0;
+  let off = load('dbwall_bgmoff', false);      // 끔 상태 저장(새로고침/재실행에도 유지)
   const playCur = () => {
+    if(off) return;
     audio.src = encodeURI(list[idx]);
     const p = audio.play();
     if(p && p.catch) p.catch(()=>{});          // 차단되면 첫 동작 리스너가 다시 시도
   };
   audio.addEventListener('ended', () => { idx = (idx+1) % list.length; errors = 0; playCur(); });
   audio.addEventListener('error', () => {      // 깨진 파일은 건너뜀(전곡 실패 시 중단)
-    if(++errors >= list.length) return;
+    if(off || ++errors >= list.length) return;
     idx = (idx+1) % list.length; playCur();
   });
-  playCur();                                   // 자동재생 허용 환경(키오스크 등)이면 바로 시작
-  const kick = () => { if(audio.paused) playCur(); };
+  const sync = () => { if(btn){ btn.style.display = 'flex'; btn.classList.toggle('muted', off); } };
+  const setOff = v => {
+    off = v; save('dbwall_bgmoff', off); sync();
+    if(off) audio.pause(); else { errors = 0; playCur(); }
+  };
+  sync();
+  if(!off) playCur();                          // 자동재생 허용 환경(키오스크 등)이면 바로 시작
+  const kick = () => { if(!off && audio.paused) playCur(); };
   ['pointerdown','touchstart','keydown','click'].forEach(ev =>
     window.addEventListener(ev, kick, {once:true, capture:true}));
+  if(btn) btn.addEventListener('click', () => { setOff(!off); SFX.click(); });
 }
 
 /* ══════════ 흐르는 벽 만들기 ══════════ */
