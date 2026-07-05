@@ -378,7 +378,12 @@ async function boot(){
   state.order = state.photos.map(p => p.id);
 
   if(!state.photos.length){ $('#err').textContent = 'database/ 폴더에 사진이 없습니다.'; return; }
-  if(new URLSearchParams(location.search).get('admin') === '1') setAdmin(true);
+  // 공개 링크(모든 이 개방)에서는 관리자 진입을 잠금 — ⚙ 숨김, 모든 진입로에 PIN 요구.
+  // 로컬 키오스크(127.0.0.1)는 기존 그대로.
+  if(!IS_LOCAL_HOST) $('#gear').style.display = 'none';
+  if(new URLSearchParams(location.search).get('admin') === '1'){
+    IS_LOCAL_HOST ? setAdmin(true) : askAdminPin();
+  }
 
   buildWall();
   $('#loading').style.display = 'none';
@@ -820,11 +825,15 @@ function setAdmin(on){
   $('#admin-badge').style.display = on ? 'block' : 'none';
   if($('#overlay').classList.contains('on')) $('#bEdit').style.display = on?'inline-flex':'none';
 }
-$('#gear').addEventListener('click', () => {
-  if(state.admin){ setAdmin(false); return; }
+const IS_LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname) || location.protocol === 'file:';
+function askAdminPin(){
   const pin = prompt('관리자 PIN을 입력하세요');
   if(pin === ADMIN_PIN) setAdmin(true);
   else if(pin !== null) alert('PIN이 올바르지 않습니다.');
+}
+$('#gear').addEventListener('click', () => {
+  if(state.admin){ setAdmin(false); return; }
+  askAdminPin();
 });
 $('#bEdit').addEventListener('click', () => { $('#panel').classList.add('editing'); state.editing=true; $('#eTitle').focus(); });
 $('#eCancel').addEventListener('click', () => { $('#panel').classList.remove('editing'); state.editing=false; });
@@ -870,7 +879,9 @@ addEventListener('keydown', e => {
     else if(e.code==='KeyN') setSpeed(16);         // 16배속
     else if(e.code==='Equal' || e.code==='NumpadAdd') stepPerScreen(1);        // + : TV당 칸 하나 늘림
     else if(e.code==='Minus' || e.code==='NumpadSubtract') stepPerScreen(-1);  // - : TV당 칸 하나 줄임
-    else if(e.code==='KeyA' && e.shiftKey) setAdmin(!state.admin);  // Shift+A: 관리자
+    else if(e.code==='KeyA' && e.shiftKey){                        // Shift+A: 관리자(공개 링크는 PIN)
+      state.admin ? setAdmin(false) : (IS_LOCAL_HOST ? setAdmin(true) : askAdminPin());
+    }
     else if(e.code==='KeyF' && e.shiftKey) toggleFS();             // Shift+F: 전체화면
     else if(SCREEN_CODES[e.code]) setScreens(SCREEN_CODES[e.code]);  // a~l: TV 1~9대
     return;
