@@ -335,8 +335,8 @@
   </div>
 
   <!-- 우하단 삼각형 content 버튼 + 목차 패널 (content.txt) -->
-  <button id="contentBtn" aria-label="목차"><span>content</span></button>
-  <div id="toc"><div class="tocbox"><h3>Content</h3><div id="tocList"></div></div></div>
+  <button id="contentBtn" aria-label="목차"><span>index</span></button>
+  <div id="toc"><div class="tocbox"><h3>Index</h3><div id="tocList"></div></div></div>
 
   <!-- QR 공유 -->
   <div id="share">
@@ -471,8 +471,72 @@ async function loadToc(){
   });
 }
 function closeToc(){ $('#toc').classList.remove('on'); }
-$('#contentBtn').addEventListener('click', () => $('#toc').classList.toggle('on'));
+$('#contentBtn').addEventListener('click', () => {
+  const on = $('#toc').classList.toggle('on');
+  on ? SFX.open() : SFX.click();
+});
 $('#toc').addEventListener('click', e => { if(e.target.id === 'toc') closeToc(); });
+
+/* ══════════ 효과음(SFX) — Web Audio 합성, 파일 불필요 ══════════
+   은은하고 고급스러운 톤: 부드러운 사인파 탭 + 밴드패스 노이즈 스위프(휘익).
+   모든 버튼 = 잔잔한 탭, 사진 터치 = 카드들이 흩어지는 공기 소리. */
+const SFX = (() => {
+  let ctx, master, noiseBuf;
+  function ac(){
+    if(!ctx){
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = 0.55; master.connect(ctx.destination);
+      const n = ctx.sampleRate;                      // 1초 화이트노이즈 버퍼(재사용)
+      noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for(let i = 0; i < n; i++) d[i] = Math.random()*2 - 1;
+    }
+    if(ctx.state === 'suspended') ctx.resume();      // 제스처 안에서 호출되므로 자연 해제
+    return ctx;
+  }
+  function tone(f0, f1, dur, vol, delay=0){          // 부드러운 사인 글라이드
+    const c = ac(), t = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f0, t);
+    if(f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(40,f1), t+dur);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t+0.012);    // 소프트 어택
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.06);
+  }
+  function whoosh(f0, f1, dur, vol, q=1.0, delay=0){ // 공기 스위프(노이즈+밴드패스)
+    const c = ac(), t = c.currentTime + delay;
+    const s = c.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q;
+    bp.frequency.setValueAtTime(f0, t);
+    bp.frequency.exponentialRampToValueAtTime(f1, t+dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t+dur*0.28);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    s.connect(bp); bp.connect(g); g.connect(master); s.start(t); s.stop(t+dur+0.06);
+  }
+  return {
+    click(){ tone(1400, 900, 0.09, 0.10); },                              // 버튼 공통: 유리 탭
+    tick(){  tone(1050, 780, 0.06, 0.07); },                              // 이전/다음: 가벼운 틱
+    pop(){   tone(520, 940, 0.14, 0.13); tone(1560, 2100, 0.12, 0.05, 0.03); },  // 좋아요: 따뜻한 팝
+    scatter(){                                                            // 사진 터치: 카드 흩어짐
+      whoosh(480, 3600, 0.55, 0.15, 0.9);                                 //   공기 휘익(상승)
+      tone(620, 1240, 0.5, 0.045);                                        //   은은한 저음 스웰
+      tone(2400, 4200, 0.4, 0.02, 0.06);                                  //   반짝임 한 겹
+    },
+    close(){ whoosh(2600, 340, 0.4, 0.10, 1.0); },                        // 닫기: 모여드는 휘익(하강)
+    zoomIn(){  tone(520, 1040, 0.26, 0.08); whoosh(800, 2400, 0.3, 0.045); },
+    zoomOut(){ tone(1040, 520, 0.22, 0.07); },
+    open(){ whoosh(320, 1700, 0.3, 0.065, 1.4); }                         // 목차 열림: 슬라이드
+  };
+})();
+/* 버튼 공통 탭 사운드 — 전용 사운드가 있는 버튼은 제외 */
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  if(/^(bLike|close|prev|next|bZoom|contentBtn|zoomClose)$/.test(b.id)) return;
+  SFX.click();
+}, true);
 
 /* ══════════ BGM — bgm/ 폴더 음악 자동 순차 재생 ══════════
    manifest.bgm(파일명 순) 을 처음부터 끝까지 재생, 끝나면 처음으로(무한 반복).
@@ -684,6 +748,7 @@ function openPhoto(id, fromEl){
   layoutFocus();                                   // 사진+정보를 터치 자리에 배치
   $('#hint').style.opacity = 0;
   scatter(pt.x, pt.y, true);                        // 주변 카드 방사형으로 밀어내기(팝아웃)
+  SFX.scatter();                                    // 카드 흩어지는 효과음
   flipIn(fromRect);                                 // 카드 위치에서 자라나는 애니메이션
 }
 
@@ -821,6 +886,7 @@ function flipIn(fromEl){
 function closePhoto(){
   const ov = $('#overlay'); const img = $('#bigImg'); const fromEl = state.fromEl;
   exitZoom();
+  SFX.close();                               // 카드들이 제자리로 모여드는 효과음
   scatter(0, 0, false);                      // 밀려났던 카드들 제자리로 복귀
   let closed = false;
   const done = () => {                       // 애니메이션 성공/실패와 무관하게 반드시 닫힘 보장
@@ -848,6 +914,7 @@ function closePhoto(){
 }
 
 function step(dir){
+  SFX.tick();
   state.cur = (state.cur + dir + state.order.length) % state.order.length;
   const img = $('#bigImg');
   renderDetail();
@@ -858,8 +925,8 @@ function step(dir){
 /* ══════════ 좋아요 / 공유 / 확대 ══════════ */
 $('#bLike').addEventListener('click', () => {
   const p = state.byId[state.order[state.cur]];
-  if(state.userLikes[p.id]){ delete state.userLikes[p.id]; }
-  else { state.userLikes[p.id] = 1; }
+  if(state.userLikes[p.id]){ delete state.userLikes[p.id]; SFX.click(); }
+  else { state.userLikes[p.id] = 1; SFX.pop(); }
   save('dbwall_likes', state.userLikes);
   const total = (p.likes||0) + (state.userLikes[p.id]||0);
   $('#likeCnt').textContent = total.toLocaleString();
@@ -900,8 +967,8 @@ function makeQR(box, url){
 
 /* 확대(줌/팬) — 전체화면 확대 시 하단 닫기 버튼 표시, 사진/빈곳 탭으로도 해제 */
 const zoom = { on:false, scale:1, x:0, y:0, drag:false, px:0, py:0, downX:0, downY:0, moved:false };
-function enterZoom(){ $('#stage').classList.add('zoom'); $('#overlay').classList.add('zoomed'); zoom.on=true; zoom.scale=1; applyZoom(); }
-function exitZoom(){ $('#stage').classList.remove('zoom'); $('#overlay').classList.remove('zoomed'); resetZoom(); }
+function enterZoom(){ SFX.zoomIn(); $('#stage').classList.add('zoom'); $('#overlay').classList.add('zoomed'); zoom.on=true; zoom.scale=1; applyZoom(); }
+function exitZoom(){ if($('#stage').classList.contains('zoom')) SFX.zoomOut(); $('#stage').classList.remove('zoom'); $('#overlay').classList.remove('zoomed'); resetZoom(); }
 $('#bZoom').addEventListener('click', () => {
   $('#stage').classList.contains('zoom') ? exitZoom() : enterZoom();
 });
