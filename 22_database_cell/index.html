@@ -420,6 +420,7 @@ async function boot(){
   $('#loading').style.display = 'none';
   startFlow();
   loadToc();                                       // content.txt 목차(우하단 삼각형 버튼)
+  initBgm(manifest.bgm || []);                     // bgm/ 음악 자동 순차 재생
 
   // QR 공유 링크로 들어온 경우 자동 확대
   const ph = new URLSearchParams(location.search).get('photo');
@@ -472,6 +473,30 @@ async function loadToc(){
 function closeToc(){ $('#toc').classList.remove('on'); }
 $('#contentBtn').addEventListener('click', () => $('#toc').classList.toggle('on'));
 $('#toc').addEventListener('click', e => { if(e.target.id === 'toc') closeToc(); });
+
+/* ══════════ BGM — bgm/ 폴더 음악 자동 순차 재생 ══════════
+   manifest.bgm(파일명 순) 을 처음부터 끝까지 재생, 끝나면 처음으로(무한 반복).
+   브라우저 자동재생 정책상 로드 직후엔 차단될 수 있어 첫 사용자 동작에서 확실히 시작. */
+function initBgm(list){
+  if(!list.length) return;
+  const audio = new Audio();
+  audio.preload = 'auto';
+  let idx = 0, errors = 0;
+  const playCur = () => {
+    audio.src = encodeURI(list[idx]);
+    const p = audio.play();
+    if(p && p.catch) p.catch(()=>{});          // 차단되면 첫 동작 리스너가 다시 시도
+  };
+  audio.addEventListener('ended', () => { idx = (idx+1) % list.length; errors = 0; playCur(); });
+  audio.addEventListener('error', () => {      // 깨진 파일은 건너뜀(전곡 실패 시 중단)
+    if(++errors >= list.length) return;
+    idx = (idx+1) % list.length; playCur();
+  });
+  playCur();                                   // 자동재생 허용 환경(키오스크 등)이면 바로 시작
+  const kick = () => { if(audio.paused) playCur(); };
+  ['pointerdown','touchstart','keydown','click'].forEach(ev =>
+    window.addEventListener(ev, kick, {once:true, capture:true}));
+}
 
 /* ══════════ 흐르는 벽 만들기 ══════════ */
 const flow = { cols: [], raf: 0, last: 0, paused: false };
