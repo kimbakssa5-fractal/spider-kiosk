@@ -286,6 +286,26 @@
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     font-size:16px; font-weight:900; color:var(--ink);
   }
+  .score-panel.dim{ opacity:.42; }
+
+  /* 차례 교대 대형 고지 배너 */
+  #turn-banner{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    z-index:7; display:none; pointer-events:none; white-space:nowrap;
+    font-size:46px; font-weight:900; color:#fff;
+    border-radius:999px; padding:22px 56px 25px;
+    box-shadow:0 14px 36px rgba(40,20,15,.35);
+  }
+  #turn-banner.p1{ background:linear-gradient(160deg,#6aa5e2,var(--p1)); }
+  #turn-banner.p2{ background:linear-gradient(160deg,#f09a68,var(--p2)); }
+  #turn-banner.on{ display:block; animation:tbPop 1.4s ease forwards; }
+  @keyframes tbPop{
+    0%{ opacity:0; transform:translate(-50%,-50%) scale(.5); }
+    12%{ opacity:1; transform:translate(-50%,-50%) scale(1.08); }
+    22%{ transform:translate(-50%,-50%) scale(1); }
+    78%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-50%) scale(.92); }
+  }
   .score-panel.active{ transform:scale(1.04); }
   .score-panel[data-p="1"].active{ border-color:var(--p1); }
   .score-panel[data-p="2"].active{ border-color:var(--p2); }
@@ -507,6 +527,7 @@
           <div id="countdown"><span>5</span></div>
           <div id="memo-tip">그림 위치를 기억하세요!</div>
           <div id="demo-cap"></div>
+          <div id="turn-banner"></div>
         </div>
         <div class="side" id="side-right">
           <div class="score-panel" data-p="2" id="panel-2">
@@ -747,6 +768,8 @@ function stopGame(){
   document.getElementById('countdown').classList.remove('on');
   document.getElementById('memo-tip').classList.remove('on');
   document.getElementById('demo-cap').classList.remove('on');
+  document.getElementById('turn-banner').classList.remove('on');
+  try{ speechSynthesis.cancel(); }catch(e){}
 }
 
 /* ================= how-to demo (self-playing) ================= */
@@ -939,7 +962,7 @@ function runPreview(sec){
       clearInterval(S.previewId);
       cd.classList.remove('on'); tip.classList.remove('on');
       document.querySelectorAll('#board .card').forEach(c => c.classList.remove('flipped'));
-      S.previewTo = setTimeout(() => { S.lock = false; S.playing = true; updatePanels(); startTimer(); startTurnTimer(); }, 500);
+      S.previewTo = setTimeout(() => { S.lock = false; S.playing = true; updatePanels(); startTimer(); startTurnTimer(); announceTurn(); }, 500);
     }else{
       cd.firstElementChild.textContent = n;
       sfx.tick();
@@ -1003,6 +1026,26 @@ function renderTurnTimer(left){
   fill.classList.toggle('low', left <= 3);
   panel.querySelector('.turn-sec').textContent = Math.ceil(left);
 }
+/* 차례 교대 고지: 대형 배너 + 플레이어별 신호음 + 음성 안내 */
+function announceTurn(){
+  if(S.mode !== 2 || !S.playing) return;
+  const b = document.getElementById('turn-banner');
+  b.textContent = `플레이어 ${S.cur} 차례!`;
+  b.className = 'p' + S.cur;
+  void b.offsetWidth;                     // 애니메이션 재시작
+  b.classList.add('on');
+  clearTimeout(S.turnBannerTo);
+  S.turnBannerTo = setTimeout(() => b.classList.remove('on'), 1400);
+  if(S.cur === 1){ tone(392, .12, 'sine', .15); tone(523, .2, 'sine', .15, .12); }
+  else{ tone(523, .12, 'sine', .15); tone(659, .2, 'sine', .15, .12); }
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(`플레이어 ${S.cur} 차례`);
+    u.lang = 'ko-KR'; u.rate = 1.05; u.volume = .9;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
 function onTurnTimeout(){
   if(!S.playing || S.mode !== 2 || S.lock) return;
   S.lock = true;
@@ -1012,6 +1055,7 @@ function onTurnTimeout(){
   setTimeout(() => {
     S.cur = S.cur === 1 ? 2 : 1;
     updatePanels();
+    announceTurn();
     S.lock = false;
     startTurnTimer();
   }, 500);
@@ -1043,7 +1087,7 @@ function onCard(el){
       if(S.pairsFound >= S.totalPairs){ endGame(true); }
       else{
         // 맞혀도 차례는 한 번씩 교대
-        if(S.mode === 2){ S.cur = S.cur === 1 ? 2 : 1; updatePanels(); }
+        if(S.mode === 2){ S.cur = S.cur === 1 ? 2 : 1; updatePanels(); announceTurn(); }
         S.lock = false;
         startTurnTimer();
       }
@@ -1056,7 +1100,7 @@ function onCard(el){
         a.classList.remove('flipped','shake');
         b.classList.remove('flipped','shake');
         S.flipped = [];
-        if(S.mode === 2){ S.cur = S.cur === 1 ? 2 : 1; updatePanels(); }
+        if(S.mode === 2){ S.cur = S.cur === 1 ? 2 : 1; updatePanels(); announceTurn(); }
         S.lock = false;
         startTurnTimer();
       }, 550);
@@ -1079,6 +1123,10 @@ function updatePanels(){
   document.getElementById('p2-tries').textContent = S.tries[1];
   document.getElementById('panel-1').classList.toggle('active', S.mode === 2 && S.cur === 1 && S.playing);
   document.getElementById('panel-2').classList.toggle('active', S.mode === 2 && S.cur === 2 && S.playing);
+  // 2인용: 차례가 아닌 쪽 점수판은 흐리게 (누구 차례인지 대비 강화)
+  const twoP = S.mode === 2 && S.playing;
+  document.getElementById('panel-1').classList.toggle('dim', twoP && S.cur !== 1);
+  document.getElementById('panel-2').classList.toggle('dim', twoP && S.cur !== 2);
 }
 
 /* ================= end / result ================= */
