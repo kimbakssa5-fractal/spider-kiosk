@@ -733,6 +733,28 @@ const Sound = {
   // 기름: "흑!..." 하고 풀 죽는 슬픈 하강음
   oil()     { this.tone(392,.14,'sine',.16,0,-40); this.tone(330,.16,'triangle',.14,.10,-70); this.tone(233,.34,'sine',.13,.24,-70); },
   lose()    { this.tone(300,.5,'sawtooth',.12,0,-220); },
+  // 공 추락: 익살스러운 아찔한 비명 — "우와아아↓" 떨리는 하강 글리산도 + 마지막 퐁당
+  scream() {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime;
+    // 2성부 비명(살짝 어긋난 음정으로 우스꽝스럽게)
+    for (const det of [0, 1.03]) {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(1250*(det||1), t0);
+      o.frequency.exponentialRampToValueAtTime(160, t0+.62);
+      // 비브라토(덜덜 떨림)
+      const lfo = this.ctx.createOscillator(), lg = this.ctx.createGain();
+      lfo.type = 'sine'; lfo.frequency.value = 19; lg.gain.value = 55;
+      lfo.connect(lg).connect(o.frequency);
+      g.gain.setValueAtTime(det ? .10 : .20, t0);
+      g.gain.exponentialRampToValueAtTime(.0001, t0+.66);
+      o.connect(g).connect(this.ctx.destination);
+      o.start(t0); o.stop(t0+.68); lfo.start(t0); lfo.stop(t0+.68);
+    }
+    // 퐁당!
+    this.tone(85, .2, 'sine', .28, .6, 55);
+  },
   clear()   { [523,659,784,1047,1319,1568].forEach((f,i)=>this.tone(f,.3,'triangle',.2,i*.12)); },
   over()    { [392,330,262].forEach((f,i)=>this.tone(f,.32,'triangle',.16,i*.18)); },
   // 시작: 팡파레(상승 아르페지오 + 밝은 톤)
@@ -881,7 +903,7 @@ function lapClear() {
 
 function loseBall() {
   if (G.over || G.ball.docked) return; // 서브스텝 중복 호출 방지
-  Sound.lose();
+  Sound.scream();   // 익살스러운 아찔한 비명 + 퐁당
   G.shake = 1;
   G.balls--;
   updateHud();
