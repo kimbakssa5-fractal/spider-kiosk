@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "28";
+  const ASSET_VER = "29";
   const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
