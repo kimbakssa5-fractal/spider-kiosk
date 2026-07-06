@@ -497,7 +497,7 @@
   function _dc(){var d=new Date();var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return m.split('').map(function(c){return(+c+1)%10;}).join('');}
   function _ins(){try{return new URLSearchParams(location.search).get('g')==='ins';}catch(e){return false;}}
   var g=document.getElementById('dgate');
-  if(localStorage.getItem('kiosk_daily')===_td()||_ins()){ g.parentNode&&g.parentNode.removeChild(g); return; }
+  if(localStorage.getItem('kiosk_daily')||_ins()){ g.parentNode&&g.parentNode.removeChild(g); return; }
   var dd=document.getElementById('dgd'),dots=[];for(var i=0;i<4;i++){var s=document.createElement('span');s.style.cssText='width:16px;height:16px;border-radius:50%;background:#eee3d6;transition:.15s';dd.appendChild(s);dots.push(s);}
   var entry='';
   function render(){for(var i=0;i<4;i++)dots[i].style.background=i<entry.length?'#e8604c':'#eee3d6';}
