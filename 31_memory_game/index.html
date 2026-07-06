@@ -598,7 +598,7 @@
 /* ================= config ================= */
 const DATA = {
   easy:   { label:'하 (쉬움)',  time:120, pairs:6,  cols:4, rows:3, preview:8, cats:[
-            ['fruits','과일'],['sea','바다 동물'],['insects','곤충'],['instruments','악기'],['safari','사파리 동물'],
+            ['fruits','과일'],['sea','바다 동물'],['insects','곤충'],['instruments','악기'],['sporttool','스포츠 용품'],
             ['sports','스포츠'],['dessert','달콤한 간식'],['bunsik','분식'],['flowers','꽃'],['daily','생활 소품']]},
   normal: { label:'중 (보통)',  time:180, pairs:8,  cols:4, rows:4, preview:11, cats:[
             ['animals','귀여운 동물'],['reptiles','파충류'],['tradition','전통 문화'],['dogs','강아지'],['pets','반려동물'],
@@ -608,6 +608,12 @@ const DATA = {
             ['grains','곡식과 씨앗'],['billiards','당구'],['tropical','열대 과일'],['leisure','레저 스포츠'],['fruityoga','과일 요가']]},
 };
 const sheetURL = (diff, id) => `data/${diff}/${id}.jpg`;
+// 카테고리 tuple의 3번째 요소 = 빈 칸(삭제된 아이콘) 인덱스 목록. 게임은 이 칸을 뽑지 않음.
+function iconPool(diff, catId){
+  const cat = DATA[diff].cats.find(c => c[0] === catId);
+  const holes = (cat && cat[2]) || [];
+  return [...Array(16).keys()].filter(i => !holes.includes(i));
+}
 
 /* ================= stage fit (1920x1080 -> any screen) ================= */
 const stage = document.getElementById('stage');
@@ -789,7 +795,7 @@ async function demoScript(){
     flipped:[], lock:true, pairsFound:0, totalPairs:d.pairs,
     cur:1, score:[0,0], tries:[0,0], timeLeft:d.time, playing:false, demo:true,
   });
-  const icons = shuffle([...Array(16).keys()]).slice(0, d.pairs);
+  const icons = shuffle(iconPool(S.diff, S.catId)).slice(0, d.pairs);
   S.deck = shuffle(icons.flatMap(i => [i, i]));
   buildBoard(); updateHud(); updatePanels(); renderTime();
   show('screen-game');
