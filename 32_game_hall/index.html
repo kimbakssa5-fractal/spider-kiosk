@@ -2,7 +2,6 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>두더지 게임 · 드라큘라 편</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -178,12 +177,20 @@
     background:linear-gradient(160deg,#f07a5e,var(--accent-deep));
     border-radius:999px; padding:24px 74px 27px;
     box-shadow:0 10px 28px rgba(232,96,76,.5);
-    animation:joinblink 1.2s ease-in-out infinite;
+    animation:joinblink 1.8s ease-in-out infinite;
     transition:transform .1s;
   }
+  /* 진동 버스트(0~30%) 후 숨쉬기 펄스 — 시작 버튼 존재감 강조 */
   @keyframes joinblink{
-    0%,100%{ transform:scale(1); box-shadow:0 10px 28px rgba(232,96,76,.5); }
-    50%{ transform:scale(1.06); box-shadow:0 14px 40px rgba(232,96,76,.8); }
+    0%  { transform:scale(1) rotate(0deg);    box-shadow:0 10px 28px rgba(232,96,76,.5); }
+    5%  { transform:scale(1.05) rotate(-5deg); }
+    10% { transform:scale(1.06) rotate(5deg); }
+    15% { transform:scale(1.06) rotate(-4deg); }
+    20% { transform:scale(1.05) rotate(4deg); }
+    25% { transform:scale(1.04) rotate(-2deg); }
+    30% { transform:scale(1.02) rotate(0deg); }
+    60% { transform:scale(1.09) rotate(0deg); box-shadow:0 16px 44px rgba(232,96,76,.9); }
+    100%{ transform:scale(1) rotate(0deg);    box-shadow:0 10px 28px rgba(232,96,76,.5); }
   }
   #startBtn:active{ transform:scale(.94); }
   #startBtn.playing{ /* 게임 중: '다시 시작' — 차분한 보조 톤, 블링크 정지 */

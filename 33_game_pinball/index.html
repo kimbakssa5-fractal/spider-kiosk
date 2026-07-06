@@ -94,7 +94,20 @@
   .btn-ghost {
     background:#f4ece2; color:#7d7263; font-size:30px; padding:20px 60px;
   }
-  #intro .btn-primary { margin-top:26px; }
+  #intro .btn-primary { margin-top:26px; animation:ctaShake 1.8s ease-in-out infinite; }
+  #intro .btn-primary:active { animation:none; }
+  /* 인트로 '시작하기' 진동 — 시작 버튼 존재감 강조 */
+  @keyframes ctaShake {
+    0%  { transform:scale(1) rotate(0deg);    box-shadow:0 14px 30px rgba(232,96,76,.35); }
+    5%  { transform:scale(1.04) rotate(-4deg); }
+    10% { transform:scale(1.05) rotate(4deg); }
+    15% { transform:scale(1.05) rotate(-3deg); }
+    20% { transform:scale(1.04) rotate(3deg); }
+    25% { transform:scale(1.03) rotate(-2deg); }
+    30% { transform:scale(1.02) rotate(0deg); }
+    60% { transform:scale(1.07) rotate(0deg); box-shadow:0 18px 40px rgba(232,96,76,.6); }
+    100%{ transform:scale(1) rotate(0deg);    box-shadow:0 14px 30px rgba(232,96,76,.35); }
+  }
   .stage-pick { margin-top:26px; }
   .stage-pick-label { font-size:22px; font-weight:900; letter-spacing:.3em; text-indent:.3em; color:#c5b6a2; margin-bottom:16px; }
   .stage-toggle { display:inline-flex; gap:16px; }
@@ -190,9 +203,20 @@
     background:#e8604c; color:#fff; border:none; cursor:pointer; font-family:inherit;
     font-size:44px; font-weight:900; border-radius:999px; padding:28px 100px;
     box-shadow:0 16px 40px rgba(232,96,76,.45);
-    animation:blink 1.15s ease-in-out infinite;
+    animation:blink 1.8s ease-in-out infinite;
   }
-  @keyframes blink { 50% { opacity:.45; transform:translateX(-50%) scale(.97); } }
+  /* 진동 버스트(0~30%) 후 숨쉬기 펄스 — 시작 버튼 존재감 강조 */
+  @keyframes blink {
+    0%  { transform:translateX(-50%) scale(1) rotate(0deg); opacity:1; }
+    5%  { transform:translateX(-50%) scale(1.04) rotate(-5deg); }
+    10% { transform:translateX(-50%) scale(1.05) rotate(5deg); }
+    15% { transform:translateX(-50%) scale(1.05) rotate(-4deg); }
+    20% { transform:translateX(-50%) scale(1.04) rotate(4deg); }
+    25% { transform:translateX(-50%) scale(1.03) rotate(-2deg); }
+    30% { transform:translateX(-50%) scale(1.02) rotate(0deg); }
+    60% { transform:translateX(-50%) scale(1.08) rotate(0deg); opacity:.82; }
+    100%{ transform:translateX(-50%) scale(1) rotate(0deg); opacity:1; }
+  }
 
   /* ---------- PORTRAIT (폰 세로) ----------
      스테이지가 1080×1920로 바뀌고 .portrait가 붙는다 (JS fitStage) */

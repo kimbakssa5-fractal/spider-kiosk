@@ -2,7 +2,6 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>기억력 퍼즐 — MEMORY</title>
 <meta property="og:title" content="기억력 퍼즐 — MEMORY">
@@ -127,15 +126,23 @@
     background:linear-gradient(160deg, #f07a5e, var(--accent-deep));
     border-radius:999px; padding:22px 64px 24px;
     box-shadow:0 10px 28px rgba(232,96,76,.5);
-    animation:joinblink 1.1s ease-in-out infinite;
+    animation:joinblink 1.8s ease-in-out infinite;
   }
   #stage.attract #btn-join{ display:block; }
   #stage.attract .hud .ctrl{ display:none; }
   #stage.attract #demo-cap{ bottom:auto; top:-14px; }
   #stage.attract footer{ visibility:hidden; }
+  /* 진동 버스트(0~30%) 후 숨쉬기 펄스 — 시작 버튼 존재감 강조 */
   @keyframes joinblink{
-    0%,100%{ transform:translateX(-50%) scale(1); box-shadow:0 10px 28px rgba(232,96,76,.5); opacity:1; }
-    50%{ transform:translateX(-50%) scale(1.07); box-shadow:0 14px 40px rgba(232,96,76,.85); opacity:.88; }
+    0%  { transform:translateX(-50%) scale(1) rotate(0deg);    box-shadow:0 10px 28px rgba(232,96,76,.5); }
+    5%  { transform:translateX(-50%) scale(1.05) rotate(-5deg); }
+    10% { transform:translateX(-50%) scale(1.06) rotate(5deg); }
+    15% { transform:translateX(-50%) scale(1.06) rotate(-4deg); }
+    20% { transform:translateX(-50%) scale(1.05) rotate(4deg); }
+    25% { transform:translateX(-50%) scale(1.04) rotate(-2deg); }
+    30% { transform:translateX(-50%) scale(1.02) rotate(0deg); }
+    60% { transform:translateX(-50%) scale(1.09) rotate(0deg); box-shadow:0 16px 44px rgba(232,96,76,.9); }
+    100%{ transform:translateX(-50%) scale(1) rotate(0deg);    box-shadow:0 10px 28px rgba(232,96,76,.5); }
   }
 
   .back-btn{
