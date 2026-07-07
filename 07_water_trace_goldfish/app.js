@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "41";   // 척추 회전 워프(gf_spine) — 유연한 회전 휨
+  const ASSET_VER = "42";   // 호버 클립 추가(스윔+호버 2클립/변종, gates 메타)
   const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
@@ -464,6 +464,10 @@
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
       panic: 0,                                       // 도망 흥분도(0~1+), 시간에 따라 감쇠
       bend: 0, prevHeading: 0,                        // 몸 휨(라디안), 직전 heading
+      // 행동 상태: cruise(순항) / circle(서행 회전 유영) / hover(정지·지느러미 노젓기)
+      //   *Pend = 애니 전환 게이트(곧은 프레임) 대기
+      mode: "cruise", modeT: rand(4, 14),
+      circleDir: 1, circleRate: 0,
     };
   }
   function spawnFishes() {
@@ -850,9 +854,45 @@
       f.panic *= Math.exp(-dtSec / PANIC_DECAY);
       if (f.panic < 0.003) f.panic = 0;
 
+      // === 행동 상태머신: cruise ↔ circle(서행 회전) ↔ hover(정지·지느러미 노젓기) ===
+      // 애니 전환은 '곧은 프레임' 게이트(meta.gates/hgates)에서만 → 팝 최소.
+      const v = f.variant;
+      const hasHover = v.hstart != null && v.hcount;
+      const GATE_TOL = 1.6;
+      function nearGate(local, gs) {
+        for (let gi = 0; gi < gs.length; gi++) {
+          const d = Math.abs(local - gs[gi]);
+          if (d <= GATE_TOL || d >= (f.mode === "hover" ? v.hcount : v.count) - GATE_TOL) return gi;
+        }
+        return -1;
+      }
+      f.modeT -= dtSec;
+      if (f.panic > 0.25) {
+        if (f.mode === "hover" && hasHover) f.frame = v.gates ? v.gates[0] : 0; // 도망 우선, 즉시 스윔 복귀
+        f.mode = "cruise"; f.modeT = rand(4, 9);
+      } else if (f.mode === "cruise" && f.modeT <= 0) {
+        const r = Math.random();
+        if (r < 0.38) { f.mode = "circle"; f.modeT = rand(4, 9); f.circleDir = Math.random() < 0.5 ? -1 : 1; f.circleRate = rand(0.25, 0.55); }
+        else if (r < 0.72 && hasHover && v.gates) { f.mode = "hoverPend"; f.modeT = rand(2.5, 6) + 4; }
+        else { f.modeT = rand(5, 12); }
+      } else if (f.mode === "circle" && f.modeT <= 0) {
+        f.mode = "cruise"; f.modeT = rand(6, 16);
+      } else if (f.mode === "hoverPend") {
+        const gi = nearGate(((f.frame | 0) % v.count + v.count) % v.count, v.gates);
+        if (gi >= 0) { f.mode = "hover"; f.frame = v.hgates[gi]; f.modeT = rand(2.5, 6); }
+        else if (f.modeT <= 0) { f.mode = "cruise"; f.modeT = rand(5, 12); }   // 게이트 못 만나면 포기
+      } else if (f.mode === "hover" && f.modeT <= 0) {
+        const gi = nearGate(((f.frame | 0) % v.hcount + v.hcount) % v.hcount, v.hgates);
+        if (gi >= 0) { f.mode = "cruise"; f.modeT = rand(6, 16); f.frame = v.gates[gi]; }
+      }
+      const inHover = f.mode === "hover";
+      const modeSpeedMul = inHover ? 0.06 : (f.mode === "circle" ? 0.35 : 1);
+
       // 천천히 배회: heading 에 느린 사인 흔들림 (패닉 시엔 약화, 몸통 일렁임은 프레임 애니메이션 담당)
-      f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec * (1 - Math.min(1, f.panic));
-      f.frame += f.animFps * (1 + f.panic * 1.8) * dtSec;   // 패닉 시 꼬리짓 빨라짐
+      f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec
+                   * (1 - Math.min(1, f.panic)) * (inHover ? 0.15 : 1);
+      if (f.mode === "circle") f.heading += f.circleDir * f.circleRate * dtSec;   // 서행 회전 유영
+      f.frame += f.animFps * (inHover ? 0.9 : 1 + f.panic * 1.8) * dtSec;   // 패닉 시 꼬리짓 빨라짐
 
       // 회전축: 평상시엔 몸 중앙, 도망(패닉)할수록 머리로 → 머리 고정하고 몸·꼬리가 휙 돈다
       const pivotW = Math.min(1, f.panic * 1.3);
@@ -862,7 +902,7 @@
       let cyC = fy + (headPivotCy - fy) * pivotW;
 
       // 전진(heading 방향)
-      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST);  // 패닉 시 가속
+      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * modeSpeedMul;  // 패닉 시 가속, 회전/호버 시 감속
       cxC += Math.cos(f.heading) * speedPx * dtSec;
       cyC += Math.sin(f.heading) * speedPx * dtSec;
       f.nx = cxC / W; f.ny = cyC / H;
@@ -877,10 +917,11 @@
       const hw = hl * aspect;
       const cx = f.nx * W, cy = f.ny * H;             // 중심(px, top-down)
 
-      // 현재 프레임 셀 → UV (변종 셀범위 내에서 사이클, 머리=셀 위 v0, 꼬리=셀 아래 v1)
-      const vcount = f.variant.count;
+      // 현재 프레임 셀 → UV (모드별 클립: 스윔=start/count, 호버=hstart/hcount)
+      const clipStart = inHover ? v.hstart : v.start;
+      const vcount = inHover ? v.hcount : v.count;
       const local = (((f.frame | 0) % vcount) + vcount) % vcount;
-      const fi = f.variant.start + local;
+      const fi = clipStart + local;
       const col = fi % koiAtlas.cols, row = (fi / koiAtlas.cols) | 0;
       const u0 = (col * cellW) / koiAtlas.atlasW, u1 = (col * cellW + cellW) / koiAtlas.atlasW;
       const v0 = (row * cellH) / koiAtlas.atlasH, v1 = (row * cellH + cellH) / koiAtlas.atlasH;
@@ -889,8 +930,10 @@
       let dH = f.heading - f.prevHeading;
       dH = Math.atan2(Math.sin(dH), Math.cos(dH));
       f.prevHeading = f.heading;
-      let targetBend = (dH / dtSec) * BEND_GAIN * (1 + f.panic * 1.5);
-      if (targetBend > BEND_MAX) targetBend = BEND_MAX; else if (targetBend < -BEND_MAX) targetBend = -BEND_MAX;
+      // 도망(패닉) 시 훨씬 크게 휨: 게인 1.5→2.6, 최대각도 0.8→최대 1.55 로 확장(FISH_SEG=14 라 접힘 없음)
+      let targetBend = (dH / dtSec) * BEND_GAIN * (1 + f.panic * 2.6);
+      const bendMax = Math.min(1.55, BEND_MAX + f.panic * 0.75);
+      if (targetBend > bendMax) targetBend = bendMax; else if (targetBend < -bendMax) targetBend = -bendMax;
       f.bend += (targetBend - f.bend) * Math.min(1, BEND_SMOOTH * dtSec);
 
       function px2clip(out, oi, X, Y, u, v) {
