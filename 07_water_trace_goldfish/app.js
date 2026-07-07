@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "38";   // 꼬리 팬 응집(위상 전단 찢어짐 수정)
+  const ASSET_VER = "39";   // 팬 강체-추종(C1) — 몸 후반부 꺾임 해소
   const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
@@ -53,9 +53,9 @@
   const PANIC_DECAY = 0.85;           // 패닉 감쇠 시간상수(초)
   const POINTER_TTL = 0.45;           // 포인터가 멈춘 뒤 이만큼 지나면 진정(초)
   // 몸 휨(도망 방향으로 C자): 선회 각속도+패닉에 비례
-  const FISH_SEG = 7;                 // 몸 분절 수
+  const FISH_SEG = 14;                // 몸 분절 수 — 금붕어 셀은 폭비 0.86(코이 2배)라 7분절이면 굽힘 접힘이 드러남
   const BEND_GAIN = 0.055;            // 각속도(rad/s) → 휨
-  const BEND_MAX = 1.5;               // 최대 휨(라디안, 몸 전체 분배)
+  const BEND_MAX = 0.8;               // 최대 휨(라디안, 몸 전체 분배) — 넓은 셀에서 1.5는 몸이 꺾여 보임
   const BEND_SMOOTH = 13.0;           // 휨 추종 속도
 
   const canvas = document.getElementById("scene");
