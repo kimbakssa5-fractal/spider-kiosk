@@ -37,6 +37,7 @@ D = csp(script="'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.n
 PROFILE = {
     "index.html": A, "index-cards.html": A, "doodle.html": A,
     "05_water_trace/index.html": A, "06_water_trace_interaction/index.html": A,
+    "07_water_trace_goldfish/index.html": A,
     "08_water_wave/index.html": A, "10_dot_mosaic/index.html": A,
     "31_memory_game/index.html": A, "32_game_hall/index.html": A, "33_game_pinball/index.html": A,
     "21_database_cell/index.html": A,
