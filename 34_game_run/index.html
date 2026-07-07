@@ -335,24 +335,40 @@ class OneEuro{
 
 /* ================= 발 착지 감지 =================
    실측 신호는 이론값보다 작게 나온다 → 절대 상수 대신
-   다리 길이(엉덩이~발목) 비례 + 측정 노이즈 비례로 문턱을 정한다.
-   상태기계: ground --(들림>liftThresh)--> air --(내림<downThresh)--> ground(=착지 이벤트)
-   지면 기준선(ground)은 발의 최저점(최대 y)을 즉시 따라가고, 위로는 천천히 적응. */
-class FootTracker{
-  constructor(){ this.f=new OneEuro(1.2,6.0); this.reset(); }
-  reset(){ this.f.reset(); this.ground=null; this.phase='ground'; this.lastStrike=0; this.y=null; this.height=0; }
-  update(rawY, legLen, noise, t){
-    if(this.tPrevG===undefined) this.tPrevG=t;
-    const dt=Math.max(1e-3,(t-this.tPrevG)/1000); this.tPrevG=t;
-    const y=this.f.filter(rawY,t); this.y=y;
+   다리 길이(엉덩이~발목) "상대 단위" + 측정 노이즈 비례로 문턱을 정한다.
+   키가 작은 아이 대응:
+   ① 최근 관측 스윙 피크에 문턱이 자동 적응(작은 들림도 몇 걸음 안에 잡힘)
+   ② 발목보다 크게 움직이는 무릎 신호를 보조로 결합(SNR 확보)
+   상태기계: ground --(들림>lift)--> air --(내림<down)--> ground(=착지 이벤트)
+   지면 기준선은 최저점(최대 y)을 즉시 따라가고, 위로는 천천히 적응. */
+class Chan{ // 채널(발목/무릎): One Euro + 지면 기준선 → 다리길이 상대 들림 높이
+  // minCutoff 1.7: 어린이의 작은(느린 속도) 1.5Hz 스텝 신호가 감쇠되지 않는 하한
+  constructor(){ this.f=new OneEuro(1.7,6.0); this.reset(); }
+  reset(){ this.f.reset(); this.ground=null; this.tPrev=undefined; }
+  h(rawY, legLen, t){
+    const dt=this.tPrev===undefined?1e-3:Math.max(1e-3,(t-this.tPrev)/1000); this.tPrev=t;
+    const y=this.f.filter(rawY,t);
     if(this.ground===null) this.ground=y;
-    // 아래로는 즉시, 위로는 초당 다리길이 6%씩만 적응(사람이 이동해도 기준선 유지)
-    this.ground = Math.max(y, this.ground - legLen*0.06*dt);
-    this.height = this.ground - y;
-    const lift = Math.max(4*noise, legLen*0.050);
-    const down = Math.max(2*noise, legLen*0.022);
-    if(this.phase==='ground' && this.height>lift){ this.phase='air'; return false; }
-    if(this.phase==='air' && this.height<down && (t-this.lastStrike)>160){
+    // 아래로는 즉시, 위로는 초당 다리길이 2.5%씩만 적응(발이 떠 있는 0.3초 동안 기준선 잠식 최소화)
+    this.ground=Math.max(y, this.ground - legLen*0.025*dt);
+    return (this.ground-y)/legLen;
+  }
+}
+class FootTracker{
+  constructor(){ this.ankle=new Chan(); this.knee=new Chan(); this.reset(); }
+  reset(){ this.ankle.reset(); this.knee.reset(); this.phase='ground'; this.lastStrike=0; this.height=0; this.peak=0; this.tPrev=undefined; }
+  update(ankleY, kneeY, legLen, relNoise, t){
+    const dt=this.tPrev===undefined?1e-3:Math.max(1e-3,(t-this.tPrev)/1000); this.tPrev=t;
+    const hA=this.ankle.h(ankleY,legLen,t);
+    const hK=kneeY===null?0:this.knee.h(kneeY,legLen,t);
+    const h=Math.max(hA, hK*0.55);          // 무릎 보조(아이는 무릎 들림이 더 큼)
+    this.height=h;
+    // 최근 스윙 피크(지수 감쇠 ~2초 반감) — 관측된 실제 진폭에 문턱 자동 적응
+    this.peak=Math.max(h, this.peak - this.peak*0.35*dt);
+    const lift=Math.min(Math.max(0.45*this.peak, Math.max(3*relNoise, 0.020)), 0.060);
+    const down=Math.min(Math.max(0.18*this.peak, Math.max(2*relNoise, 0.008)), 0.026);
+    if(this.phase==='ground' && h>lift){ this.phase='air'; return false; }
+    if(this.phase==='air' && h<down && (t-this.lastStrike)>160){
       this.phase='ground'; this.lastStrike=t; return true;
     }
     return false;
@@ -369,7 +385,7 @@ class PlayerRunner{
     this.resetCalibration();
   }
   resetCalibration(){
-    this.calStart=null; this.calSamples=[]; this.calibrated=false; this.noise=0.004;
+    this.calStart=null; this.calSamples=[]; this.calibrated=false; this.relNoise=0.006;
   }
   fullReset(){ this.feet.L.reset(); this.feet.R.reset(); this.resetCalibration(); }
   /* lm: MediaPipe 33 landmarks(normalized). 반환: 이번 프레임 착지한 발 배열 */
@@ -378,24 +394,29 @@ class PlayerRunner{
     const vis=i=>(lm[i].visibility??1)>0.4;
     if(!(vis(27)&&vis(28)&&vis(23)&&vis(24))) return [];
     const legLen=((lm[27].y-lm[23].y)+(lm[28].y-lm[24].y))/2;
-    if(legLen<0.05) return [];               // 다리가 화면에 거의 안 보임
-    // 발목+뒤꿈치 평균(둘 다 보이면)으로 y 안정화
+    if(legLen<0.03) return [];               // 다리가 화면에 거의 안 보임(키 작은 아이도 통과하게 완화)
+    // 발목+뒤꿈치 평균(둘 다 보이면)으로 y 안정화, 무릎은 보조 채널
     const yL = vis(29) ? (lm[27].y+lm[29].y)/2 : lm[27].y;
     const yR = vis(30) ? (lm[28].y+lm[30].y)/2 : lm[28].y;
-    // ---- 노이즈 자동 보정(정지 구간 표준편차) ----
+    const kL = vis(25) ? lm[25].y : null;
+    const kR = vis(26) ? lm[26].y : null;
+    const hits=[];
+    const sL=this.feet.L.update(yL,kL,legLen,this.relNoise,t);
+    const sR=this.feet.R.update(yR,kR,legLen,this.relNoise,t);
+    // ---- 노이즈 자동 보정 — 감지에 실제로 쓰는 "필터 후" 상대 높이의 정지 표준편차로 측정 ----
     if(!this.calibrated){
       if(this.calStart===null) this.calStart=t;
-      this.calSamples.push(yL,yR);
+      this.calSamples.push(this.feet.L.height, this.feet.R.height);
       if(t-this.calStart>=CAL_MS && this.calSamples.length>=20){
         const s=this.calSamples, m=s.reduce((a,b)=>a+b,0)/s.length;
         const sd=Math.sqrt(s.reduce((a,b)=>a+(b-m)*(b-m),0)/s.length);
-        this.noise=Math.min(Math.max(sd,0.0015), legLen*0.012); // 상한: 보정 중 뛰고 있었어도 감지 가능하게
+        this.relNoise=Math.max(0.002, Math.min(0.014, sd*1.2)); // 상한: 보정 중 뛰고 있었어도 감지 가능하게
         this.calibrated=true;
       }
+    }else{
+      if(sL) hits.push('L');
+      if(sR) hits.push('R');
     }
-    const hits=[];
-    if(this.feet.L.update(yL,legLen,this.noise,t) && this.calibrated) hits.push('L');
-    if(this.feet.R.update(yR,legLen,this.noise,t) && this.calibrated) hits.push('R');
     for(const f of hits){
       this.count++;
       this.stepTimes.push(t);
@@ -447,6 +468,25 @@ function emitStep(player,foot,t){
   if(window.RunGame?.onStep) window.RunGame.onStep(player,foot,p.count);
 }
 window.RunGame={ onStep:null, getCounts:()=>({p1:players[1].count,p2:players[2].count}) };
+/* 자동 검증용: 데모와 같은 합성 러너를 고정 60fps 가상시간으로 동기 실행(탭 가시성 무관) */
+window.RunGame.simulate=function(seconds=12, fps=60, o={}){
+  const A=Object.assign({scale2:0.55, amp2:0.045, f1:1.33, f2:1.50, noise:0.0022},o);
+  players[1].fullReset(); players[2].fullReset();
+  const t0=performance.now(), c0={p1:players[1].count,p2:players[2].count};
+  for(let i=0;i<seconds*fps;i++){
+    const tSec=i/fps, t=t0+tSec*1000;
+    const runSec=Math.max(0,tSec-2.2);
+    const f1=runSec>0?A.f1:0, f2=runSec>0?A.f2:0;
+    processPoses([
+      makeDemoPose(0.30,tSec,f1,0,A.noise,1.0,0.10),
+      makeDemoPose(0.72,tSec,f2,0.9,A.noise,A.scale2,A.amp2)
+    ],t);
+  }
+  const runDur=seconds-2.2;
+  const r={p1:players[1].count-c0.p1, p2:players[2].count-c0.p2};
+  r.p1PerMin=Math.round(r.p1/runDur*60); r.p2PerMin=Math.round(r.p2/runDur*60);
+  return r;
+};
 
 /* ================= MediaPipe ================= */
 let poseLandmarker=null, running=false, stream=null, raf=null;
@@ -644,30 +684,32 @@ function stop(){
 let demoRaf=null, demoActive=false, demoT0=0;
 function gauss(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
   return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
-function makeDemoPose(cx, tSec, freq, phase0, noiseSd){
-  // 화면 비율 기준 신체(정규화 좌표, y 아래로 증가)
-  const shoulderY=0.34, hipY=0.55, kneeY=0.72, ankleY=0.88;
-  const legLen=ankleY-hipY;                       // 0.33
-  const amp=legLen*0.10;                          // 실측 수준의 작은 들림(이론치 절반 이하)
+function makeDemoPose(cx, tSec, freq, phase0, noiseSd, scale, ampFrac){
+  // 화면 비율 기준 신체(정규화 좌표, y 아래로 증가). scale<1 = 어린이(지면 고정, 위로 축소)
+  const groundY=0.88;
+  const legLen=0.33*scale;
+  const hipY=groundY-legLen, kneeY=groundY-0.16*scale, shoulderY=hipY-0.21*scale, ankleY=groundY;
+  const amp=legLen*ampFrac;                       // 실측 수준의 작은 들림(이론치 절반 이하)
   const bounce=Math.abs(Math.sin(2*Math.PI*freq*tSec+phase0))*legLen*0.015;
   const lm=Array.from({length:33},()=>({x:cx,y:hipY,visibility:1}));
   const lift=ph=>Math.pow(Math.max(0,Math.sin(2*Math.PI*freq*tSec+ph)),1.5);
   const L=lift(phase0), R=lift(phase0+Math.PI);
   const n=()=>gauss()*noiseSd;
-  const sw=0.055, hw=0.038;                       // 어깨/골반 반폭
-  lm[0] ={x:cx+n()*0.5, y:shoulderY-0.10-bounce+n(), visibility:1};        // 코
+  const sw=0.055*scale, hw=0.038*scale;           // 어깨/골반 반폭
+  const s=scale;
+  lm[0] ={x:cx+n()*0.5, y:shoulderY-0.10*s-bounce+n(), visibility:1};      // 코
   lm[11]={x:cx-sw+n(), y:shoulderY-bounce+n(), visibility:1};
   lm[12]={x:cx+sw+n(), y:shoulderY-bounce+n(), visibility:1};
   lm[23]={x:cx-hw+n(), y:hipY-bounce+n(), visibility:1};
   lm[24]={x:cx+hw+n(), y:hipY-bounce+n(), visibility:1};
-  lm[25]={x:cx-hw-0.012+L*0.03+n(), y:kneeY-L*amp*1.6+n(), visibility:1};  // 무릎이 발보다 크게 들림
-  lm[26]={x:cx+hw+0.012+R*0.03+n(), y:kneeY-R*amp*1.6+n(), visibility:1};
-  lm[27]={x:cx-hw-0.016+n(), y:ankleY-L*amp+n(), visibility:1};            // 발목
-  lm[28]={x:cx+hw+0.016+n(), y:ankleY-R*amp+n(), visibility:1};
-  lm[29]={x:cx-hw-0.028+n(), y:ankleY+0.015-L*amp+n(), visibility:1};      // 뒤꿈치
-  lm[30]={x:cx+hw+0.028+n(), y:ankleY+0.015-R*amp+n(), visibility:1};
-  lm[31]={x:cx-hw-0.045+n(), y:ankleY+0.03-L*amp*1.15+n(), visibility:1};  // 발끝
-  lm[32]={x:cx+hw+0.045+n(), y:ankleY+0.03-R*amp*1.15+n(), visibility:1};
+  lm[25]={x:cx-hw-0.012*s+L*0.03*s+n(), y:kneeY-L*amp*1.6+n(), visibility:1};  // 무릎이 발보다 크게 들림
+  lm[26]={x:cx+hw+0.012*s+R*0.03*s+n(), y:kneeY-R*amp*1.6+n(), visibility:1};
+  lm[27]={x:cx-hw-0.016*s+n(), y:ankleY-L*amp+n(), visibility:1};          // 발목
+  lm[28]={x:cx+hw+0.016*s+n(), y:ankleY-R*amp+n(), visibility:1};
+  lm[29]={x:cx-hw-0.028*s+n(), y:ankleY+0.015*s-L*amp+n(), visibility:1};  // 뒤꿈치
+  lm[30]={x:cx+hw+0.028*s+n(), y:ankleY+0.015*s-R*amp+n(), visibility:1};
+  lm[31]={x:cx-hw-0.045*s+n(), y:ankleY+0.03*s-L*amp*1.15+n(), visibility:1};  // 발끝
+  lm[32]={x:cx+hw+0.045*s+n(), y:ankleY+0.03*s-R*amp*1.15+n(), visibility:1};
   return lm;
 }
 function demoLoop(){
@@ -676,11 +718,11 @@ function demoLoop(){
   const t=performance.now(), tSec=(t-demoT0)/1000;
   // 시작 2초는 제자리 정지(자동 보정 구간) → 이후 달리기
   const runSec=Math.max(0,tSec-2.2);
-  const f1=runSec>0?1.33:0, f2=runSec>0?1.18:0;   // 발당 주파수(총 160/142 걸음/분)
-  const noiseSd=0.0022;                            // 실측 지터 수준
+  const f1=runSec>0?1.33:0, f2=runSec>0?1.50:0;   // 발당 주파수(성인 160/어린이 180 걸음/분)
+  const noiseSd=0.0022;                            // 실측 지터 수준(절대값 — 작은 사람일수록 상대적으로 불리)
   const poses=[
-    makeDemoPose(0.30,tSec,f1,0,noiseSd),
-    makeDemoPose(0.70,tSec,f2,0.9,noiseSd)
+    makeDemoPose(0.30,tSec,f1,0,noiseSd,1.0,0.10),   // 성인: 들림 10% legLen
+    makeDemoPose(0.72,tSec,f2,0.9,noiseSd,0.55,0.045) // 어린이(55% 키): 들림 4.5% legLen — 구 문턱(5%)이면 누락되던 수준
   ];
   const W=canvas.width,H=canvas.height;
   ctx.fillStyle='#f5ede6'; ctx.fillRect(0,0,W,H);
@@ -692,7 +734,7 @@ function demoLoop(){
   });
   ctx.font=`700 ${Math.max(13,W*0.016)}px 'Noto Sans KR','Noto Sans',sans-serif`;
   ctx.textAlign='left'; ctx.fillStyle='#a89a8c';
-  ctx.fillText('데모 모드 — 합성 러너 2명 (실측 파이프라인 통과)', W*0.02, H*0.05);
+  ctx.fillText('데모 모드 — 합성 러너 2명: 성인 + 어린이(55% 키, 작은 들림) · 실측 파이프라인 통과', W*0.02, H*0.05);
   tickFps();
 }
 function startDemo(){
