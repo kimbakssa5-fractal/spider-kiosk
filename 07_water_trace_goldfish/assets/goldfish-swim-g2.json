@@ -1,1 +1,1 @@
-{"cellW": 132, "cellH": 162, "cols": 17, "rows": 13, "count": 216, "fps": 20, "headUp": true, "atlasW": 2244, "atlasH": 2106, "variants": [{"name": "orange1", "start": 0, "count": 72}, {"name": "orange2", "start": 72, "count": 72}, {"name": "orange3", "start": 144, "count": 72}]}
+{"cellW": 148, "cellH": 162, "cols": 16, "rows": 14, "count": 216, "fps": 20, "headUp": true, "atlasW": 2368, "atlasH": 2268, "variants": [{"name": "orange1", "start": 0, "count": 72}, {"name": "orange2", "start": 72, "count": 72}, {"name": "orange3", "start": 144, "count": 72}]}
