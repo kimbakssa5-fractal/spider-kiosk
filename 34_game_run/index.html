@@ -95,6 +95,14 @@ main{ width:min(1080px,100%); display:flex; flex-direction:column; gap:16px; }
 }
 .pcard.p1::before{ background:var(--coral); }
 .pcard.p2::before{ background:var(--blue); }
+.avatar-wrap{ height:118px; display:flex; align-items:flex-end; justify-content:center; margin:6px 0 2px; }
+.avatar{
+  height:118px; width:auto; object-fit:contain; display:block;
+  transform:translateY(0); transition:transform .05s;
+  filter:drop-shadow(0 6px 6px rgba(90,60,40,.14));
+}
+.avatar.hop{ animation:hop .22s ease; }
+@keyframes hop{ 0%{transform:translateY(0)} 40%{transform:translateY(-11px)} 100%{transform:translateY(0)} }
 .plabel{ font-weight:900; font-size:15px; letter-spacing:2px; margin-top:4px; }
 .p1 .plabel{ color:var(--coral); }
 .p2 .plabel{ color:var(--blue); }
@@ -218,6 +226,7 @@ footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px
   <div class="score-row">
     <div class="pcard p1" id="card1">
       <div class="plabel">PLAYER 1</div>
+      <div class="avatar-wrap"><video class="avatar" id="avatar1" src="assets/ostrich_run.webm" poster="assets/ostrich_poster.png" muted loop playsinline preload="auto"></video></div>
       <div class="pcount" id="count1">0</div>
       <div class="pmeta" id="cad1">&nbsp;</div>
       <div class="pstate" id="state1">대기</div>
@@ -229,6 +238,7 @@ footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px
     </div>
     <div class="pcard p2" id="card2">
       <div class="plabel">PLAYER 2</div>
+      <div class="avatar-wrap"><video class="avatar" id="avatar2" src="assets/ostrich_run.webm" poster="assets/ostrich_poster.png" muted loop playsinline preload="auto"></video></div>
       <div class="pcount" id="count2">0</div>
       <div class="pmeta" id="cad2">&nbsp;</div>
       <div class="pstate" id="state2">대기</div>
@@ -338,6 +348,15 @@ const mirrorChk=$('mirrorChk'), videoChk=$('videoChk'), soundChk=$('soundChk');
 const statusDot=$('statusDot'), statusText=$('statusText'), personCountEl=$('personCount'), fpsEl=$('fps');
 const tickerEl=$('ticker');
 const PCOLORS={1:'#e8604c', 2:'#4c8fe8'};
+const avatars={1:$('avatar1'), 2:$('avatar2')};
+// 아바타(타조): 스텝마다 통통 튀고, 케이던스에 비례해 달리는 속도 조절, 멈추면 정지
+function avatarHop(id){ const v=avatars[id]; if(!v) return; v.play?.().catch(()=>{}); v.classList.remove('hop'); void v.offsetWidth; v.classList.add('hop'); }
+function updateAvatar(id, cad, active){
+  const v=avatars[id]; if(!v) return;
+  if(!active || cad<1){ if(!v.paused) v.pause(); }
+  else { v.playbackRate=Math.max(0.6, Math.min(3.0, cad/45)); if(v.paused) v.play().catch(()=>{}); }
+}
+function resetAvatars(){ for(const id of [1,2]){ const v=avatars[id]; if(v){ v.pause(); try{ v.currentTime=0; }catch(_){} } } }
 
 function setOverlay(html,spin){ omsg.innerHTML=html; spinner.style.display=spin?'block':'none'; overlay.classList.remove('hidden'); }
 function hideOverlay(){ overlay.classList.add('hidden'); }
@@ -472,6 +491,7 @@ function emitStep(player,foot,t){
   $('count'+player).textContent=p.count;
   const card=$('card'+player);
   card.classList.remove('bump'); void card.offsetWidth; card.classList.add('bump');
+  avatarHop(player);          // 타조 아바타 통통
   beep(player);
   // 향후 아바타 연동용 훅
   document.dispatchEvent(new CustomEvent('run:step',{detail:{player,foot,count:p.count,t}}));
@@ -623,6 +643,7 @@ function processPoses(poses,t){
       if(now-p.lastSeen>5000 && p.lastSeen>0){ p.fullReset(); }
       stateEl.textContent='대기'; stateEl.classList.remove('on');
       $('cad'+id).innerHTML='&nbsp;';
+      updateAvatar(id, 0, false);       // 사람 없으면 타조 정지
       continue;
     }
     const hits=p.update(lm,now);
@@ -630,6 +651,7 @@ function processPoses(poses,t){
     else{ stateEl.textContent='달리는 중'; stateEl.classList.add('on'); }
     const cad=p.cadence(now);
     $('cad'+id).textContent = cad>0 ? `🏃 ${cad} 걸음/분` : ' ';
+    updateAvatar(id, cad, true);        // 케이던스에 맞춰 타조 달리기 속도
     for(const f of hits){
       emitStep(id,f,now);
       const li=f==='L'?27:28;
@@ -795,6 +817,7 @@ function stop(){
   setOverlay('▶ <b>시작</b>을 누르면 카메라가 켜집니다<br><span style="color:var(--muted);font-weight:300;font-size:13px">웹캠이 없으면 <b>데모 모드</b>로 동작을 확인할 수 있어요</span>',false);
   for(const id of [1,2]){ $('state'+id).textContent='대기'; $('state'+id).classList.remove('on'); }
   personCountEl.textContent='0';
+  resetAvatars();
 }
 
 /* ================= 데모 모드 =================
@@ -878,6 +901,7 @@ function stopDemo(){
     setOverlay('▶ <b>시작</b>을 누르면 카메라가 켜집니다<br><span style="color:var(--muted);font-weight:300;font-size:13px">웹캠이 없으면 <b>데모 모드</b>로 동작을 확인할 수 있어요</span>',false);
     for(const id of [1,2]){ $('state'+id).textContent='대기'; $('state'+id).classList.remove('on'); }
     personCountEl.textContent='0';
+    resetAvatars();
   }
 }
 function resetCounts(){
