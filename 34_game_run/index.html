@@ -108,8 +108,7 @@ main{
 }
 .pcol.p1::before{ background:var(--coral); }
 .pcol.p2::before{ background:var(--blue); }
-.avatar-wrap{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; margin:8px 0; }
-.p2 .avatar-wrap{ transform:scaleX(-1); }   /* P2 타조는 가운데를 향해 마주보기 */
+.avatar-wrap{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; margin:8px 0; transform:scaleX(-1); }   /* 좌우 반전: 거울(카메라) 방향에 맞춰 참여자와 같은 발이 움직여 보이게 */
 .avatar{
   max-height:100%; max-width:100%; height:auto; width:auto; object-fit:contain; display:block;
   transform:translateY(0);
