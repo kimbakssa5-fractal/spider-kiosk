@@ -41,8 +41,8 @@
 
   // ---- 황금 잉어 파라미터 ----
   //   fish01 헤엄 사이클(73프레임, 머리=위) 프레임 애니메이션 사용 → 몸이 자연스럽게 일렁임.
-  let FISH_COUNT = 12;                // 동시에 헤엄치는 잉어 수 (9/0 키로 가감, 0~24)
-  const FISH_LEN_MIN = 0.22, FISH_LEN_MAX = 0.34;  // 화면 짧은변 대비 몸길이 비율 (크게)
+  let FISH_COUNT = 20;                // 동시에 헤엄치는 금붕어 수 (9/0 키로 가감, 0~40)
+  const FISH_LEN_MIN = 0.145, FISH_LEN_MAX = 0.225;  // 화면 짧은변 대비 몸길이 비율(꼬리 포함) — 06 잉어보다 작게, 마릿수↑
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
@@ -1190,7 +1190,7 @@
     hudTimer = setTimeout(function () { hud.classList.remove("show"); }, 1400);
   }
   function setFishCount(dir) {
-    FISH_COUNT = clamp(FISH_COUNT + dir, 0, 24);
+    FISH_COUNT = clamp(FISH_COUNT + dir, 0, 40);
     if (koiReady) spawnFishes();
     showHud("FISH  " + FISH_COUNT);
   }
