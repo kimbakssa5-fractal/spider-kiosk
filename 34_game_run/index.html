@@ -109,11 +109,11 @@ main{
 .pcol.p1::before{ background:var(--coral); }
 .pcol.p2::before{ background:var(--blue); }
 .avatar-wrap{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; margin:8px 0; }
-.p2 .avatar-wrap{ transform:scaleX(-1); }   /* 마주보기: P1(왼쪽)은 오른쪽을, P2(오른쪽)는 왼쪽을 향해 가운데서 마주봄 */
+/* 정면 뷰 타조 — 좌우 다리가 명확하므로 반전 없이 둘 다 정면(참여자를 향함) */
 .avatar{
-  height:100%; max-height:100%; max-width:100%; aspect-ratio:260/462;
-  background-image:url('assets/ostrich_sheet.png');
-  background-repeat:no-repeat; background-size:1200% 100%; background-position:0% 0%;
+  height:100%; max-height:100%; max-width:100%; aspect-ratio:500/896;
+  background-image:url('assets/ostrich_idle.png');
+  background-repeat:no-repeat; background-size:contain; background-position:center bottom;
   transform:translateY(0);
   filter:drop-shadow(0 8px 8px rgba(90,60,40,.16));
 }
@@ -373,32 +373,25 @@ const statusDot=$('statusDot'), statusText=$('statusText'), personCountEl=$('per
 const tickerEl=$('ticker');
 const PCOLORS={1:'#e8604c', 2:'#4c8fe8'};
 const avatars={1:$('avatar1'), 2:$('avatar2')};
-/* 타조 아바타: 12프레임 스프라이트 시트를 참여자의 발 위상에 물려 부드럽게 재생.
-   스텝 하나 = 반 사이클(6프레임) → 참여자가 발을 딛는 리듬·속도 그대로 타조가 달린다.
-   멈추면(마지막 스텝 0.5초 경과) 첫 프레임. 방향 반대로 느껴지면 PHASE_OFFSET 0↔0.5. */
-const NFRAMES=12;
-let PHASE_OFFSET=0;   // 0 또는 0.5 — 어느 발이 먼저인지(방향) 뒤집기
-function setFrame(el, idx){
-  if(!el) return;
-  const i=((idx%NFRAMES)+NFRAMES)%NFRAMES;
-  if(+el.dataset.f===i) return; el.dataset.f=i;
-  el.style.backgroundPositionX=(i/(NFRAMES-1)*100)+'%';
-}
+/* 정면 타조 아바타: 참여자의 "든 발"(raised)에 따라 좌/우 다리 자세(A/B)를 스왑 → 발과 직접 동기.
+   정면 뷰라 좌우 다리가 명확(A=한 다리 듦, B=그 좌우반전=반대 다리). 멈추면(0.5초) idle. 스텝마다 통통.
+   방향(내 왼발↔타조 어느 다리)이 반대면 POSE_L/POSE_R만 스왑(RunGame.swapAvatarFeet). */
+const POSE_SRC={ A:'assets/ostrich_A.png', B:'assets/ostrich_B.png', idle:'assets/ostrich_idle.png' };
+let POSE_L='A', POSE_R='B';
+['A','B','idle'].forEach(k=>{ const im=new Image(); im.src=POSE_SRC[k]; });   // 사전 로드
+function setPose(el,pose){ if(!el||el.dataset.pose===pose) return; el.dataset.pose=pose; el.style.backgroundImage="url('"+POSE_SRC[pose]+"')"; }
 function avatarHop(id){ const v=avatars[id]; if(!v) return; v.classList.remove('hop'); void v.offsetWidth; v.classList.add('hop'); }
 function updateAvatar(id, p, now, active){
   const el=avatars[id]; if(!el) return;
-  const st=p.stepTimes, n=st.length;
-  const last = n ? st[n-1] : -1e9;
-  const running = active && (now-last)<500;       // 멈추면 첫 프레임(중립)
-  if(!running){ setFrame(el, 0); return; }
-  let interval=400;                                // 최근 스텝 간격(ms)
-  if(n>=2) interval=Math.min(900, Math.max(130, st[n-1]-st[n-2]));
-  const frac=Math.min(1,(now-last)/interval)*0.5;  // 스텝 하나 동안 반 사이클 진행
-  // 좌우 교대는 누적 카운트 홀짝으로(stepTimes는 40개 상한이라 홀짝이 고정돼 한쪽 다리만 나오는 버그 방지)
-  const phase=((p.count%2)*0.5 + frac + PHASE_OFFSET)%1;
-  setFrame(el, Math.floor(phase*NFRAMES));
+  const last = p.stepTimes.length ? p.stepTimes[p.stepTimes.length-1] : -1e9;
+  const running = active && (now-last)<500;        // 멈추면 idle
+  let pose;
+  if(!running) pose='idle';
+  else pose = p.raised==='L' ? POSE_L : p.raised==='R' ? POSE_R
+             : (el.dataset.pose && el.dataset.pose!=='idle' ? el.dataset.pose : POSE_L);  // 중립순간엔 직전 자세 유지
+  setPose(el, pose);
 }
-function resetAvatars(){ for(const id of [1,2]) setFrame(avatars[id], 0); }
+function resetAvatars(){ for(const id of [1,2]) setPose(avatars[id],'idle'); }
 
 function setOverlay(html,spin){ omsg.innerHTML=html; spinner.style.display=spin?'block':'none'; overlay.classList.remove('ready','hidden'); }
 function hideOverlay(){ overlay.classList.add('hidden'); overlay.classList.remove('ready'); }
@@ -570,7 +563,7 @@ function emitStep(player,foot,t){
   if(window.RunGame?.onStep) window.RunGame.onStep(player,foot,p.count);
 }
 window.RunGame={ onStep:null, getCounts:()=>({p1:players[1].count,p2:players[2].count}),
-  swapAvatarFeet:()=>{ PHASE_OFFSET = PHASE_OFFSET ? 0 : 0.5; return {PHASE_OFFSET}; } };
+  swapAvatarFeet:()=>{ const t=POSE_L; POSE_L=POSE_R; POSE_R=t; return {POSE_L,POSE_R}; } };
 /* 자동 검증용: 데모와 같은 합성 러너를 고정 60fps 가상시간으로 동기 실행(탭 가시성 무관) */
 window.RunGame.simulate=function(seconds=12, fps=60, o={}){
   const A=Object.assign({scale2:0.55, amp2:0.045, f1:1.33, f2:1.50, noise:0.0022},o);
