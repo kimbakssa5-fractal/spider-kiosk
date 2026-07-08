@@ -220,7 +220,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
   <!-- 왼쪽: PLAYER 1 타조 -->
   <section class="pcol p1" id="card1">
     <div class="plabel">PLAYER 1</div>
-    <div class="avatar-wrap"><video class="avatar" id="avatar1" src="assets/ostrich_run.webm" poster="assets/ostrich_poster.png" muted loop playsinline preload="auto"></video></div>
+    <div class="avatar-wrap"><img class="avatar" id="avatar1" src="assets/ostrich_idle.png" alt=""></div>
     <div class="pcount" id="count1">0</div>
     <div class="pmeta" id="cad1">&nbsp;</div>
     <div class="pstate" id="state1">대기</div>
@@ -274,7 +274,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
   <!-- 오른쪽: PLAYER 2 타조 -->
   <section class="pcol p2" id="card2">
     <div class="plabel">PLAYER 2</div>
-    <div class="avatar-wrap"><video class="avatar" id="avatar2" src="assets/ostrich_run.webm" poster="assets/ostrich_poster.png" muted loop playsinline preload="auto"></video></div>
+    <div class="avatar-wrap"><img class="avatar" id="avatar2" src="assets/ostrich_idle.png" alt=""></div>
     <div class="pcount" id="count2">0</div>
     <div class="pmeta" id="cad2">&nbsp;</div>
     <div class="pstate" id="state2">대기</div>
@@ -371,21 +371,23 @@ const statusDot=$('statusDot'), statusText=$('statusText'), personCountEl=$('per
 const tickerEl=$('ticker');
 const PCOLORS={1:'#e8604c', 2:'#4c8fe8'};
 const avatars={1:$('avatar1'), 2:$('avatar2')};
-// 아바타(타조): 스텝마다 통통 튀고, 케이던스에 비례해 달리는 속도 조절, 멈추면 정지
-function avatarHop(id){ const v=avatars[id]; if(!v) return; v.play?.().catch(()=>{}); v.classList.remove('hop'); void v.offsetWidth; v.classList.add('hop'); }
+/* 타조 아바타: 참여자의 "든 발"(raised)에 맞춰 좌/우 스텝 스프라이트를 즉시 스왑 → 발과 정밀 동기.
+   멈추면(마지막 스텝 0.5초 경과) idle. 스텝마다 통통. 좌/우 매핑은 반대로 느껴지면 POSE_L/POSE_R만 스왑. */
+const POSE_SRC={ A:'assets/ostrich_A.png', B:'assets/ostrich_B.png', idle:'assets/ostrich_idle.png' };
+let POSE_L='A', POSE_R='B';   // raised 'L'→A, 'R'→B (반대면 스왑)
+['A','B','idle'].forEach(k=>{ const im=new Image(); im.src=POSE_SRC[k]; });   // 사전 로드(스왑 깜빡임 방지)
+function setPose(img,pose){ if(!img||img.dataset.pose===pose) return; img.dataset.pose=pose; img.src=POSE_SRC[pose]; }
+function avatarHop(id){ const v=avatars[id]; if(!v) return; v.classList.remove('hop'); void v.offsetWidth; v.classList.add('hop'); }
 function updateAvatar(id, p, now, active){
-  const v=avatars[id]; if(!v) return;
-  // 멈추면 즉시 정지: 마지막 스텝 이후 0.5초 넘으면(달릴 땐 스텝 간격 ~0.3~0.4초) 멈춘 것으로 간주.
+  const img=avatars[id]; if(!img) return;
   const last = p.stepTimes.length ? p.stepTimes[p.stepTimes.length-1] : -1e9;
-  const running = active && (now-last)<500;
-  if(!running){ if(!v.paused) v.pause(); }
-  else {
-    const cad=p.cadence(now);
-    v.playbackRate=Math.max(0.6, Math.min(3.0, (cad||90)/45));  // cad 미확정 시 기본 속도
-    if(v.paused) v.play().catch(()=>{});
-  }
+  const running = active && (now-last)<500;     // 멈추면 idle
+  let pose;
+  if(!running) pose='idle';
+  else pose = p.raised==='L' ? POSE_L : p.raised==='R' ? POSE_R : (img.dataset.pose==='idle' ? POSE_L : img.dataset.pose);
+  setPose(img, pose);
 }
-function resetAvatars(){ for(const id of [1,2]){ const v=avatars[id]; if(v){ v.pause(); try{ v.currentTime=0; }catch(_){} } } }
+function resetAvatars(){ for(const id of [1,2]) setPose(avatars[id],'idle'); }
 
 function setOverlay(html,spin){ omsg.innerHTML=html; spinner.style.display=spin?'block':'none'; overlay.classList.remove('ready','hidden'); }
 function hideOverlay(){ overlay.classList.add('hidden'); overlay.classList.remove('ready'); }
@@ -556,7 +558,8 @@ function emitStep(player,foot,t){
   document.dispatchEvent(new CustomEvent('run:step',{detail:{player,foot,count:p.count,t}}));
   if(window.RunGame?.onStep) window.RunGame.onStep(player,foot,p.count);
 }
-window.RunGame={ onStep:null, getCounts:()=>({p1:players[1].count,p2:players[2].count}) };
+window.RunGame={ onStep:null, getCounts:()=>({p1:players[1].count,p2:players[2].count}),
+  swapAvatarFeet:()=>{ const t=POSE_L; POSE_L=POSE_R; POSE_R=t; return {POSE_L,POSE_R}; } };
 /* 자동 검증용: 데모와 같은 합성 러너를 고정 60fps 가상시간으로 동기 실행(탭 가시성 무관) */
 window.RunGame.simulate=function(seconds=12, fps=60, o={}){
   const A=Object.assign({scale2:0.55, amp2:0.045, f1:1.33, f2:1.50, noise:0.0022},o);
