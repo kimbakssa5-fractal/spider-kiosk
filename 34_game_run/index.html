@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; worker-src 'self' blob:; child-src blob:; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>달리기 게임 — 발구름 카운터</title>
+<title>RUNNING GAME</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet">
@@ -214,7 +214,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
 <div id="sensToast"></div>
 
 <header>
-  <h1>🏃 달리기 게임 <span class="accent">발구름 카운터</span></h1>
+  <h1>🏃 RUNNING <span class="accent">GAME</span></h1>
   <div class="sub">카메라 앞에서 제자리 달리기 — 발이 땅에 닿을 때마다 숫자가 입력됩니다 (1인 = 1 · 2인 = 왼쪽 1, 오른쪽 2)</div>
 </header>
 
@@ -244,7 +244,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
         <span class="pill"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></span>
         <span class="pill">👥 인식 <b id="personCount">0</b>명</span>
         <span class="pill">FPS <b id="fps">–</b></span>
-        <span class="pill sens-pill">🎚️ 민감도
+        <span class="pill sens-pill">👣 민감도
           <button class="sbtn" id="sensDown" title="덜 예민 ( [ 또는 ↓ )">−</button>
           <b id="sensVal">100</b>%
           <button class="sbtn" id="sensUp" title="더 예민 ( ] 또는 ↑ )">+</button>
@@ -1006,7 +1006,7 @@ let sensToastT=null;
 function applySens(){
   const pct=Math.round(SENS*100);
   sensValEl.textContent=pct;
-  sensToast.textContent='🎚️ 민감도 '+pct+'%'+(pct>=200?' · 매우 예민':pct<=60?' · 둔감':'');
+  sensToast.textContent='👣 민감도 '+pct+'%'+(pct>=200?' · 매우 예민':pct<=60?' · 둔감':'');
   sensToast.classList.add('show');
   clearTimeout(sensToastT); sensToastT=setTimeout(()=>sensToast.classList.remove('show'),900);
   try{ localStorage.setItem(SENS_KEY,SENS.toFixed(2)); }catch(_){}
