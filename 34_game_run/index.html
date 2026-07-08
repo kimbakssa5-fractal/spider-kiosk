@@ -22,25 +22,34 @@ body{
   background:var(--bg) radial-gradient(rgba(232,96,76,.07) 2.2px, transparent 2.2px);
   background-size:34px 34px;
   color:var(--ink);
-  min-height:100%;
-  display:flex; flex-direction:column; align-items:center;
-  padding:22px 18px 30px;
+  height:100%;
+  display:flex; flex-direction:column;
+  padding:12px 18px 8px;
+  overflow:hidden;                 /* 키오스크: 스크롤 없이 한 화면 */
 }
-header{ text-align:center; margin-bottom:16px; }
-h1{ font-weight:900; font-size:clamp(26px,4vw,40px); letter-spacing:-1px; }
+header{ text-align:center; flex:0 0 auto; margin-bottom:10px; }
+h1{ font-weight:900; font-size:clamp(20px,2.6vw,32px); letter-spacing:-1px; }
 h1 .accent{ color:var(--coral); }
-.sub{ color:var(--muted); font-weight:400; margin-top:4px; font-size:14px; }
+.sub{ color:var(--muted); font-weight:400; margin-top:2px; font-size:13px; }
 
-main{ width:min(1080px,100%); display:flex; flex-direction:column; gap:16px; }
+/* 3열: 왼쪽 P1 · 가운데 카메라/스트림/컨트롤 · 오른쪽 P2 (좌우 여백 활용, 스크롤 제거) */
+main{
+  flex:1 1 auto; min-height:0; width:100%;
+  display:grid;
+  grid-template-columns: minmax(190px,1fr) minmax(0,1.9fr) minmax(190px,1fr);
+  gap:16px; align-items:stretch;
+}
+.center{ display:flex; flex-direction:column; gap:12px; min-height:0; min-width:0; }
 
 /* ---- 스테이지 ---- */
 .stage-card{
   position:relative; background:var(--card); border-radius:26px; box-shadow:var(--shadow);
-  padding:14px; overflow:hidden;
+  padding:12px; overflow:hidden;
+  flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
 }
-.stage{ position:relative; border-radius:18px; overflow:hidden; background:#f5ede6; aspect-ratio:16/9; }
+.stage{ position:relative; border-radius:18px; overflow:hidden; background:#f5ede6; flex:1 1 auto; min-height:0; }
 #video{ display:none; }
-#canvas{ width:100%; height:100%; display:block; }
+#canvas{ width:100%; height:100%; display:block; object-fit:contain; }
 .overlay{
   position:absolute; inset:0; display:flex; flex-direction:column; gap:14px;
   align-items:center; justify-content:center; text-align:center;
@@ -82,31 +91,32 @@ main{ width:min(1080px,100%); display:flex; flex-direction:column; gap:16px; }
 }
 #sensToast.show{ opacity:.96; transform:translateX(-50%) translateY(0); }
 
-/* ---- 점수 ---- */
-.score-row{ display:grid; grid-template-columns:1fr 1.15fr 1fr; gap:16px; }
-.pcard{
+/* ---- 플레이어 열(타조 아바타 크게 + 점수) ---- */
+.pcol{
   background:var(--card); border-radius:26px; box-shadow:var(--shadow);
-  padding:20px 18px; text-align:center; position:relative; overflow:hidden;
+  padding:14px 12px 16px; text-align:center; position:relative; overflow:hidden;
+  display:flex; flex-direction:column; align-items:center; min-height:0;
   transition:transform .12s ease;
 }
-.pcard.bump{ transform:scale(1.035); }
-.pcard::before{
+.pcol.bump{ transform:scale(1.02); }
+.pcol::before{
   content:''; position:absolute; top:0; left:0; right:0; height:7px;
 }
-.pcard.p1::before{ background:var(--coral); }
-.pcard.p2::before{ background:var(--blue); }
-.avatar-wrap{ height:118px; display:flex; align-items:flex-end; justify-content:center; margin:6px 0 2px; }
+.pcol.p1::before{ background:var(--coral); }
+.pcol.p2::before{ background:var(--blue); }
+.avatar-wrap{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; margin:8px 0; }
+.p2 .avatar-wrap{ transform:scaleX(-1); }   /* P2 타조는 가운데를 향해 마주보기 */
 .avatar{
-  height:118px; width:auto; object-fit:contain; display:block;
-  transform:translateY(0); transition:transform .05s;
-  filter:drop-shadow(0 6px 6px rgba(90,60,40,.14));
+  max-height:100%; max-width:100%; height:auto; width:auto; object-fit:contain; display:block;
+  transform:translateY(0);
+  filter:drop-shadow(0 8px 8px rgba(90,60,40,.16));
 }
 .avatar.hop{ animation:hop .22s ease; }
-@keyframes hop{ 0%{transform:translateY(0)} 40%{transform:translateY(-11px)} 100%{transform:translateY(0)} }
-.plabel{ font-weight:900; font-size:15px; letter-spacing:2px; margin-top:4px; }
+@keyframes hop{ 0%{transform:translateY(0)} 40%{transform:translateY(-14px)} 100%{transform:translateY(0)} }
+.plabel{ font-weight:900; font-size:clamp(14px,1.4vw,18px); letter-spacing:2px; }
 .p1 .plabel{ color:var(--coral); }
 .p2 .plabel{ color:var(--blue); }
-.pcount{ font-weight:900; font-size:clamp(46px,7vw,74px); line-height:1.1; font-variant-numeric:tabular-nums; }
+.pcount{ font-weight:900; font-size:clamp(40px,5vw,72px); line-height:1; font-variant-numeric:tabular-nums; }
 .pmeta{ color:var(--muted); font-size:13px; font-weight:700; margin-top:2px; min-height:19px; }
 .pstate{
   display:inline-block; margin-top:9px; border-radius:999px; padding:4px 14px;
@@ -117,15 +127,16 @@ main{ width:min(1080px,100%); display:flex; flex-direction:column; gap:16px; }
 
 /* ---- 입력 스트림 ---- */
 .ticker-card{
-  background:var(--card); border-radius:26px; box-shadow:var(--shadow);
-  padding:18px; display:flex; flex-direction:column; gap:10px; min-width:0;
+  background:var(--card); border-radius:22px; box-shadow:var(--shadow);
+  padding:12px 16px; display:flex; flex-direction:column; gap:6px; min-width:0;
+  flex:0 0 auto;
 }
-.tlabel{ font-weight:900; font-size:14px; color:#8b7a6a; letter-spacing:1px; text-align:center; }
+.tlabel{ font-weight:900; font-size:13px; color:#8b7a6a; letter-spacing:1px; text-align:center; }
 .ticker{
-  flex:1; background:#fdf6f0; border-radius:16px; padding:12px 14px;
-  font-weight:900; font-size:26px; letter-spacing:6px;
+  background:#fdf6f0; border-radius:14px; padding:8px 14px;
+  font-weight:900; font-size:24px; letter-spacing:6px;
   overflow:hidden; display:flex; align-items:center; justify-content:flex-end;
-  white-space:nowrap; min-height:64px; font-variant-numeric:tabular-nums;
+  white-space:nowrap; min-height:48px; font-variant-numeric:tabular-nums;
 }
 .ticker .d1{ color:var(--coral); }
 .ticker .d2{ color:var(--blue); }
@@ -135,12 +146,13 @@ main{ width:min(1080px,100%); display:flex; flex-direction:column; gap:16px; }
 
 /* ---- 컨트롤 ---- */
 .controls{
-  display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap;
-  background:var(--card); border-radius:999px; box-shadow:var(--shadow); padding:12px 20px;
+  display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap;
+  background:var(--card); border-radius:26px; box-shadow:var(--shadow); padding:10px 16px;
+  flex:0 0 auto;
 }
 button{
-  font-family:inherit; font-weight:900; font-size:16px; border:none; cursor:pointer;
-  border-radius:999px; padding:12px 30px; transition:transform .08s ease, box-shadow .15s;
+  font-family:inherit; font-weight:900; font-size:15px; border:none; cursor:pointer;
+  border-radius:999px; padding:10px 22px; transition:transform .08s ease, box-shadow .15s;
 }
 button:active{ transform:scale(.96); }
 button:disabled{ opacity:.45; cursor:default; }
@@ -153,8 +165,13 @@ button:disabled{ opacity:.45; cursor:default; }
 }
 .toggle input{ accent-color:var(--coral); width:16px; height:16px; }
 
-footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px; line-height:1.7; font-weight:400; }
-@media (max-width:820px){ .score-row{ grid-template-columns:1fr; } }
+footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); font-size:11.5px; line-height:1.5; font-weight:400; }
+/* 좁은 화면(모바일 등): 세로로 쌓고 스크롤 허용 */
+@media (max-width:900px){
+  body{ overflow:auto; height:auto; min-height:100%; padding-bottom:20px; }
+  main{ grid-template-columns:1fr; }
+  .avatar-wrap{ flex:0 0 auto; height:150px; }
+}
 
 /* ===== password gate (31/33과 동일 정책) ===== */
 #gate{
@@ -196,71 +213,72 @@ footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px
 </header>
 
 <main>
-  <div class="stage-card">
-    <div class="stage">
-      <video id="video" playsinline muted></video>
-      <canvas id="canvas" width="960" height="540"></canvas>
-      <div class="overlay" id="overlay">
-        <div class="spinner" id="spinner"></div>
-        <div id="overlayMsg">▶ <b>시작</b>을 누르면 카메라가 켜집니다<br>
-        <span style="color:var(--muted);font-weight:300;font-size:13px">웹캠이 없으면 <b>데모 모드</b>로 동작을 확인할 수 있어요</span></div>
+  <!-- 왼쪽: PLAYER 1 타조 -->
+  <section class="pcol p1" id="card1">
+    <div class="plabel">PLAYER 1</div>
+    <div class="avatar-wrap"><video class="avatar" id="avatar1" src="assets/ostrich_run.webm" poster="assets/ostrich_poster.png" muted loop playsinline preload="auto"></video></div>
+    <div class="pcount" id="count1">0</div>
+    <div class="pmeta" id="cad1">&nbsp;</div>
+    <div class="pstate" id="state1">대기</div>
+  </section>
+
+  <!-- 가운데: 카메라 · 입력 스트림 · 컨트롤 -->
+  <div class="center">
+    <div class="stage-card">
+      <div class="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="canvas" width="960" height="540"></canvas>
+        <div class="overlay" id="overlay">
+          <div class="spinner" id="spinner"></div>
+          <div id="overlayMsg">▶ <b>시작</b>(스페이스바)을 누르면 카메라가 켜집니다<br>
+          <span style="color:var(--muted);font-weight:300;font-size:13px">웹캠이 없으면 <b>데모 모드</b>로 동작을 확인할 수 있어요</span></div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span class="pill"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></span>
+        <span class="pill">👥 인식 <b id="personCount">0</b>명</span>
+        <span class="pill">FPS <b id="fps">–</b></span>
+        <span class="pill sens-pill">🎚️ 민감도
+          <button class="sbtn" id="sensDown" title="덜 예민 ( [ 또는 ↓ )">−</button>
+          <b id="sensVal">100</b>%
+          <button class="sbtn" id="sensUp" title="더 예민 ( ] 또는 ↑ )">+</button>
+        </span>
+        <span class="pill sens-pill">📷 카메라
+          <button class="sbtn" id="camDown" title="더 투명하게 ( , )">−</button>
+          <b id="camVal">0</b>%
+          <button class="sbtn" id="camUp" title="더 진하게 ( . )">+</button>
+        </span>
       </div>
     </div>
-    <div class="statusbar">
-      <span class="pill"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></span>
-      <span class="pill">👥 인식 <b id="personCount">0</b>명</span>
-      <span class="pill">FPS <b id="fps">–</b></span>
-      <span class="pill sens-pill">🎚️ 민감도
-        <button class="sbtn" id="sensDown" title="덜 예민 ( [ 또는 ↓ )">−</button>
-        <b id="sensVal">100</b>%
-        <button class="sbtn" id="sensUp" title="더 예민 ( ] 또는 ↑ )">+</button>
-      </span>
-      <span class="pill sens-pill">📷 카메라
-        <button class="sbtn" id="camDown" title="더 투명하게 ( , )">−</button>
-        <b id="camVal">0</b>%
-        <button class="sbtn" id="camUp" title="더 진하게 ( . )">+</button>
-      </span>
-    </div>
-  </div>
 
-  <div class="score-row">
-    <div class="pcard p1" id="card1">
-      <div class="plabel">PLAYER 1</div>
-      <div class="avatar-wrap"><video class="avatar" id="avatar1" src="assets/ostrich_run.webm" poster="assets/ostrich_poster.png" muted loop playsinline preload="auto"></video></div>
-      <div class="pcount" id="count1">0</div>
-      <div class="pmeta" id="cad1">&nbsp;</div>
-      <div class="pstate" id="state1">대기</div>
-    </div>
     <div class="ticker-card">
-      <div class="tlabel">입력 스트림</div>
+      <div class="tlabel">입력 스트림 &nbsp;·&nbsp; 왼발·오른발 번갈아 착지 = 1스텝</div>
       <div class="ticker" id="ticker"><span style="color:var(--muted);letter-spacing:0;font-size:14px;font-weight:400">발이 땅에 닿으면 숫자가 찍힙니다</span></div>
-      <div class="thint">왼발·오른발이 번갈아 착지할 때마다 1스텝</div>
     </div>
-    <div class="pcard p2" id="card2">
-      <div class="plabel">PLAYER 2</div>
-      <div class="avatar-wrap"><video class="avatar" id="avatar2" src="assets/ostrich_run.webm" poster="assets/ostrich_poster.png" muted loop playsinline preload="auto"></video></div>
-      <div class="pcount" id="count2">0</div>
-      <div class="pmeta" id="cad2">&nbsp;</div>
-      <div class="pstate" id="state2">대기</div>
+
+    <div class="controls">
+      <button class="btn-primary" id="startBtn">▶ 시작</button>
+      <button class="btn-ghost" id="stopBtn" disabled>■ 정지</button>
+      <button class="btn-demo" id="demoBtn">🤖 데모 모드</button>
+      <button class="btn-ghost" id="resetBtn">↺ 다시 시작</button>
+      <label class="toggle"><input type="checkbox" id="mirrorChk" checked>거울</label>
+      <label class="toggle"><input type="checkbox" id="videoChk" checked>영상</label>
+      <label class="toggle"><input type="checkbox" id="soundChk" checked>사운드</label>
     </div>
   </div>
 
-  <div class="controls">
-    <button class="btn-primary" id="startBtn">▶ 시작</button>
-    <button class="btn-ghost" id="stopBtn" disabled>■ 정지</button>
-    <button class="btn-demo" id="demoBtn">🤖 데모 모드</button>
-    <button class="btn-ghost" id="resetBtn">↺ 리셋</button>
-    <label class="toggle"><input type="checkbox" id="mirrorChk" checked>거울</label>
-    <label class="toggle"><input type="checkbox" id="videoChk" checked>영상</label>
-    <label class="toggle"><input type="checkbox" id="soundChk" checked>사운드</label>
-  </div>
+  <!-- 오른쪽: PLAYER 2 타조 -->
+  <section class="pcol p2" id="card2">
+    <div class="plabel">PLAYER 2</div>
+    <div class="avatar-wrap"><video class="avatar" id="avatar2" src="assets/ostrich_run.webm" poster="assets/ostrich_poster.png" muted loop playsinline preload="auto"></video></div>
+    <div class="pcount" id="count2">0</div>
+    <div class="pmeta" id="cad2">&nbsp;</div>
+    <div class="pstate" id="state2">대기</div>
+  </section>
 </main>
 
 <footer>
-  모든 처리는 <b>브라우저 안에서</b> 실행됩니다 — 영상은 서버로 전송되지 않습니다.<br>
-  🎚️ 센싱 민감도 조절: <b>] · ↑ · +</b> 더 예민 &nbsp;/&nbsp; <b>[ · ↓ · −</b> 덜 예민 (화면 −/+ 버튼도 동일) &nbsp;·&nbsp; <b>d</b> 키: 실시간 신호 계측기<br>
-  📷 카메라 영상 투명도: <b>.</b> 더 진하게 &nbsp;/&nbsp; <b>,</b> 더 투명하게 (시작은 완전 투명 · 화면 −/+ 버튼도 동일)<br>
-  향후 아바타 연동용 이벤트: <code>document.addEventListener('run:step', e => e.detail /* {player, foot, count, t} */)</code>
+  <b>스페이스</b> 시작/정지 · <b>r</b> 다시 시작 · <b>↑↓</b> 민감도 · <b>. ,</b> 카메라 투명도 · <b>d</b> 신호 계측기 &nbsp;|&nbsp; 모든 처리는 브라우저 안에서 실행됩니다(영상 미전송)
 </footer>
 
 <!-- 첫 진입 비밀번호 게이트: 웹=오늘만 유효(일일비번), exe=1회 입력 후 기기 영구 개방 -->
@@ -961,6 +979,8 @@ window.addEventListener('keydown',e=>{
   else if(e.key==='d'||e.key==='D'){ DEBUG=!DEBUG; }       // 실시간 신호 계측기 토글
   else if(e.key==='.'||e.key==='>'){ bumpCam(+1); e.preventDefault(); }   // 카메라 더 진하게
   else if(e.key===','||e.key==='<'){ bumpCam(-1); e.preventDefault(); }   // 카메라 더 투명하게
+  else if(e.code==='Space'){ e.preventDefault(); document.activeElement?.blur?.(); if(running) stop(); else start(); }  // 시작/정지
+  else if(e.key==='r'||e.key==='R'){ resetCounts(); }      // 다시 시작(점수 리셋)
 });
 sensValEl.textContent=Math.round(SENS*100);                 // 초기 표시(토스트 없이)
 window.RunGame.setSensitivity=v=>{ SENS=Math.min(SENS_MAX,Math.max(SENS_MIN,v)); applySens(); return SENS; };
