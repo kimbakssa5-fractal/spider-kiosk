@@ -369,10 +369,17 @@ const PCOLORS={1:'#e8604c', 2:'#4c8fe8'};
 const avatars={1:$('avatar1'), 2:$('avatar2')};
 // 아바타(타조): 스텝마다 통통 튀고, 케이던스에 비례해 달리는 속도 조절, 멈추면 정지
 function avatarHop(id){ const v=avatars[id]; if(!v) return; v.play?.().catch(()=>{}); v.classList.remove('hop'); void v.offsetWidth; v.classList.add('hop'); }
-function updateAvatar(id, cad, active){
+function updateAvatar(id, p, now, active){
   const v=avatars[id]; if(!v) return;
-  if(!active || cad<1){ if(!v.paused) v.pause(); }
-  else { v.playbackRate=Math.max(0.6, Math.min(3.0, cad/45)); if(v.paused) v.play().catch(()=>{}); }
+  // 멈추면 즉시 정지: 마지막 스텝 이후 0.5초 넘으면(달릴 땐 스텝 간격 ~0.3~0.4초) 멈춘 것으로 간주.
+  const last = p.stepTimes.length ? p.stepTimes[p.stepTimes.length-1] : -1e9;
+  const running = active && (now-last)<500;
+  if(!running){ if(!v.paused) v.pause(); }
+  else {
+    const cad=p.cadence(now);
+    v.playbackRate=Math.max(0.6, Math.min(3.0, (cad||90)/45));  // cad 미확정 시 기본 속도
+    if(v.paused) v.play().catch(()=>{});
+  }
 }
 function resetAvatars(){ for(const id of [1,2]){ const v=avatars[id]; if(v){ v.pause(); try{ v.currentTime=0; }catch(_){} } } }
 
@@ -661,7 +668,7 @@ function processPoses(poses,t){
       if(now-p.lastSeen>5000 && p.lastSeen>0){ p.fullReset(); }
       stateEl.textContent='대기'; stateEl.classList.remove('on');
       $('cad'+id).innerHTML='&nbsp;';
-      updateAvatar(id, 0, false);       // 사람 없으면 타조 정지
+      updateAvatar(id, p, now, false);  // 사람 없으면 타조 정지
       continue;
     }
     const hits=p.update(lm,now);
@@ -669,7 +676,7 @@ function processPoses(poses,t){
     else{ stateEl.textContent='달리는 중'; stateEl.classList.add('on'); }
     const cad=p.cadence(now);
     $('cad'+id).textContent = cad>0 ? `🏃 ${cad} 걸음/분` : ' ';
-    updateAvatar(id, cad, true);        // 케이던스에 맞춰 타조 달리기 속도
+    updateAvatar(id, p, now, true);     // 케이던스에 맞춰 달리고, 멈추면 즉시 정지
     for(const f of hits){
       emitStep(id,f,now);
       const li=f==='L'?27:28;
