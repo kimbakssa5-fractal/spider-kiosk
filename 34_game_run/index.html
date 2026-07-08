@@ -65,6 +65,22 @@ main{ width:min(1080px,100%); display:flex; flex-direction:column; gap:16px; }
 }
 .dot{ width:9px; height:9px; border-radius:50%; background:#d6c9bc; }
 .dot.live{ background:#37c26e; box-shadow:0 0 0 4px rgba(55,194,110,.18); }
+.sens-pill{ gap:8px; }
+.sens-pill b{ min-width:34px; display:inline-block; text-align:center; color:var(--coral); }
+.sbtn{
+  width:24px; height:24px; padding:0; border-radius:50%;
+  font-size:17px; font-weight:900; line-height:1;
+  background:var(--coral-soft); color:var(--coral); box-shadow:none;
+}
+.sbtn:active{ transform:scale(.9); }
+/* 민감도 변경 토스트 */
+#sensToast{
+  position:fixed; left:50%; top:22px; transform:translateX(-50%) translateY(-14px);
+  background:var(--ink); color:#fff; font-weight:900; font-size:17px;
+  padding:10px 22px; border-radius:999px; box-shadow:var(--shadow);
+  opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; z-index:60;
+}
+#sensToast.show{ opacity:.96; transform:translateX(-50%) translateY(0); }
 
 /* ---- 점수 ---- */
 .score-row{ display:grid; grid-template-columns:1fr 1.15fr 1fr; gap:16px; }
@@ -164,6 +180,8 @@ footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px
 </head>
 <body>
 
+<div id="sensToast"></div>
+
 <header>
   <h1>🏃 달리기 게임 <span class="accent">발구름 카운터</span></h1>
   <div class="sub">카메라 앞에서 제자리 달리기 — 발이 땅에 닿을 때마다 숫자가 입력됩니다 (1인 = 1 · 2인 = 왼쪽 1, 오른쪽 2)</div>
@@ -184,6 +202,11 @@ footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px
       <span class="pill"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></span>
       <span class="pill">👥 인식 <b id="personCount">0</b>명</span>
       <span class="pill">FPS <b id="fps">–</b></span>
+      <span class="pill sens-pill">🎚️ 민감도
+        <button class="sbtn" id="sensDown" title="덜 예민 ( [ 또는 ↓ )">−</button>
+        <b id="sensVal">100</b>%
+        <button class="sbtn" id="sensUp" title="더 예민 ( ] 또는 ↑ )">+</button>
+      </span>
     </div>
   </div>
 
@@ -220,6 +243,7 @@ footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px
 
 <footer>
   모든 처리는 <b>브라우저 안에서</b> 실행됩니다 — 영상은 서버로 전송되지 않습니다.<br>
+  🎚️ 센싱 민감도 조절: <b>] · ↑ · +</b> 더 예민 &nbsp;/&nbsp; <b>[ · ↓ · −</b> 덜 예민 (화면 −/+ 버튼도 동일)<br>
   향후 아바타 연동용 이벤트: <code>document.addEventListener('run:step', e => e.detail /* {player, foot, count, t} */)</code>
 </footer>
 
@@ -341,6 +365,8 @@ class OneEuro{
    ② 발목보다 크게 움직이는 무릎 신호를 보조로 결합(SNR 확보)
    상태기계: ground --(들림>lift)--> air --(내림<down)--> ground(=착지 이벤트)
    지면 기준선은 최저점(최대 y)을 즉시 따라가고, 위로는 천천히 적응. */
+// 센싱 민감도(현장 단축키/버튼으로 조절). 1.0=기본, 클수록 예민(문턱↓). 범위 0.5~2.5
+let SENS = 1.0;
 class Chan{ // 채널(발목/무릎): One Euro + 지면 기준선 → 다리길이 상대 들림 높이
   // minCutoff 1.7: 어린이의 작은(느린 속도) 1.5Hz 스텝 신호가 감쇠되지 않는 하한
   constructor(){ this.f=new OneEuro(1.7,6.0); this.reset(); }
@@ -365,8 +391,14 @@ class FootTracker{
     this.height=h;
     // 최근 스윙 피크(지수 감쇠 ~2초 반감) — 관측된 실제 진폭에 문턱 자동 적응
     this.peak=Math.max(h, this.peak - this.peak*0.35*dt);
-    const lift=Math.min(Math.max(0.45*this.peak, Math.max(3*relNoise, 0.020)), 0.060);
-    const down=Math.min(Math.max(0.18*this.peak, Math.max(2*relNoise, 0.008)), 0.026);
+    // 민감도(SENS) 반영: 값이 클수록 문턱을 낮춰 작은 발 들림도 잡음. k=1/SENS
+    const k=1/SENS;
+    let lift=Math.min(Math.max(0.45*this.peak, Math.max(3*relNoise, 0.020)), 0.060)*k;
+    let down=Math.min(Math.max(0.18*this.peak, Math.max(2*relNoise, 0.008)), 0.026)*k;
+    // 안전장치: 착지 문턱은 노이즈보다 크게(떨림 오탐 방지), 들림은 히스테리시스 간격 유지.
+    // 최대 민감도에서도 정지 노이즈가 문턱을 넘지 않도록 lift≈2.7σ 확보.
+    down=Math.max(down, 1.5*relNoise);
+    lift=Math.max(lift, down*1.8);
     if(this.phase==='ground' && h>lift){ this.phase='air'; return false; }
     if(this.phase==='air' && h<down && (t-this.lastStrike)>160){
       this.phase='ground'; this.lastStrike=t; return true;
@@ -385,7 +417,7 @@ class PlayerRunner{
     this.resetCalibration();
   }
   resetCalibration(){
-    this.calStart=null; this.calSamples=[]; this.calibrated=false; this.relNoise=0.006;
+    this.calStart=null; this.calDiffs=[]; this.calibrated=false; this.relNoise=0.006; this._pL=undefined; this._pR=undefined;
   }
   fullReset(){ this.feet.L.reset(); this.feet.R.reset(); this.resetCalibration(); }
   /* lm: MediaPipe 33 landmarks(normalized). 반환: 이번 프레임 착지한 발 배열 */
@@ -403,14 +435,19 @@ class PlayerRunner{
     const hits=[];
     const sL=this.feet.L.update(yL,kL,legLen,this.relNoise,t);
     const sR=this.feet.R.update(yR,kR,legLen,this.relNoise,t);
-    // ---- 노이즈 자동 보정 — 감지에 실제로 쓰는 "필터 후" 상대 높이의 정지 표준편차로 측정 ----
+    // ---- 노이즈 자동 보정 — "필터 후" 상대 높이의 프레임간 변화(롤링) 중앙값으로 측정 ----
+    // 정지 지터는 프레임마다 작게 흔들림 → 중앙값이 곧 노이즈 크기. 러닝은 대부분 구간이
+    // 느리게 변해 중앙 diff가 작으므로, 보정 중 뛰고 있어도 과대추정되지 않음(캡 완화 가능).
     if(!this.calibrated){
       if(this.calStart===null) this.calStart=t;
-      this.calSamples.push(this.feet.L.height, this.feet.R.height);
-      if(t-this.calStart>=CAL_MS && this.calSamples.length>=20){
-        const s=this.calSamples, m=s.reduce((a,b)=>a+b,0)/s.length;
-        const sd=Math.sqrt(s.reduce((a,b)=>a+(b-m)*(b-m),0)/s.length);
-        this.relNoise=Math.max(0.002, Math.min(0.014, sd*1.2)); // 상한: 보정 중 뛰고 있었어도 감지 가능하게
+      const hL=this.feet.L.height, hR=this.feet.R.height;
+      if(this._pL!==undefined){ this.calDiffs.push(Math.abs(hL-this._pL), Math.abs(hR-this._pR)); }
+      this._pL=hL; this._pR=hR;
+      if(t-this.calStart>=CAL_MS && this.calDiffs.length>=20){
+        const d=this.calDiffs.slice().sort((a,b)=>a-b), med=d[d.length>>1];
+        // K=5.6: 하네스 스윕으로 확정 — 노이즈 큰 환경의 작은 아이도 민감도 150%면 완전 포착하면서
+        // 정지 오탐은 극단(250%·노이즈 2배)에서도 ~0. 더 키우면 진짜 약한 신호까지 소실.
+        this.relNoise=Math.max(0.002, Math.min(0.030, med*5.6));
         this.calibrated=true;
       }
     }else{
@@ -838,6 +875,36 @@ startBtn.addEventListener('click',start);
 stopBtn.addEventListener('click',stop);
 demoBtn.addEventListener('click',()=>demoActive?stopDemo():startDemo());
 resetBtn.addEventListener('click',resetCounts);
+
+/* ================= 센싱 민감도 조절 =================
+   단축키: ] · ↑ · + → 더 예민(문턱↓) / [ · ↓ · - → 덜 예민(문턱↑)
+   화면 −/+ 버튼도 동일. 10%씩, 범위 50~250%. localStorage 유지(키오스크 재부팅 대비). */
+const SENS_MIN=0.5, SENS_MAX=2.5, SENS_STEP=0.1, SENS_KEY='run34_sens';
+const sensValEl=$('sensVal'), sensToast=$('sensToast');
+let sensToastT=null;
+(function initSens(){ const s=parseFloat(localStorage.getItem(SENS_KEY)); if(s>=SENS_MIN&&s<=SENS_MAX) SENS=s; })();
+function applySens(){
+  const pct=Math.round(SENS*100);
+  sensValEl.textContent=pct;
+  sensToast.textContent='🎚️ 민감도 '+pct+'%'+(pct>=200?' · 매우 예민':pct<=60?' · 둔감':'');
+  sensToast.classList.add('show');
+  clearTimeout(sensToastT); sensToastT=setTimeout(()=>sensToast.classList.remove('show'),900);
+  try{ localStorage.setItem(SENS_KEY,SENS.toFixed(2)); }catch(_){}
+}
+function bumpSens(dir){
+  SENS=Math.min(SENS_MAX,Math.max(SENS_MIN, Math.round((SENS+dir*SENS_STEP)*100)/100));
+  applySens();
+}
+$('sensUp').addEventListener('click',()=>bumpSens(+1));
+$('sensDown').addEventListener('click',()=>bumpSens(-1));
+window.addEventListener('keydown',e=>{
+  if(document.getElementById('gate')) return;              // 비번 게이트 중엔 무시
+  if(e.key===']'||e.key==='ArrowUp'||e.key==='+'||e.key==='='){ bumpSens(+1); e.preventDefault(); }
+  else if(e.key==='['||e.key==='ArrowDown'||e.key==='-'||e.key==='_'){ bumpSens(-1); e.preventDefault(); }
+});
+sensValEl.textContent=Math.round(SENS*100);                 // 초기 표시(토스트 없이)
+window.RunGame.setSensitivity=v=>{ SENS=Math.min(SENS_MAX,Math.max(SENS_MIN,v)); applySens(); return SENS; };
+window.RunGame.getSensitivity=()=>SENS;
 </script>
 </body>
 </html>
