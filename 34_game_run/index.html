@@ -28,7 +28,7 @@ body{
   overflow:hidden;                 /* 키오스크: 스크롤 없이 한 화면 */
 }
 header{ text-align:center; flex:0 0 auto; margin-bottom:10px; }
-h1{ font-weight:900; font-size:clamp(20px,2.6vw,32px); letter-spacing:-1px; }
+h1{ font-weight:900; font-size:clamp(30px,4vw,58px); letter-spacing:-1px; }
 h1 .accent{ color:var(--coral); }
 .sub{ color:var(--muted); font-weight:400; margin-top:2px; font-size:13px; }
 
@@ -39,18 +39,18 @@ main{
   grid-template-columns: minmax(190px,1fr) minmax(0,1.9fr) minmax(190px,1fr);
   gap:16px; align-items:stretch;
 }
-.center{ display:flex; flex-direction:column; gap:12px; min-height:0; min-width:0; }
+.center{ display:flex; flex-direction:column; gap:12px; min-height:0; min-width:0; justify-content:center; }
 
 /* ---- 게임바(타이머·오늘최고) ---- */
 .gamebar{
   flex:0 0 auto; background:var(--card); border-radius:22px; box-shadow:var(--shadow);
-  display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 18px;
+  display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 24px;
 }
-.gb-best{ font-weight:900; font-size:14px; color:#8b7a6a; white-space:nowrap; }
-.gb-best b{ color:var(--coral); font-size:18px; }
-.gb-len{ font-weight:700; font-size:13px; color:#a89a8c; white-space:nowrap; }
+.gb-best{ font-weight:900; font-size:clamp(16px,1.8vw,24px); color:#8b7a6a; white-space:nowrap; }
+.gb-best b{ color:var(--coral); font-size:clamp(30px,3.4vw,52px); }
+.gb-len{ font-weight:700; font-size:14px; color:#a89a8c; white-space:nowrap; }
 .gb-timer{
-  font-weight:900; font-size:clamp(26px,3vw,40px); line-height:1; color:var(--ink);
+  font-weight:900; font-size:clamp(42px,5.2vw,84px); line-height:1; color:var(--ink);
   font-variant-numeric:tabular-nums; letter-spacing:1px;
 }
 .gb-timer.warn{ color:var(--coral); animation:tpulse .5s ease infinite; }
@@ -60,7 +60,7 @@ main{
 .stage-card{
   position:relative; background:var(--card); border-radius:26px; box-shadow:var(--shadow);
   padding:12px; overflow:hidden;
-  flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
+  flex:1 1 auto; min-height:0; max-height:46vh; display:flex; flex-direction:column;   /* 카메라 영역 높이 축소(1920×1080 fit) */
 }
 .stage{ position:relative; border-radius:18px; overflow:hidden; background:#f5ede6; flex:1 1 auto; min-height:0; }
 #video{ display:none; }
@@ -251,7 +251,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
   <!-- 가운데: 게임바 · 카메라 · 입력 스트림 · 컨트롤 -->
   <div class="center">
     <div class="gamebar">
-      <span class="gb-best">🏆 오늘 최고 <b id="todayBest">0</b></span>
+      <span class="gb-best">🏆 최고 <b id="todayBest">0</b></span>
       <span class="gb-timer" id="timer">0:30</span>
       <span class="gb-len">⏱ <b id="gameLen">30</b>초</span>
     </div>
