@@ -57,10 +57,6 @@
   const BEND_GAIN = 0.055;            // 각속도(rad/s) → 휨
   const BEND_MAX = 0.8;               // 최대 휨(라디안, 몸 전체 분배) — 넓은 셀에서 1.5는 몸이 꺾여 보임
   const BEND_SMOOTH = 13.0;           // 휨 추종 속도
-  const IDLE_SWAY = 0.30;             // 평상시 꼬리 살랑임 진폭(그룹3, 개체별 swayAmp 로 다양화)
-  const REACT_K = 0.70;              // 살랑임 각속도 → 반작용 세기 정규화
-  const REACT_LEAN = 0.11;           // 앞몸 반작용 리코일(라디안, 꼬리 반대로 살짝 젖힘) → S자
-  const STRETCH_AMP = 0.11;          // 반작용 스트레칭(휘두를 때 몸 축 신장 비율)
 
   const canvas = document.getElementById("scene");
   const ambient = document.getElementById("ambient");
@@ -471,10 +467,6 @@
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
       panic: 0,                                       // 도망 흥분도(0~1+), 시간에 따라 감쇠
       bend: 0, prevHeading: 0,                        // 몸 휨(라디안), 직전 heading
-      // 평상시 꼬리 살랑임(개체별 다양) — 그룹3(긴꼬리)에서 사용. 2주파 합성으로 불규칙하게.
-      swayF: rand(0.28, 0.62), swayF2: rand(1.4, 2.2),
-      swayPhase: Math.random() * 6.28, swayAmp: rand(0.6, 1.35),
-      swayPrev: 0,                                   // 직전 살랑임 값(반작용 각속도 계산)
       // 행동 상태: cruise(순항) / circle(서행 회전 유영) / hover(정지·지느러미 노젓기)
       //   *Pend = 애니 전환 게이트(곧은 프레임) 대기
       mode: "cruise", modeT: rand(4, 14),
@@ -947,40 +939,22 @@
       if (targetBend > bendMax) targetBend = bendMax; else if (targetBend < -bendMax) targetBend = -bendMax;
       f.bend += (targetBend - f.bend) * Math.min(1, BEND_SMOOTH * dtSec);
 
-      // 평상시 살랑임(그룹3): 개체별 2주파 합성 사인을 휨에 더함 → 완만·불규칙·다양한 꼬리짓.
-      //   패닉/호버 시 약화. 스트립이 bend*t 라 꼬리 쪽이 가장 크게 흔들린다.
-      //   + 부드러운 반작용: 살랑임 각속도(react)로 ①앞몸 반대 리코일(S자) ②몸 축 스트레칭.
-      let bendTotal = f.bend, swayReact = 0, swayStretch = 1;
-      if (activeGroup === 2) {
-        const w = 6.2831 * f.swayF;
-        const s = Math.sin(tSec * w + f.swayPhase) + 0.4 * Math.sin(tSec * w * f.swayF2 + f.swayPhase * 1.7);
-        const swayBend = IDLE_SWAY * f.swayAmp * s * (1 - Math.min(1, f.panic)) * (inHover ? 0.25 : 1);
-        bendTotal += swayBend;
-        const swayVel = (swayBend - f.swayPrev) / Math.max(dtSec, 1e-3);
-        f.swayPrev = swayBend;
-        swayReact = Math.max(-1, Math.min(1, swayVel * REACT_K));   // -1..1
-        swayStretch = 1 + STRETCH_AMP * Math.abs(swayReact);        // 휘두르는 중 몸 신장
-      }
-
       function px2clip(out, oi, X, Y, u, v) {
         out[oi] = (X / W) * 2 - 1; out[oi + 1] = 1 - (Y / H) * 2;
         out[oi + 2] = u; out[oi + 3] = v;
       }
       // 머리에서 꼬리로 척추를 걸으며 분절 스트립 생성. 뒤 방향 = (heading+π) - bend*t → 꼬리가 휜다.
       const headWX = cx + fwdx * hl, headWY = cy + fwdy * hl;
-      // 스트레칭: 휘두를 때 몸 축 신장(stepLen↑) + 부피보존 근사로 살짝 가늘게(hw↓) = squash&stretch
-      const stepLen = (lenPx / FISH_SEG) * swayStretch, baseBack = f.heading + Math.PI;
-      const hwT = hw * (1 - 0.45 * (swayStretch - 1));
+      const stepLen = lenPx / FISH_SEG, baseBack = f.heading + Math.PI;
       let spx = headWX, spy = headWY;
       let pLx = 0, pLy = 0, pRx = 0, pRy = 0, pV = v0;
       for (let sgi = 0; sgi <= FISH_SEG; sgi++) {
         const t = sgi / FISH_SEG;
-        // 뒤 방향 = C자(꼬리 bend) + 앞몸 반작용 리코일(반대 방향, (1-t) 로 앞쪽 강조 → S자)
-        const backAng = baseBack - bendTotal * t + REACT_LEAN * swayReact * (1 - t);
+        const backAng = baseBack - f.bend * t;
         const fwdAng = backAng + Math.PI;
         const perpx = -Math.sin(fwdAng), perpy = Math.cos(fwdAng);
-        const lx = spx + perpx * hwT, ly = spy + perpy * hwT;   // 좌 → u0
-        const rx = spx - perpx * hwT, ry = spy - perpy * hwT;   // 우 → u1
+        const lx = spx + perpx * hw, ly = spy + perpy * hw;   // 좌 → u0
+        const rx = spx - perpx * hw, ry = spy - perpy * hw;   // 우 → u1
         const vv = v0 + (v1 - v0) * t;
         if (sgi > 0) {
           px2clip(fishVerts, vi, pLx, pLy, u0, pV); vi += 4;
