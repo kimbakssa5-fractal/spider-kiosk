@@ -41,6 +41,21 @@ main{
 }
 .center{ display:flex; flex-direction:column; gap:12px; min-height:0; min-width:0; }
 
+/* ---- 게임바(타이머·오늘최고) ---- */
+.gamebar{
+  flex:0 0 auto; background:var(--card); border-radius:22px; box-shadow:var(--shadow);
+  display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 18px;
+}
+.gb-best{ font-weight:900; font-size:14px; color:#8b7a6a; white-space:nowrap; }
+.gb-best b{ color:var(--coral); font-size:18px; }
+.gb-len{ font-weight:700; font-size:13px; color:#a89a8c; white-space:nowrap; }
+.gb-timer{
+  font-weight:900; font-size:clamp(26px,3vw,40px); line-height:1; color:var(--ink);
+  font-variant-numeric:tabular-nums; letter-spacing:1px;
+}
+.gb-timer.warn{ color:var(--coral); animation:tpulse .5s ease infinite; }
+@keyframes tpulse{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
+
 /* ---- 스테이지 ---- */
 .stage-card{
   position:relative; background:var(--card); border-radius:26px; box-shadow:var(--shadow);
@@ -50,6 +65,7 @@ main{
 .stage{ position:relative; border-radius:18px; overflow:hidden; background:#f5ede6; flex:1 1 auto; min-height:0; }
 #video{ display:none; }
 #canvas{ width:100%; height:100%; display:block; object-fit:contain; }
+#fxcanvas{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:4; }
 .overlay{
   position:absolute; inset:0; display:flex; flex-direction:column; gap:14px;
   align-items:center; justify-content:center; text-align:center;
@@ -232,12 +248,18 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
     <div class="pstate" id="state1">대기</div>
   </section>
 
-  <!-- 가운데: 카메라 · 입력 스트림 · 컨트롤 -->
+  <!-- 가운데: 게임바 · 카메라 · 입력 스트림 · 컨트롤 -->
   <div class="center">
+    <div class="gamebar">
+      <span class="gb-best">🏆 오늘 최고 <b id="todayBest">0</b></span>
+      <span class="gb-timer" id="timer">0:30</span>
+      <span class="gb-len">⏱ <b id="gameLen">30</b>초</span>
+    </div>
     <div class="stage-card">
       <div class="stage">
         <video id="video" playsinline muted></video>
         <canvas id="canvas" width="960" height="540"></canvas>
+        <canvas id="fxcanvas"></canvas>
         <div class="overlay" id="overlay">
           <div class="spinner" id="spinner"></div>
           <div id="overlayMsg">▶ <b>시작</b>(스페이스바)을 누르면 카메라가 켜집니다<br>
@@ -444,12 +466,96 @@ function readyBeep(go){
   }catch(_){}
 }
 function runReadyCountdown(onDone){
-  clearReady(); readyCountdown=true;
+  clearReady(); readyCountdown=true; gamePhase='ready';
+  showTimer(GAME_SEC);                             // 준비 구간엔 풀타임 표시
   showReady('');                                   // "준비하세요"
   const seq=[[800,'3',0],[1600,'2',0],[2400,'1',0],[3200,'시작!',1]];
   for(const [ms,n,go] of seq){ readyTimeouts.push(setTimeout(()=>{ showReady(n,go); readyBeep(go); }, ms)); }
   readyTimeouts.push(setTimeout(()=>{ readyCountdown=false; hideOverlay(); if(onDone) onDone(); }, 3900));
 }
+
+/* ===== 게임: 시간 제한 타이머 · 승자 팡파르 · 오늘의 최고 점수 ===== */
+let gamePhase='idle';   // idle | ready(카운트다운) | play(타이머 진행) | over(결과)
+let GAME_SEC=30, gameEndT=0, gameTimer=null;
+const timerEl=$('timer'), todayBestEl=$('todayBest'), gameLenEl=$('gameLen');
+const fxcanvas=$('fxcanvas'), fxctx=fxcanvas.getContext('2d');
+function todayKey(){ const d=new Date(); return 'run34_best_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
+function loadBest(){ try{ const v=+localStorage.getItem(todayKey()); return v>0?v:0; }catch(e){ return 0; } }
+function saveBest(v){ try{ localStorage.setItem(todayKey(),String(v));
+  Object.keys(localStorage).forEach(k=>{ if(k.indexOf('run34_best_')===0 && k!==todayKey()) localStorage.removeItem(k); }); }catch(e){} }
+let todayBest=loadBest();
+function showBest(){ todayBestEl.textContent=todayBest; }
+function fmtTime(sec){ sec=Math.max(0,Math.ceil(sec)); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+function showTimer(sec){ timerEl.textContent=fmtTime(sec); timerEl.classList.toggle('warn', sec<=5.5 && gamePhase==='play'); }
+if(gameLenEl) gameLenEl.textContent=GAME_SEC;
+showBest(); showTimer(GAME_SEC);
+
+function beginGame(){
+  zeroScores();               // 점수만 0(감지기 워밍업은 유지 → 시작 즉시 카운트)
+  gamePhase='play';
+  gameEndT=performance.now()+GAME_SEC*1000;
+  clearInterval(gameTimer);
+  gameTimer=setInterval(()=>{
+    if(gamePhase!=='play'){ clearInterval(gameTimer); return; }
+    const rem=(gameEndT-performance.now())/1000;
+    showTimer(rem);
+    if(rem<=0) endGame();
+  },150);
+  showTimer(GAME_SEC);
+}
+function restartGame(){ if(running||demoActive) runReadyCountdown(beginGame); }
+function endGame(){
+  if(gamePhase!=='play') return;
+  gamePhase='over'; clearInterval(gameTimer); showTimer(0);
+  timerEl.classList.remove('warn'); confetti=[];
+  const c1=players[1].count, c2=players[2].count, best=Math.max(c1,c2);
+  if(best>todayBest){ todayBest=best; saveBest(todayBest); showBest(); }
+  let title, color='#8b7a6a';
+  if(c1===0 && c2===0) title='기록 없음';
+  else if(c1===c2) title='무승부! '+c1+'점';
+  else { const w=c1>c2?1:2; color=PCOLORS[w]; title='PLAYER '+w+' 승리! '+Math.max(c1,c2)+'점'; spawnConfetti(w); fanfare(); }
+  const nb = best>0 && best===todayBest ? '<div style="margin-top:6px;color:var(--coral);font-weight:900;font-size:14px">🏆 오늘의 최고 점수!</div>' : '';
+  setOverlay('<div style="font-weight:900;font-size:clamp(24px,3.2vw,42px);color:'+color+'">🎉 '+title+'</div>'
+    +'<div style="margin-top:8px;font-weight:900;color:var(--ink);font-size:20px"><span style="color:var(--coral)">P1 '+c1+'</span> · <span style="color:var(--blue)">P2 '+c2+'</span></div>'
+    +nb+'<div style="margin-top:12px;color:var(--muted);font-weight:400;font-size:14px">스페이스 또는 <b>다시 시작(r)</b> 으로 재시작</div>', false);
+}
+function fanfare(){
+  if(!soundChk.checked) return;
+  try{
+    audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    const t0=audioCtx.currentTime, notes=[523,659,784,1047];
+    notes.forEach((f,i)=>{ const o=audioCtx.createOscillator(),g=audioCtx.createGain(),s=t0+i*0.12;
+      o.type='triangle'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,s); g.gain.linearRampToValueAtTime(0.10,s+0.02); g.gain.exponentialRampToValueAtTime(0.0008,s+0.45);
+      o.connect(g).connect(audioCtx.destination); o.start(s); o.stop(s+0.5); });
+    const s=t0+notes.length*0.12;
+    [523,659,784,1047].forEach(f=>{ const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.type='sawtooth'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,s); g.gain.linearRampToValueAtTime(0.05,s+0.02); g.gain.exponentialRampToValueAtTime(0.0006,s+0.9);
+      o.connect(g).connect(audioCtx.destination); o.start(s); o.stop(s+0.95); });
+  }catch(_){}
+}
+let confetti=[], fxRaf=null, fxLast=0;
+function spawnConfetti(winner){
+  const W=fxcanvas.width=fxcanvas.clientWidth||600, H=fxcanvas.height=fxcanvas.clientHeight||340;
+  const cols = winner===1?['#e8604c','#ffd27a','#ffffff','#ffb3a6']
+             : winner===2?['#4c8fe8','#ffd27a','#ffffff','#bcd9ff']
+             : ['#e8604c','#4c8fe8','#ffd27a','#ffffff'];
+  confetti=[];
+  for(let i=0;i<140;i++) confetti.push({ x:Math.random()*W, y:-Math.random()*H, vx:(Math.random()-0.5)*90, vy:80+Math.random()*180, s:5+Math.random()*8, rot:Math.random()*6.3, vr:(Math.random()-0.5)*10, c:cols[i%cols.length] });
+  fxLast=performance.now(); if(!fxRaf) fxLoop();
+}
+function fxLoop(){
+  fxRaf=requestAnimationFrame(fxLoop);
+  const now=performance.now(), dt=Math.min(0.05,(now-fxLast)/1000); fxLast=now;
+  const W=fxcanvas.width, H=fxcanvas.height;
+  fxctx.clearRect(0,0,W,H);
+  if(gamePhase!=='over' || !confetti.length){ cancelAnimationFrame(fxRaf); fxRaf=null; return; }
+  for(const p of confetti){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=240*dt; p.rot+=p.vr*dt;
+    fxctx.save(); fxctx.translate(p.x,p.y); fxctx.rotate(p.rot); fxctx.fillStyle=p.c; fxctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.62); fxctx.restore(); }
+  confetti=confetti.filter(p=>p.y<H+24);
+}
+function clearGame(){ gamePhase='idle'; clearInterval(gameTimer); confetti=[]; if(fxRaf){cancelAnimationFrame(fxRaf);fxRaf=null;} if(fxctx)fxctx.clearRect(0,0,fxcanvas.width,fxcanvas.height); timerEl.classList.remove('warn'); showTimer(GAME_SEC); }
 
 /* ================= One Euro 필터 =================
    정지 시 안정(저역), 이동 시 즉각 반응(속도에 비례해 컷오프 상승). */
@@ -534,7 +640,7 @@ class PlayerRunner{
       if(t-this.calStart>=CAL_MS) this.calibrated=true;
       return [];
     }
-    if(side && !readyCountdown){          // 준비 카운트다운 동안은 카운트 안 함
+    if(side && gamePhase==='play'){       // 게임 진행(타이머) 중에만 카운트
       this.count++; this.stepTimes.push(t);
       if(this.stepTimes.length>40) this.stepTimes.shift();
       return [side];
@@ -889,7 +995,7 @@ async function start(){
     stopBtn.disabled=false;
     startWatchdog();
     camLoop();
-    runReadyCountdown();      // 마커 위치에서 준비하세요 3·2·1·시작 (그동안 카운트 억제)
+    runReadyCountdown(beginGame);   // 준비 카운트다운 → 게임(타이머) 시작
   }catch(e){
     console.error(e);
     setOverlay(cameraErrorMsg(e),false);
@@ -899,7 +1005,7 @@ async function start(){
 }
 function stop(){
   running=false; recovering=false;
-  clearReady();
+  clearReady(); clearGame();
   stopWatchdog();
   if(raf) cancelAnimationFrame(raf); raf=null;
   if(stream){ stream.getTracks().forEach(tr=>tr.stop()); stream=null; }
@@ -982,12 +1088,12 @@ function startDemo(){
   setStatus('데모 모드',true);
   demoBtn.textContent='🤖 데모 정지';
   demoLoop();
-  runReadyCountdown();       // 데모도 준비 카운트다운으로 시작
+  runReadyCountdown(beginGame);   // 데모도 준비 카운트다운 → 게임 시작
 }
 function stopDemo(){
   if(!demoActive) return;
   demoActive=false;
-  clearReady();
+  clearReady(); clearGame();
   if(demoRaf) cancelAnimationFrame(demoRaf); demoRaf=null;
   demoBtn.textContent='🤖 데모 모드';
   if(!running){
@@ -998,21 +1104,21 @@ function stopDemo(){
     resetAvatars();
   }
 }
-function resetCounts(){
+function zeroScores(){        // 점수·틱커·아바타만 초기화(감지기 상태 유지)
   for(const id of [1,2]){
-    players[id].count=0; players[id].stepTimes=[]; players[id].fullReset();
+    players[id].count=0; players[id].stepTimes=[];
     $('count'+id).textContent='0'; $('cad'+id).innerHTML='&nbsp;';
   }
   tickerEl.innerHTML='<span style="color:var(--muted);letter-spacing:0;font-size:14px;font-weight:400">발이 땅에 닿으면 숫자가 찍힙니다</span>';
   tickerCount=0;
   resetAvatars();
-  if(running||demoActive) runReadyCountdown();   // 다시 시작(r): 준비 카운트다운부터
 }
+function resetCounts(){ zeroScores(); for(const id of [1,2]) players[id].fullReset(); }
 
 startBtn.addEventListener('click',start);
 stopBtn.addEventListener('click',stop);
 demoBtn.addEventListener('click',()=>demoActive?stopDemo():startDemo());
-resetBtn.addEventListener('click',resetCounts);
+resetBtn.addEventListener('click',restartGame);   // 다시 시작 = 준비 카운트다운부터 새 게임
 
 /* ================= 센싱 민감도 조절 =================
    단축키: ] · ↑ · + → 더 예민(문턱↓) / [ · ↓ · - → 덜 예민(문턱↑)
@@ -1057,8 +1163,10 @@ window.addEventListener('keydown',e=>{
   else if(e.key==='d'||e.key==='D'){ DEBUG=!DEBUG; }       // 실시간 신호 계측기 토글
   else if(e.key==='.'||e.key==='>'){ bumpCam(+1); e.preventDefault(); }   // 카메라 더 진하게
   else if(e.key===','||e.key==='<'){ bumpCam(-1); e.preventDefault(); }   // 카메라 더 투명하게
-  else if(e.code==='Space'){ e.preventDefault(); document.activeElement?.blur?.(); if(running) stop(); else start(); }  // 시작/정지
-  else if(e.key==='r'||e.key==='R'){ resetCounts(); }      // 다시 시작(점수 리셋)
+  else if(e.code==='Space'){ e.preventDefault(); document.activeElement?.blur?.();
+    if(gamePhase==='over') restartGame();                 // 결과 화면 → 새 게임
+    else if(running) stop(); else start(); }
+  else if(e.key==='r'||e.key==='R'){ restartGame(); }      // 다시 시작(새 게임: 준비 카운트다운부터)
 });
 sensValEl.textContent=Math.round(SENS*100);                 // 초기 표시(토스트 없이)
 window.RunGame.setSensitivity=v=>{ SENS=Math.min(SENS_MAX,Math.max(SENS_MIN,v)); applySens(); return SENS; };
