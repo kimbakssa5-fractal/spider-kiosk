@@ -561,12 +561,14 @@
   canvas.style.touchAction = "none";
   canvas.addEventListener("pointerdown", function (e) {
     splash(e.clientX, e.clientY);
+    playSplash(1);                       // 접촉 파문 → 찰방
     notePointer(e.pointerId, e.clientX, e.clientY);
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   });
   canvas.addEventListener("pointermove", function (e) {
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evs) splash(ev.clientX, ev.clientY);
+    playSplash(0.4);                      // 이동/드래그 파문 → 잔잔한 찰방(버스트 제한)
     notePointer(e.pointerId, e.clientX, e.clientY);
   });
   canvas.addEventListener("pointerup", function (e) { dropPointer(e.pointerId); });
@@ -678,12 +680,15 @@
     if (fbCooldown) return;    // 되먹임 냉각 중(넓게 퍼진 일렁임 지속) — updateMotion 이 판정
     const W = window.innerWidth, H = window.innerHeight;
     const n = Math.min(MOTION_SPLASH_N, cells.length);
+    let maxd = 0;
     for (let i = 0; i < n; i++) {
       const c = cells[(Math.random() * cells.length) | 0];   // 강한 영역일수록 셀이 많아 더 자주 뽑힘
       const sx = ((c.x + Math.random()) / MW) * W;            // 셀 내부 지터(연속 위치)
       const sy = ((c.y + Math.random()) / MH) * H;
       splash(sx, sy, 70 + 90 * Math.min(1, c.d / 100));       // 작은 물결 다수 → 자연스러운 교란
+      if (c.d > maxd) maxd = c.d;
     }
+    playSplash(0.35 + 0.65 * Math.min(1, maxd / 100));         // 카메라 앞 사람 접근 → 찰방(세기 비례)
   }
 
   function applyCamClass() {
@@ -1020,6 +1025,77 @@
     ambient.play().then(function () { soundOn = true; })
                   .catch(function () { soundOn = false; });
   }
+
+  // ---- 물 찰방 효과음 (실제 음원 assets/splash1~4.wav, WebAudio 버퍼) ----
+  //   접근/터치로 파문이 생길 때 4종 랜덤 재생. 버스트 최대 2회(2번째 작게)+~1초 프리즈(따발총 방지).
+  //   soundOn 연동, 세기 비례 음량, 물소리 볼륨(_splashVol) 슬라이더/[ ]키. 초기 10%.
+  let _actx = null, _splashGain = null;
+  let _splashBufs = [], _splashLoading = false;
+  let _splashVol = 0.1;                          // 물소리 마스터 볼륨(0~1) — 슬라이더 / [ ] 키 (초기 10%)
+  let _burstActive = false, _burstStartMs = 0, _chainUsed = false, _freezeUntil = 0;
+  const SPLASH_2ND_MIN_MS = 70, SPLASH_CHAIN_MS = 260, SPLASH_FREEZE_MS = 1000, SPLASH_2ND_VOL = 0.5;
+  const SPLASH_FILES = ["assets/splash1.wav", "assets/splash2.wav", "assets/splash3.wav", "assets/splash4.wav"];
+  function ensureAudio() {
+    if (_actx) return _actx;
+    try {
+      _actx = new (window.AudioContext || window.webkitAudioContext)();
+      _splashGain = _actx.createGain();
+      _splashGain.gain.value = _splashVol;
+      _splashGain.connect(_actx.destination);
+      loadSplashBuffers();
+    } catch (e) { _actx = null; }
+    return _actx;
+  }
+  function loadSplashBuffers() {
+    if (_splashLoading || !_actx) return;
+    _splashLoading = true;
+    SPLASH_FILES.forEach(function (url, i) {
+      fetch(url + "?v=" + ASSET_VER).then(function (r) { return r.arrayBuffer(); })
+        .then(function (ab) { return _actx.decodeAudioData(ab); })
+        .then(function (buf) { _splashBufs[i] = buf; })
+        .catch(function () {});
+    });
+  }
+  function _emitSplash(ac, strength, rel) {
+    const ready = _splashBufs.filter(Boolean);
+    if (!ready.length) return;
+    const s = Math.max(0.15, Math.min(1, strength == null ? 0.6 : strength));
+    const src = ac.createBufferSource();
+    src.buffer = ready[(Math.random() * ready.length) | 0];
+    src.playbackRate.value = 0.92 + Math.random() * 0.18;
+    const g = ac.createGain();
+    g.gain.value = (0.28 + 0.72 * s) * rel;
+    src.connect(g); g.connect(_splashGain);
+    src.start();
+  }
+  function playSplash(strength) {
+    if (!soundOn) return;
+    const ac = ensureAudio();
+    if (!ac) return;
+    if (ac.state === "suspended") { try { ac.resume(); } catch (_) {} }
+    const now = performance.now();
+    if (_burstActive) {
+      const dt = now - _burstStartMs;
+      if (!_chainUsed && dt >= SPLASH_2ND_MIN_MS && dt <= SPLASH_CHAIN_MS) {
+        _chainUsed = true;
+        _emitSplash(ac, strength, SPLASH_2ND_VOL);
+        _freezeUntil = now + SPLASH_FREEZE_MS;
+        return;
+      }
+      if (now < _freezeUntil) return;
+      _burstActive = false;
+    }
+    _burstActive = true; _chainUsed = false; _burstStartMs = now;
+    _freezeUntil = now + SPLASH_FREEZE_MS;
+    _emitSplash(ac, strength, 1.0);
+  }
+  function setSplashVol(v) {
+    _splashVol = Math.max(0, Math.min(1, v));
+    if (_splashGain) _splashGain.gain.value = _splashVol;
+    const sl = document.getElementById("splashVolSlider");
+    if (sl) sl.value = Math.round(_splashVol * 100);
+    showHud("물소리 볼륨 " + Math.round(_splashVol * 100) + "%");
+  }
   // 첫 사용자 제스처에 소리 시작 + 전체화면 진입(동기 호출이라야 허용됨).
   //   처음 켤 땐 비번 통과 시점에 전체화면(index 게이트에서 처리). 여기선 재방문(게이트 없음) 대비.
   window.addEventListener("pointerdown", function once() {
@@ -1106,6 +1182,13 @@
     });
   }
   refreshGlitterUI();
+  // 물소리 볼륨 슬라이더(0~100) + [ / ] 키
+  const splashVolSlider = document.getElementById("splashVolSlider");
+  if (splashVolSlider) {
+    _splashVol = (+splashVolSlider.value) / 100;
+    if (_splashGain) _splashGain.gain.value = _splashVol;
+    splashVolSlider.addEventListener("input", function () { setSplashVol((+this.value) / 100); });
+  }
   const fishPlusBtn = document.getElementById("fishPlusBtn");
   const fishMinusBtn = document.getElementById("fishMinusBtn");
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
@@ -1204,6 +1287,8 @@
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
       case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
       case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
+      case "BracketRight": e.preventDefault(); setSplashVol(_splashVol + 0.1); break;   // 물소리 크게 ]
+      case "BracketLeft": e.preventDefault(); setSplashVol(_splashVol - 0.1); break;    // 물소리 작게 [
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
       case "Digit3": case "Numpad3": e.preventDefault(); adjust("DISP", +1); break;
