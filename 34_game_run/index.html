@@ -244,7 +244,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
         <span class="pill"><span class="dot" id="statusDot"></span><span id="statusText">대기 중</span></span>
         <span class="pill">👥 인식 <b id="personCount">0</b>명</span>
         <span class="pill">FPS <b id="fps">–</b></span>
-        <span class="pill sens-pill">👣 민감도
+        <span class="pill sens-pill">🎯 민감도
           <button class="sbtn" id="sensDown" title="덜 예민 ( [ 또는 ↓ )">−</button>
           <b id="sensVal">100</b>%
           <button class="sbtn" id="sensUp" title="더 예민 ( ] 또는 ↑ )">+</button>
@@ -1006,7 +1006,7 @@ let sensToastT=null;
 function applySens(){
   const pct=Math.round(SENS*100);
   sensValEl.textContent=pct;
-  sensToast.textContent='👣 민감도 '+pct+'%'+(pct>=200?' · 매우 예민':pct<=60?' · 둔감':'');
+  sensToast.textContent='🎯 민감도 '+pct+'%'+(pct>=200?' · 매우 예민':pct<=60?' · 둔감':'');
   sensToast.classList.add('show');
   clearTimeout(sensToastT); sensToastT=setTimeout(()=>sensToast.classList.remove('show'),900);
   try{ localStorage.setItem(SENS_KEY,SENS.toFixed(2)); }catch(_){}
