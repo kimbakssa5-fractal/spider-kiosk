@@ -484,10 +484,12 @@ function beep(player){
     const o=audioCtx.createOscillator(), g=audioCtx.createGain();
     o.frequency.value = player===1 ? 660 : 440;
     o.type='sine';
-    g.gain.setValueAtTime(0.12,audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.09);
+    const t0=audioCtx.currentTime, vol=0.035;      // 볼륨 대폭 축소(0.12→0.035)
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.linearRampToValueAtTime(vol,t0+0.012);  // 부드러운 어택(딸깍 충격음 제거)
+    g.gain.exponentialRampToValueAtTime(0.0008,t0+0.10);
     o.connect(g).connect(audioCtx.destination);
-    o.start(); o.stop(audioCtx.currentTime+0.1);
+    o.start(t0); o.stop(t0+0.11);
   }catch(_){}
 }
 function emitStep(player,foot,t){
