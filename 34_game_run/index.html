@@ -375,40 +375,47 @@ class Chan{ // 채널(발목/무릎): One Euro + 지면 기준선 → 다리길�
     const dt=this.tPrev===undefined?1e-3:Math.max(1e-3,(t-this.tPrev)/1000); this.tPrev=t;
     const y=this.f.filter(rawY,t);
     if(this.ground===null) this.ground=y;
-    // 아래로는 즉시, 위로는 초당 다리길이 2.5%씩만 적응(발이 떠 있는 0.3초 동안 기준선 잠식 최소화)
-    this.ground=Math.max(y, this.ground - legLen*0.025*dt);
+    // 지면 기준선 = 딛고 선 최저점(=최대 y). Math.max로 즉시 붙잡으면 한두 프레임짜리
+    // 노이즈 스파이크가 기준선을 올려놓고 → 스파이크 회복 시 "발이 들림"으로 오탐된다.
+    // 그래서 "딛는 쪽(y↑)"은 시상수 ~0.1초로 완만히 수렴(스파이크 무시), "드는 쪽"은 아주 천천히.
+    if(y>this.ground){
+      this.ground += (y-this.ground)*(1-Math.exp(-dt/0.10));
+    }else{
+      this.ground -= legLen*0.02*dt;
+      if(this.ground<y) this.ground=y;
+    }
     return (this.ground-y)/legLen;
   }
 }
 class FootTracker{
   constructor(){ this.ankle=new Chan(); this.knee=new Chan(); this.reset(); }
-  reset(){ this.ankle.reset(); this.knee.reset(); this.phase='ground'; this.lastStrike=0; this.height=0; this.peak=0; this.tPrev=undefined; }
-  update(ankleY, kneeY, legLen, relNoise, t){
+  reset(){ this.ankle.reset(); this.knee.reset(); this.phase='ground'; this.lastStrike=0; this.height=0; this.peak=0; this.tPrev=undefined; this.floor=0.020; }
+  update(ankleY, kneeY, legLen, t){
     const dt=this.tPrev===undefined?1e-3:Math.max(1e-3,(t-this.tPrev)/1000); this.tPrev=t;
     const hA=this.ankle.h(ankleY,legLen,t);
     const hK=kneeY===null?0:this.knee.h(kneeY,legLen,t);
-    const h=Math.max(hA, hK*0.55);          // 무릎 보조(아이는 무릎 들림이 더 큼)
+    const h=Math.max(hA, hK*0.6);           // 무릎 보조(아이는 무릎 들림이 더 큼)
     this.height=h;
-    // 최근 스윙 피크(지수 감쇠 ~2초 반감) — 관측된 실제 진폭에 문턱 자동 적응
-    this.peak=Math.max(h, this.peak - this.peak*0.35*dt);
-    // 민감도(SENS) 반영: 값이 클수록 문턱을 낮춰 작은 발 들림도 잡음. k=1/SENS
+    // 문턱 = ① 피크 적응(관측된 실제 들림의 38%) ② 노이즈 바닥(this.floor: 서 있을 때 h의
+    // 95퍼센타일에서 워밍업 때 측정 — "가만히 서서 흔들린 것보다 높이 들려야 인정") 중 큰 값.
+    // 피크 적응 덕에 사람/키/거리에 자동 적응하고, 바닥 덕에 정지 오탐을 막는다.
+    // 민감도 k=1/SENS 를 전체에 곱해, 값을 올리면 바닥까지 실제로 내려간다(항상 효과).
+    this.peak=Math.max(h, this.peak - this.peak*0.5*dt);   // 약 1.4초 감쇠
     const k=1/SENS;
-    let lift=Math.min(Math.max(0.45*this.peak, Math.max(3*relNoise, 0.020)), 0.060)*k;
-    let down=Math.min(Math.max(0.18*this.peak, Math.max(2*relNoise, 0.008)), 0.026)*k;
-    // 안전장치: 착지 문턱은 노이즈보다 크게(떨림 오탐 방지), 들림은 히스테리시스 간격 유지.
-    // 최대 민감도에서도 정지 노이즈가 문턱을 넘지 않도록 lift≈2.7σ 확보.
-    down=Math.max(down, 1.5*relNoise);
-    lift=Math.max(lift, down*1.8);
+    let lift=Math.min(Math.max(0.34*this.peak, this.floor)*k, 0.12);
+    let down=Math.max(0.5*lift, this.floor*0.45*k);         // 착지(히스테리시스) 문턱
     if(this.phase==='ground' && h>lift){ this.phase='air'; return false; }
-    if(this.phase==='air' && h<down && (t-this.lastStrike)>160){
+    if(this.phase==='air' && h<down && (t-this.lastStrike)>150){
       this.phase='ground'; this.lastStrike=t; return true;
     }
     return false;
   }
 }
+// 배열의 p분위값(0~1)
+function pctl(arr,p){ const a=arr.slice().sort((x,y)=>x-y); return a[Math.min(a.length-1, Math.floor(p*a.length))]; }
 
 /* ================= 플레이어(1명) 러너 ================= */
-const CAL_MS=2000;              // 추적 시작 후 ~2초 정지 노이즈 자동 보정
+const CAL_MS=1200;             // 추적 시작 후 워밍업(필터·기준선 안정) — 이 구간은 카운트 안 함
 class PlayerRunner{
   constructor(id){
     this.id=id;
@@ -417,7 +424,7 @@ class PlayerRunner{
     this.resetCalibration();
   }
   resetCalibration(){
-    this.calStart=null; this.calDiffs=[]; this.calibrated=false; this.relNoise=0.006; this._pL=undefined; this._pR=undefined;
+    this.calStart=null; this.calibrated=false; this.calHL=[]; this.calHR=[];
   }
   fullReset(){ this.feet.L.reset(); this.feet.R.reset(); this.resetCalibration(); }
   /* lm: MediaPipe 33 landmarks(normalized). 반환: 이번 프레임 착지한 발 배열 */
@@ -433,21 +440,19 @@ class PlayerRunner{
     const kL = vis(25) ? lm[25].y : null;
     const kR = vis(26) ? lm[26].y : null;
     const hits=[];
-    const sL=this.feet.L.update(yL,kL,legLen,this.relNoise,t);
-    const sR=this.feet.R.update(yR,kR,legLen,this.relNoise,t);
-    // ---- 노이즈 자동 보정 — "필터 후" 상대 높이의 프레임간 변화(롤링) 중앙값으로 측정 ----
-    // 정지 지터는 프레임마다 작게 흔들림 → 중앙값이 곧 노이즈 크기. 러닝은 대부분 구간이
-    // 느리게 변해 중앙 diff가 작으므로, 보정 중 뛰고 있어도 과대추정되지 않음(캡 완화 가능).
+    const sL=this.feet.L.update(yL,kL,legLen,t);
+    const sR=this.feet.R.update(yR,kR,legLen,t);
+    // 워밍업 구간: 카운트하지 않고, 그동안의 h(발별)로 정지 노이즈 바닥을 측정한다.
+    // 바닥 = 95퍼센타일 × 1.3 (한두 스파이크에 안 흔들리게), 0.010~0.028로 클램프
+    // (상한: 워밍업 중 이미 뛰고 있었어도 바닥이 과대해져 완전 먹통 되지 않게).
     if(!this.calibrated){
       if(this.calStart===null) this.calStart=t;
-      const hL=this.feet.L.height, hR=this.feet.R.height;
-      if(this._pL!==undefined){ this.calDiffs.push(Math.abs(hL-this._pL), Math.abs(hR-this._pR)); }
-      this._pL=hL; this._pR=hR;
-      if(t-this.calStart>=CAL_MS && this.calDiffs.length>=20){
-        const d=this.calDiffs.slice().sort((a,b)=>a-b), med=d[d.length>>1];
-        // K=5.6: 하네스 스윕으로 확정 — 노이즈 큰 환경의 작은 아이도 민감도 150%면 완전 포착하면서
-        // 정지 오탐은 극단(250%·노이즈 2배)에서도 ~0. 더 키우면 진짜 약한 신호까지 소실.
-        this.relNoise=Math.max(0.002, Math.min(0.030, med*5.6));
+      this.calHL.push(this.feet.L.height); this.calHR.push(this.feet.R.height);
+      if(t-this.calStart>=CAL_MS && this.calHL.length>=15){
+        // 바닥 = 정지 h의 99퍼센타일 × 1.4, 0.010~0.036 클램프(하네스 스윕으로 확정:
+        // 정상 성인·아이 포착 우선, 정지 오탐 낮게, 약한/작은 아이는 민감도로 회복).
+        this.feet.L.floor=Math.max(0.010, Math.min(0.036, pctl(this.calHL,0.99)*1.4));
+        this.feet.R.floor=Math.max(0.010, Math.min(0.036, pctl(this.calHR,0.99)*1.4));
         this.calibrated=true;
       }
     }else{
@@ -653,7 +658,7 @@ function processPoses(poses,t){
       continue;
     }
     const hits=p.update(lm,now);
-    if(!p.calibrated){ stateEl.textContent='보정 중…'; stateEl.classList.add('on'); }
+    if(!p.calibrated){ stateEl.textContent='준비 중…'; stateEl.classList.add('on'); }
     else{ stateEl.textContent='달리는 중'; stateEl.classList.add('on'); }
     const cad=p.cadence(now);
     $('cad'+id).textContent = cad>0 ? `🏃 ${cad} 걸음/분` : ' ';
