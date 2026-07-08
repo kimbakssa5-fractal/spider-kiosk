@@ -1361,8 +1361,8 @@
   const ATTRACT_MS = 1150;
   let attractOn = false, attractTimer = null, idleTimer = null;
 
-  // I 키: 중앙 손가락 아이콘(힌트) 숨김 토글
-  let hintIconHidden = false;
+  // I 키: 중앙 손가락 아이콘(힌트) 숨김 토글 — 기본 숨김(index.html #hint 에 icon-off 클래스)
+  let hintIconHidden = true;
   function toggleHintIcon() {
     hintIconHidden = !hintIconHidden;
     if (hint) hint.classList.toggle("icon-off", hintIconHidden);
