@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "45";   // 그룹3(수묵) 삭제
+  const ASSET_VER = "46";   // 그룹3 재생성 = long.png 긴꼬리 + 색변주 6종
   const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
@@ -418,7 +418,7 @@
   const KOI_GROUPS = [
     { base: "goldfish-swim-g1", label: "1 (색변주 6종)", meta: null, img: null },
     { base: "goldfish-swim-g2", label: "2 (금붕어 원본)", meta: null, img: null },
-    // 그룹3(수묵)은 사용자 지시로 삭제(2026-07-08). 소스/빌더 보존(fish/_key_sumi2.py 등) — 되살리려면 이 줄 복원+g3 재빌드.
+    { base: "goldfish-swim-g3", label: "3 (긴꼬리 색변주)", meta: null, img: null },
   ];
   let activeGroup = 0;                    // 기본 = 색변주 6종(g1). T키로 원본 3종(g2) 전환. (2026-07-08 사용자 지정)
   function uploadGroup(i) {
