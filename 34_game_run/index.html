@@ -454,23 +454,53 @@ function showReady(num, go){
     + (num?`<div class="ready-num" style="${go?'color:#37c26e':''}">${num}</div>`:'');
   overlay.classList.add('ready'); overlay.classList.remove('hidden');
 }
-function readyBeep(go){
-  if(!soundChk.checked) return;
-  try{
-    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-    const o=audioCtx.createOscillator(), g=audioCtx.createGain(), t0=audioCtx.currentTime;
-    o.frequency.value = go?880:520; o.type='sine';
-    g.gain.setValueAtTime(0.0001,t0); g.gain.linearRampToValueAtTime(0.04,t0+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0008,t0+(go?0.25:0.12));
-    o.connect(g).connect(audioCtx.destination); o.start(t0); o.stop(t0+(go?0.28:0.14));
-  }catch(_){}
+/* ===== 오디오 툴킷 (합성 효과음) ===== */
+let audioCtx=null;
+function actx(){ try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); }catch(_){} return audioCtx; }
+function tone(f, t0, dur, o){ o=o||{};
+  const ac=actx(); if(!ac) return;
+  const osc=ac.createOscillator(), g=ac.createGain();
+  osc.type=o.type||'sine'; osc.frequency.setValueAtTime(f,t0);
+  if(o.glide) osc.frequency.exponentialRampToValueAtTime(Math.max(20,o.glide),t0+dur);
+  if(o.detune) osc.detune.value=o.detune;
+  const vol=o.gain==null?0.1:o.gain, atk=o.attack||0.006;
+  g.gain.setValueAtTime(0.0001,t0); g.gain.linearRampToValueAtTime(vol,t0+atk); g.gain.exponentialRampToValueAtTime(0.0006,t0+dur);
+  osc.connect(g).connect(ac.destination); osc.start(t0); osc.stop(t0+dur+0.03);
+}
+function noise(t0, dur, gain, hpf){
+  const ac=actx(); if(!ac) return;
+  const len=Math.max(1,(ac.sampleRate*dur)|0), buf=ac.createBuffer(1,len,ac.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+  const n=ac.createBufferSource(); n.buffer=buf;
+  const g=ac.createGain(); g.gain.setValueAtTime(gain||0.06,t0); g.gain.exponentialRampToValueAtTime(0.0005,t0+dur);
+  const f=ac.createBiquadFilter(); f.type='highpass'; f.frequency.value=hpf||1500;
+  n.connect(f).connect(g).connect(ac.destination); n.start(t0); n.stop(t0+dur+0.03);
+}
+/* 카운트다운: 3·2·1 상승 긴장감 → 시작! 큰 GO(휘리릭+코드+심벌) */
+function readyBeep(idx, go){
+  if(!soundChk.checked) return; const ac=actx(); if(!ac) return; const t0=ac.currentTime;
+  if(go){
+    tone(320,t0,0.30,{type:'sawtooth',gain:0.06,glide:1250});                                   // whoosh up
+    [523,659,784,1047].forEach((f,i)=> tone(f,t0+0.05,0.55,{type:'triangle',gain:0.10,detune:(i-1)*4})); // 밝은 코드
+    noise(t0+0.05,0.14,0.08,2500);                                                              // 착!
+  } else {
+    const f=[440,554,698][idx]||440;
+    tone(f,t0,0.17,{type:'square',gain:0.08,glide:f*1.02});
+    tone(f/2,t0,0.19,{type:'triangle',gain:0.05});                                              // 하단 두께
+    noise(t0,0.02,0.03,3000);
+  }
+}
+/* 막판 카운트 틱 */
+function tickSound(sec){
+  if(!soundChk.checked) return; const ac=actx(); if(!ac) return; const t0=ac.currentTime;
+  tone(700+(6-sec)*40,t0,0.09,{type:'square',gain:0.07}); noise(t0,0.02,0.035,4000);
 }
 function runReadyCountdown(onDone){
   clearReady(); readyCountdown=true; gamePhase='ready';
   showTimer(GAME_SEC);                             // 준비 구간엔 풀타임 표시
   showReady('');                                   // "준비하세요"
   const seq=[[800,'3',0],[1600,'2',0],[2400,'1',0],[3200,'시작!',1]];
-  for(const [ms,n,go] of seq){ readyTimeouts.push(setTimeout(()=>{ showReady(n,go); readyBeep(go); }, ms)); }
+  seq.forEach(([ms,n,go],i)=>{ readyTimeouts.push(setTimeout(()=>{ showReady(n,go); readyBeep(i,!!go); }, ms)); });
   readyTimeouts.push(setTimeout(()=>{ readyCountdown=false; hideOverlay(); if(onDone) onDone(); }, 3900));
 }
 
@@ -490,17 +520,21 @@ function showTimer(sec){ timerEl.textContent=fmtTime(sec); timerEl.classList.tog
 if(gameLenEl) gameLenEl.textContent=GAME_SEC;
 showBest(); showTimer(GAME_SEC);
 
+let lastTickSec=99;
 function beginGame(){
   zeroScores();               // 점수만 0(감지기 워밍업은 유지 → 시작 즉시 카운트)
   gamePhase='play';
   gameEndT=performance.now()+GAME_SEC*1000;
+  lastTickSec=99;
   clearInterval(gameTimer);
   gameTimer=setInterval(()=>{
     if(gamePhase!=='play'){ clearInterval(gameTimer); return; }
     const rem=(gameEndT-performance.now())/1000;
     showTimer(rem);
+    const sc=Math.ceil(rem);
+    if(sc<=5 && sc>=1 && sc!==lastTickSec){ lastTickSec=sc; tickSound(sc); }   // 막판 5초 카운트 틱
     if(rem<=0) endGame();
-  },150);
+  },100);
   showTimer(GAME_SEC);
 }
 function restartGame(){ if(running||demoActive) runReadyCountdown(beginGame); }
@@ -519,21 +553,18 @@ function endGame(){
     +'<div style="margin-top:8px;font-weight:900;color:var(--ink);font-size:20px"><span style="color:var(--coral)">P1 '+c1+'</span> · <span style="color:var(--blue)">P2 '+c2+'</span></div>'
     +nb+'<div style="margin-top:12px;color:var(--muted);font-weight:400;font-size:14px">스페이스 또는 <b>다시 시작(r)</b> 으로 재시작</div>', false);
 }
+/* 승리 팡파르: 상승 아르페지오 멜로디 → 큰 코드 + 심벌 크래시 */
 function fanfare(){
-  if(!soundChk.checked) return;
-  try{
-    audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
-    const t0=audioCtx.currentTime, notes=[523,659,784,1047];
-    notes.forEach((f,i)=>{ const o=audioCtx.createOscillator(),g=audioCtx.createGain(),s=t0+i*0.12;
-      o.type='triangle'; o.frequency.value=f;
-      g.gain.setValueAtTime(0.0001,s); g.gain.linearRampToValueAtTime(0.10,s+0.02); g.gain.exponentialRampToValueAtTime(0.0008,s+0.45);
-      o.connect(g).connect(audioCtx.destination); o.start(s); o.stop(s+0.5); });
-    const s=t0+notes.length*0.12;
-    [523,659,784,1047].forEach(f=>{ const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-      o.type='sawtooth'; o.frequency.value=f;
-      g.gain.setValueAtTime(0.0001,s); g.gain.linearRampToValueAtTime(0.05,s+0.02); g.gain.exponentialRampToValueAtTime(0.0006,s+0.9);
-      o.connect(g).connect(audioCtx.destination); o.start(s); o.stop(s+0.95); });
-  }catch(_){}
+  if(!soundChk.checked) return; const ac=actx(); if(!ac) return; const t0=ac.currentTime;
+  const mel=[523,659,784,1047,1319,1047];   // C E G C E C
+  mel.forEach((f,i)=>{ const s=t0+i*0.11;
+    tone(f,s,0.42,{type:'triangle',gain:0.11});
+    tone(f/2,s,0.42,{type:'sawtooth',gain:0.035});
+    if(i%2===0) noise(s,0.03,0.03,5000); });                    // 스텝마다 반짝
+  const s=t0+mel.length*0.11;                                   // 마지막 큰 코드
+  [523,659,784,1047,1319].forEach((f,i)=> tone(f,s,1.2,{type:'sawtooth',gain:0.05,detune:(i-2)*5}));
+  [523,659,784].forEach(f=> tone(f,s,1.2,{type:'triangle',gain:0.06}));
+  noise(s,0.55,0.10,3500); noise(s+0.03,1.1,0.045,6500);        // 심벌 크래시 + 테일
 }
 let confetti=[], fxRaf=null, fxLast=0;
 function spawnConfetti(winner){
@@ -657,21 +688,13 @@ const players={1:new PlayerRunner(1), 2:new PlayerRunner(2)};
 
 /* ================= 착지 이벤트 → 숫자 입력 ================= */
 let tickerCount=0;
-let audioCtx=null;
+/* 발구름: 펀치감 있는 팝(플레이어별 음색) — 상단 블립 + 몸통 팝 + 착지 탁 */
 function beep(player){
-  if(!soundChk.checked) return;
-  try{
-    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
-    o.frequency.value = player===1 ? 660 : 440;
-    o.type='sine';
-    const t0=audioCtx.currentTime, vol=0.035;      // 볼륨 대폭 축소(0.12→0.035)
-    g.gain.setValueAtTime(0.0001,t0);
-    g.gain.linearRampToValueAtTime(vol,t0+0.012);  // 부드러운 어택(딸깍 충격음 제거)
-    g.gain.exponentialRampToValueAtTime(0.0008,t0+0.10);
-    o.connect(g).connect(audioCtx.destination);
-    o.start(t0); o.stop(t0+0.11);
-  }catch(_){}
+  if(!soundChk.checked) return; const ac=actx(); if(!ac) return; const t0=ac.currentTime;
+  const base = player===1 ? 660 : 500;
+  tone(base*1.7, t0, 0.09, {type:'square',   gain:0.05, glide:base});      // 상단 블립(피치 다운)
+  tone(base,     t0, 0.13, {type:'triangle', gain:0.12, glide:base*1.35}); // 몸통 팝(살짝 업)
+  noise(t0, 0.035, 0.045, 3200);                                           // 착지 탁
 }
 function emitStep(player,foot,t){
   const p=players[player];
