@@ -196,11 +196,20 @@ button:disabled{ opacity:.45; cursor:default; }
 .toggle input{ accent-color:var(--coral); width:16px; height:16px; }
 
 footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); font-size:11.5px; line-height:1.5; font-weight:400; }
-/* 좁은 화면(모바일 등): 세로로 쌓고 스크롤 허용 */
-@media (max-width:900px){
-  body{ overflow:auto; height:auto; min-height:100%; padding-bottom:20px; }
-  main{ grid-template-columns:1fr; }
-  .avatar-wrap{ flex:0 0 auto; height:150px; }
+/* 폰 세로로 열면 화면 전체를 가로(landscape)로 회전해 꽉 채운다 */
+@media (orientation:portrait) and (max-width:900px){
+  html{ overflow:hidden; }
+  body{
+    position:fixed; top:0; left:100vw; margin:0;
+    width:100vh; height:100vw;
+    transform:rotate(90deg); transform-origin:top left;
+    padding:10px 16px;
+  }
+}
+/* 폰 가로: 3열 레이아웃 그대로, 여백만 축소 */
+@media (orientation:landscape) and (max-height:520px){
+  body{ padding:6px 12px; }
+  header{ margin-bottom:4px; }
 }
 
 /* ===== password gate (31/33과 동일 정책) ===== */
