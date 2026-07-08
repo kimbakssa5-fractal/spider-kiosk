@@ -394,7 +394,8 @@ function updateAvatar(id, p, now, active){
   let interval=400;                                // 최근 스텝 간격(ms)
   if(n>=2) interval=Math.min(900, Math.max(130, st[n-1]-st[n-2]));
   const frac=Math.min(1,(now-last)/interval)*0.5;  // 스텝 하나 동안 반 사이클 진행
-  const phase=((n%2)*0.5 + frac + PHASE_OFFSET)%1;
+  // 좌우 교대는 누적 카운트 홀짝으로(stepTimes는 40개 상한이라 홀짝이 고정돼 한쪽 다리만 나오는 버그 방지)
+  const phase=((p.count%2)*0.5 + frac + PHASE_OFFSET)%1;
   setFrame(el, Math.floor(phase*NFRAMES));
 }
 function resetAvatars(){ for(const id of [1,2]) setFrame(avatars[id], 0); }
