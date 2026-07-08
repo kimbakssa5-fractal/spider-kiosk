@@ -357,117 +357,73 @@ class OneEuro{
   }
 }
 
-/* ================= 발 착지 감지 =================
-   실측 신호는 이론값보다 작게 나온다 → 절대 상수 대신
-   다리 길이(엉덩이~발목) "상대 단위" + 측정 노이즈 비례로 문턱을 정한다.
-   키가 작은 아이 대응:
-   ① 최근 관측 스윙 피크에 문턱이 자동 적응(작은 들림도 몇 걸음 안에 잡힘)
-   ② 발목보다 크게 움직이는 무릎 신호를 보조로 결합(SNR 확보)
-   상태기계: ground --(들림>lift)--> air --(내림<down)--> ground(=착지 이벤트)
-   지면 기준선은 최저점(최대 y)을 즉시 따라가고, 위로는 천천히 적응. */
-// 센싱 민감도(현장 단축키/버튼으로 조절). 1.0=기본, 클수록 예민(문턱↓). 범위 0.5~2.5
+/* ================= 발구름 감지 — 좌우 교대 신호 방식 =================
+   실기 영상 분석으로 확정(2026-07-08 3차): 발별 "지면 기준선" 방식은 legLen 순간 붕괴로
+   h가 폭발(최대 1.7)해 피크 문턱을 오염 → 카운트 0. 대신 **엉덩이 기준 좌우 발목 높이차**를
+   쓴다: diff=(왼발목y−오른발목y)/다리길이. 제자리 달리기는 좌우 발이 번갈아 오르내리므로
+   이 값이 진동한다. 몸 흔들림·원근·다리길이에 자기정규화되어 폭발이 없다.
+   느린 기준선(center)로 자세 비대칭/카메라 기울기를 상쇄하고, 스윙이 ±band를 교대로 넘을
+   때마다 1스텝. band는 최근 스윙 진폭에 적응 + 바닥, 민감도로 스케일. (실영상 31~33스텝 확인) */
+// 센싱 민감도(현장 단축키/버튼). 1.0=기본, 클수록 예민(band↓). 범위 0.5~2.5
 let SENS = 1.0;
 let DEBUG = false;   // 실시간 신호 계측기(키 'd' 토글) — 실기 튜닝용
-class Chan{ // 채널(발목/무릎): One Euro + 지면 기준선 → 다리길이 상대 들림 높이
-  // minCutoff 1.7: 어린이의 작은(느린 속도) 1.5Hz 스텝 신호가 감쇠되지 않는 하한
-  constructor(){ this.f=new OneEuro(1.7,6.0); this.reset(); }
-  reset(){ this.f.reset(); this.ground=null; this.tPrev=undefined; }
-  h(rawY, legLen, t){
+class StepDetector{
+  constructor(){ this.reset(); }
+  reset(){
+    this.fd=new OneEuro(2.0,4.0);          // diff 필터
+    this.legSmooth=null; this.center=null; this.amp=0; this.tPrev=undefined;
+    this.side=0; this.lastStrike=0; this.swing=0; this.band=0.08;
+  }
+  // aLy/aRy = 좌/우 발목 y, legRaw = 다리 길이. 반환: 'L'|'R'(스텝) | null
+  update(aLy, aRy, legRaw, t){
     const dt=this.tPrev===undefined?1e-3:Math.max(1e-3,(t-this.tPrev)/1000); this.tPrev=t;
-    const y=this.f.filter(rawY,t);
-    if(this.ground===null) this.ground=y;
-    // 지면 기준선 = 딛고 선 최저점(=최대 y). Math.max로 즉시 붙잡으면 한두 프레임짜리
-    // 노이즈 스파이크가 기준선을 올려놓고 → 스파이크 회복 시 "발이 들림"으로 오탐된다.
-    // 그래서 "딛는 쪽(y↑)"은 시상수 ~0.1초로 완만히 수렴(스파이크 무시), "드는 쪽"은 아주 천천히.
-    if(y>this.ground){
-      this.ground += (y-this.ground)*(1-Math.exp(-dt/0.10));
-    }else{
-      this.ground -= legLen*0.02*dt;
-      if(this.ground<y) this.ground=y;
-    }
-    return (this.ground-y)/legLen;
+    if(this.legSmooth===null){ if(legRaw>0.05) this.legSmooth=legRaw; else return null; }
+    if(legRaw>0.05 && legRaw<2*this.legSmooth) this.legSmooth += (legRaw-this.legSmooth)*0.15;
+    const diff=this.fd.filter((aLy-aRy)/this.legSmooth, t);
+    if(this.center===null) this.center=diff;
+    this.center += (diff-this.center)*(1-Math.exp(-dt/1.5));   // 느린 기준선(비대칭/기울기 상쇄)
+    const swing=diff-this.center; this.swing=swing;
+    this.amp=Math.min(0.6, Math.max(Math.abs(swing), this.amp - this.amp*0.5*dt)); // 스윙 진폭 적응
+    const band=Math.min(0.25, Math.max(0.30*this.amp, 0.040))/SENS; this.band=band;
+    if(this.side<=0 && swing>band && (t-this.lastStrike)>150){ this.side=1;  this.lastStrike=t; return 'L'; }
+    if(this.side>=0 && swing<-band && (t-this.lastStrike)>150){ this.side=-1; this.lastStrike=t; return 'R'; }
+    return null;
   }
 }
-class FootTracker{
-  constructor(){ this.ankle=new Chan(); this.knee=new Chan(); this.reset(); }
-  reset(){ this.ankle.reset(); this.knee.reset(); this.phase='ground'; this.lastStrike=0; this.height=0; this.peak=0; this.tPrev=undefined; this.floor=0.020; }
-  update(ankleY, kneeY, legLen, t){
-    const dt=this.tPrev===undefined?1e-3:Math.max(1e-3,(t-this.tPrev)/1000); this.tPrev=t;
-    const hA=this.ankle.h(ankleY,legLen,t);
-    const hK=kneeY===null?0:this.knee.h(kneeY,legLen,t);
-    const h=Math.max(hA, hK*0.6);           // 무릎 보조(아이는 무릎 들림이 더 큼)
-    this.height=h;
-    // 문턱 = ① 피크 적응(관측된 실제 들림의 38%) ② 노이즈 바닥(this.floor: 서 있을 때 h의
-    // 95퍼센타일에서 워밍업 때 측정 — "가만히 서서 흔들린 것보다 높이 들려야 인정") 중 큰 값.
-    // 피크 적응 덕에 사람/키/거리에 자동 적응하고, 바닥 덕에 정지 오탐을 막는다.
-    // 민감도 k=1/SENS 를 전체에 곱해, 값을 올리면 바닥까지 실제로 내려간다(항상 효과).
-    this.peak=Math.max(h, this.peak - this.peak*0.45*dt);  // 약 1.5초 감쇠
-    const k=1/SENS;
-    // 실측(원근 압축된 제자리 달리기)은 신호가 작다 → 문턱을 낮게. 피크 적응이 주, 바닥은 오탐 방지용.
-    let lift=Math.min(Math.max(0.26*this.peak, this.floor)*k, 0.12);
-    let down=Math.max(0.40*lift, this.floor*0.35*k);        // 착지(히스테리시스) 문턱
-    this.lift=lift; this.down=down;                         // 디버그 계측기용
-    if(this.phase==='ground' && h>lift){ this.phase='air'; return false; }
-    if(this.phase==='air' && h<down && (t-this.lastStrike)>150){
-      this.phase='ground'; this.lastStrike=t; return true;
-    }
-    return false;
-  }
-}
-// 배열의 p분위값(0~1)
-function pctl(arr,p){ const a=arr.slice().sort((x,y)=>x-y); return a[Math.min(a.length-1, Math.floor(p*a.length))]; }
 
 /* ================= 플레이어(1명) 러너 ================= */
-const CAL_MS=1200;             // 추적 시작 후 워밍업(필터·기준선 안정) — 이 구간은 카운트 안 함
+const CAL_MS=1000;             // 추적 시작 후 워밍업(필터·기준선 안정) — 이 구간은 카운트 안 함
 class PlayerRunner{
   constructor(id){
     this.id=id;
-    this.feet={L:new FootTracker(), R:new FootTracker()};
-    this.count=0; this.stepTimes=[]; this.lastSeen=0;
+    this.det=new StepDetector();
+    this.count=0; this.stepTimes=[]; this.lastSeen=0; this.raised=null;
     this.resetCalibration();
   }
-  resetCalibration(){
-    this.calStart=null; this.calibrated=false; this.calHL=[]; this.calHR=[];
-  }
-  fullReset(){ this.feet.L.reset(); this.feet.R.reset(); this.resetCalibration(); }
-  /* lm: MediaPipe 33 landmarks(normalized). 반환: 이번 프레임 착지한 발 배열 */
+  resetCalibration(){ this.calStart=null; this.calibrated=false; }
+  fullReset(){ this.det.reset(); this.resetCalibration(); this.raised=null; }
+  /* lm: MediaPipe 33 landmarks(normalized). 반환: 이번 프레임 스텝한 발 배열 */
   update(lm,t){
     this.lastSeen=t;
-    const vis=i=>(lm[i].visibility??1)>0.4;
+    const vis=i=>(lm[i].visibility??1)>0.35;
     if(!(vis(27)&&vis(28)&&vis(23)&&vis(24))) return [];
-    const legLen=((lm[27].y-lm[23].y)+(lm[28].y-lm[24].y))/2;
-    if(legLen<0.03) return [];               // 다리가 화면에 거의 안 보임(키 작은 아이도 통과하게 완화)
-    // 발목+뒤꿈치 평균(둘 다 보이면)으로 y 안정화, 무릎은 보조 채널
-    const yL = vis(29) ? (lm[27].y+lm[29].y)/2 : lm[27].y;
-    const yR = vis(30) ? (lm[28].y+lm[30].y)/2 : lm[28].y;
-    const kL = vis(25) ? lm[25].y : null;
-    const kR = vis(26) ? lm[26].y : null;
-    const hits=[];
-    const sL=this.feet.L.update(yL,kL,legLen,t);
-    const sR=this.feet.R.update(yR,kR,legLen,t);
-    // 워밍업 구간: 카운트하지 않고, 그동안의 h(발별)로 정지 노이즈 바닥을 측정한다.
-    // 바닥 = 95퍼센타일 × 1.3 (한두 스파이크에 안 흔들리게), 0.010~0.028로 클램프
-    // (상한: 워밍업 중 이미 뛰고 있었어도 바닥이 과대해져 완전 먹통 되지 않게).
+    const legRaw=((lm[27].y-lm[23].y)+(lm[28].y-lm[24].y))/2;
+    if(legRaw<0.04) return [];
+    const side=this.det.update(lm[27].y, lm[28].y, legRaw, t);
+    // 현재 들린 발 표시(스윙 부호): swing>0 → 왼발목이 아래(오른발 들림)
+    this.raised = this.det.swing>0.04 ? 'R' : this.det.swing<-0.04 ? 'L' : null;
+    // 워밍업: center/필터 안정까지 카운트 보류
     if(!this.calibrated){
       if(this.calStart===null) this.calStart=t;
-      this.calHL.push(this.feet.L.height); this.calHR.push(this.feet.R.height);
-      if(t-this.calStart>=CAL_MS && this.calHL.length>=15){
-        // 바닥 = 정지 h의 95퍼센타일 × 1.3, 0.008~0.024 클램프. 상한을 낮게(0.024) 둬서
-        // 실제 발 스텝을 바닥이 막지 않게 하는 게 핵심(실기 미검출의 진범). 마진 1.3은 정지 오탐 억제.
-        this.feet.L.floor=Math.max(0.008, Math.min(0.024, pctl(this.calHL,0.95)*1.3));
-        this.feet.R.floor=Math.max(0.008, Math.min(0.024, pctl(this.calHR,0.95)*1.3));
-        this.calibrated=true;
-      }
-    }else{
-      if(sL) hits.push('L');
-      if(sR) hits.push('R');
+      if(t-this.calStart>=CAL_MS) this.calibrated=true;
+      return [];
     }
-    for(const f of hits){
-      this.count++;
-      this.stepTimes.push(t);
+    if(side){
+      this.count++; this.stepTimes.push(t);
       if(this.stepTimes.length>40) this.stepTimes.shift();
+      return [side];
     }
-    return hits;
+    return [];
   }
   cadence(t){ // 최근 5초 걸음/분
     const w=this.stepTimes.filter(s=>t-s<5000);
@@ -688,13 +644,13 @@ function drawPlayer(lm,id,t){
     ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
   }
   ctx.globalAlpha=1;
-  // 발목 점: 공중=빈 원, 지면=채운 원
+  // 발목 점: 들린 발=빈 원, 딛은 발=채운 원
   const p=players[id];
   for(const [i,foot] of [[27,'L'],[28,'R']]){
-    if((lm[i].visibility??1)<0.4) continue;
-    const pt=P(i), air=p.feet[foot].phase==='air';
+    if((lm[i].visibility??1)<0.35) continue;
+    const pt=P(i), up=p.raised===foot;
     ctx.beginPath(); ctx.arc(pt.x,pt.y,Math.max(6,W*0.009),0,Math.PI*2);
-    if(air){ ctx.strokeStyle=c; ctx.lineWidth=3; ctx.stroke(); }
+    if(up){ ctx.strokeStyle=c; ctx.lineWidth=3; ctx.stroke(); }
     else{ ctx.fillStyle=c; ctx.fill(); }
   }
   // 머리 위 라벨 — 거울 변환 안에서도 글자가 뒤집히지 않게 역보정
@@ -722,50 +678,44 @@ function withMirror(fn){
   if(mirrorChk.checked){ ctx.translate(canvas.width,0); ctx.scale(-1,1); }
   fn(); ctx.restore();
 }
-/* 실시간 신호 계측기(디버그) — 발별 h(현재 들림)와 lift/down 문턱을 막대로.
-   막대가 노란선(lift)을 넘으면 '들림', 초록선(down) 아래로 내려오면 '착지=카운트'. */
+/* 실시간 신호 계측기(디버그) — 좌우 교대 스윙(swing)을 중앙선 기준 좌/우 막대로.
+   스윙이 ±band(노란선)를 교대로 넘을 때마다 1스텝. 실기 튜닝: 스윙이 노란선까지 흔들리면 정상. */
 function drawDebug(assign,t){
   const W=canvas.width,H=canvas.height;
-  const FULL=0.14;                          // 막대 상단이 나타내는 h값(다리길이 비)
-  const pw=Math.min(W*0.26,300), ph=Math.min(H*0.30,150), pad=10;
+  const FULL=0.5;                           // 막대 좌우 끝이 나타내는 swing 절대값
+  const pw=Math.min(W*0.30,340), ph=64, pad=12;
   let px=W-pw-12, py=12;
   for(const id of [1,2]){
-    const lm=assign[id]; if(!lm){ continue; }
-    const p=players[id], c=PCOLORS[id];
+    if(!assign[id]) continue;
+    const p=players[id], c=PCOLORS[id], d=p.det;
     ctx.save();
-    ctx.fillStyle='rgba(255,255,255,.86)'; ctx.strokeStyle=c; ctx.lineWidth=2;
+    ctx.fillStyle='rgba(255,255,255,.88)'; ctx.strokeStyle=c; ctx.lineWidth=2;
     if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(px,py,pw,ph,10); ctx.fill(); ctx.stroke(); }
     else{ ctx.fillRect(px,py,pw,ph); ctx.strokeRect(px,py,pw,ph); }
     ctx.fillStyle=c; ctx.textAlign='left';
-    ctx.font=`900 ${Math.max(12,W*0.016)}px 'Noto Sans KR',sans-serif`;
-    ctx.fillText(`P${id} 신호계측 (민감도 ${Math.round(SENS*100)}%)`, px+pad, py+18);
-    const barTop=py+30, barH=ph-46, barBase=barTop+barH;
-    const feet=[['L',p.feet.L,'왼'],['R',p.feet.R,'오']];
-    const colW=(pw-pad*2)/2;
-    feet.forEach(([k,ft,label],i)=>{
-      const bx=px+pad+i*colW+colW*0.28, bw=colW*0.44;
-      const val=v=>barBase-Math.max(0,Math.min(1,v/FULL))*barH;
-      // 배경 막대
-      ctx.fillStyle='#eee'; ctx.fillRect(bx,barTop,bw,barH);
-      // 현재 h
-      const hy=val(ft.height||0);
-      ctx.fillStyle=ft.phase==='air'?c:'#9bbf6a';
-      ctx.fillRect(bx,hy,bw,barBase-hy);
-      // lift(노랑)·down(초록) 문턱선
-      const ly=val(ft.lift||0), dy=val(ft.down||0);
-      ctx.strokeStyle='#f0a500'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(bx-3,ly); ctx.lineTo(bx+bw+3,ly); ctx.stroke();
-      ctx.strokeStyle='#37c26e'; ctx.beginPath(); ctx.moveTo(bx-3,dy); ctx.lineTo(bx+bw+3,dy); ctx.stroke();
-      ctx.fillStyle='#666'; ctx.textAlign='center'; ctx.font=`700 ${Math.max(10,W*0.012)}px 'Noto Sans KR',sans-serif`;
-      ctx.fillText(`${label} ${(ft.height||0).toFixed(3)}`, bx+bw/2, barBase+13);
-    });
+    ctx.font=`900 ${Math.max(11,W*0.014)}px 'Noto Sans KR',sans-serif`;
+    ctx.fillText(`P${id}  스텝 ${p.count}  (민감도 ${Math.round(SENS*100)}%)`, px+pad, py+16);
+    // 스윙 막대(중앙=0, 좌우로 편향)
+    const midX=px+pw/2, barY=py+30, barH=20, half=(pw-pad*2)/2;
+    ctx.fillStyle='#eee'; ctx.fillRect(px+pad,barY,half*2,barH);
+    ctx.strokeStyle='#bbb'; ctx.beginPath(); ctx.moveTo(midX,barY); ctx.lineTo(midX,barY+barH); ctx.stroke();
+    const sx=Math.max(-1,Math.min(1,(d.swing||0)/FULL))*half;
+    ctx.fillStyle=c;
+    if(sx>=0) ctx.fillRect(midX,barY,sx,barH); else ctx.fillRect(midX+sx,barY,-sx,barH);
+    // ±band 노란선
+    const bx=Math.min(half,(d.band||0)/FULL*half);
+    ctx.strokeStyle='#f0a500'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(midX+bx,barY-2); ctx.lineTo(midX+bx,barY+barH+2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(midX-bx,barY-2); ctx.lineTo(midX-bx,barY+barH+2); ctx.stroke();
+    ctx.fillStyle='#666'; ctx.textAlign='center'; ctx.font=`700 ${Math.max(9,W*0.011)}px 'Noto Sans KR',sans-serif`;
+    ctx.fillText(`swing ${(d.swing||0).toFixed(3)}  band ±${(d.band||0).toFixed(3)}`, midX, py+ph-4);
     ctx.restore();
-    py+=ph+10;
+    py+=ph+8;
   }
-  // 범례
   ctx.save();
   ctx.textAlign='right'; ctx.fillStyle='#8b7a6a';
-  ctx.font=`700 ${Math.max(10,W*0.012)}px 'Noto Sans KR',sans-serif`;
-  ctx.fillText('막대=현재 발높이 · 노랑선=들림문턱 · 초록선=착지문턱   (d 키로 끄기)', W-12, py+2);
+  ctx.font=`700 ${Math.max(9,W*0.011)}px 'Noto Sans KR',sans-serif`;
+  ctx.fillText('막대=좌우 발 교대 · 노란선=문턱 · 좌우로 번갈아 넘으면 카운트  (d 키로 끄기)', W-12, py+2);
   ctx.restore();
 }
 function tickFps(){
