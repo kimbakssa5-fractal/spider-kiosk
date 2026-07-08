@@ -1076,16 +1076,22 @@
   // ---- 물 찰방 효과음 (실제 음원 water_sound/short_*.WAV → assets/splash1~4.wav) ----
   //   접근/터치로 파문이 생길 때 4종 랜덤 재생(피치 살짝 변주). WebAudio 버퍼로 저지연·중첩.
   //   사운드 토글(soundOn) 연동 + 쓰로틀(남발 방지) + 세기 비례 음량.
-  let _actx = null, _splashGain = null, _lastSplashMs = 0;
+  let _actx = null, _splashGain = null;
   let _splashBufs = [], _splashLoading = false;
-  const SPLASH_SND_MIN_MS = 85;        // 최소 재생 간격(파문 남발 시 소리 겹침 방지)
+  let _splashVol = 0.9;                          // 물소리 마스터 볼륨(0~1) — 슬라이더 / [ ] 키
+  // 버스트 제한(따발총 방지): 한 번에 최대 2회(2번째는 작게), 이후 ~1초 프리즈.
+  let _burstActive = false, _burstStartMs = 0, _chainUsed = false, _freezeUntil = 0;
+  const SPLASH_2ND_MIN_MS = 70;                  // 2번째 최소 간격(1번째와 겹침 방지)
+  const SPLASH_CHAIN_MS = 260;                   // 2번째 허용 창(이 안에 파문 오면 작게 1회 더)
+  const SPLASH_FREEZE_MS = 1000;                 // 버스트 후 프리즈(약 1초 동안 소리 없음)
+  const SPLASH_2ND_VOL = 0.5;                    // 2번째 상대 음량(1번째보다 작게)
   const SPLASH_FILES = ["assets/splash1.wav", "assets/splash2.wav", "assets/splash3.wav", "assets/splash4.wav"];
   function ensureAudio() {
     if (_actx) return _actx;
     try {
       _actx = new (window.AudioContext || window.webkitAudioContext)();
       _splashGain = _actx.createGain();
-      _splashGain.gain.value = 0.95;
+      _splashGain.gain.value = _splashVol;
       _splashGain.connect(_actx.destination);
       loadSplashBuffers();
     } catch (e) { _actx = null; }
@@ -1101,24 +1107,45 @@
         .catch(function () { /* 한 파일 실패해도 나머지로 재생 */ });
     });
   }
-  function playSplash(strength) {
-    if (!soundOn) return;              // S 토글로 음소거 시 함께 꺼짐
-    const ms = performance.now();
-    if (ms - _lastSplashMs < SPLASH_SND_MIN_MS) return;
-    const ac = ensureAudio();
-    if (!ac) return;
-    if (ac.state === "suspended") { try { ac.resume(); } catch (_) {} }
+  function _emitSplash(ac, strength, rel) {
     const ready = _splashBufs.filter(Boolean);
-    if (!ready.length) return;         // 아직 디코딩 전
-    _lastSplashMs = ms;
+    if (!ready.length) return;
     const s = Math.max(0.15, Math.min(1, strength == null ? 0.6 : strength));
     const src = ac.createBufferSource();
     src.buffer = ready[(Math.random() * ready.length) | 0];
     src.playbackRate.value = 0.92 + Math.random() * 0.18;   // 개별 피치 변주
     const g = ac.createGain();
-    g.gain.value = 0.28 + 0.72 * s;                         // 세기 비례 음량
+    g.gain.value = (0.28 + 0.72 * s) * rel;                 // 세기 비례 × 상대음량(1번째/2번째)
     src.connect(g); g.connect(_splashGain);
     src.start();
+  }
+  function playSplash(strength) {
+    if (!soundOn) return;              // S 토글로 음소거 시 함께 꺼짐
+    const ac = ensureAudio();
+    if (!ac) return;
+    if (ac.state === "suspended") { try { ac.resume(); } catch (_) {} }
+    const now = performance.now();
+    if (_burstActive) {
+      const dt = now - _burstStartMs;
+      if (!_chainUsed && dt >= SPLASH_2ND_MIN_MS && dt <= SPLASH_CHAIN_MS) {
+        _chainUsed = true;
+        _emitSplash(ac, strength, SPLASH_2ND_VOL);   // 2번째(1번째보다 작게)
+        _freezeUntil = now + SPLASH_FREEZE_MS;        // 2번째 직후 ~1초 프리즈
+        return;
+      }
+      if (now < _freezeUntil) return;                 // 프리즈/창 밖 → 차단
+      _burstActive = false;                           // 프리즈 끝 → 새 버스트 허용
+    }
+    _burstActive = true; _chainUsed = false; _burstStartMs = now;   // 새 버스트 1번째
+    _freezeUntil = now + SPLASH_FREEZE_MS;
+    _emitSplash(ac, strength, 1.0);
+  }
+  function setSplashVol(v) {
+    _splashVol = Math.max(0, Math.min(1, v));
+    if (_splashGain) _splashGain.gain.value = _splashVol;
+    const sl = document.getElementById("splashVolSlider");
+    if (sl) sl.value = Math.round(_splashVol * 100);
+    showHud("물소리 볼륨 " + Math.round(_splashVol * 100) + "%");
   }
   // 첫 사용자 제스처에 소리 시작 + 전체화면 진입(동기 호출이라야 허용됨).
   //   처음 켤 땐 비번 통과 시점에 전체화면(index 게이트에서 처리). 여기선 재방문(게이트 없음) 대비.
@@ -1206,6 +1233,13 @@
     });
   }
   refreshGlitterUI();
+  // 물소리 볼륨 슬라이더(0~100) + [ / ] 키
+  const splashVolSlider = document.getElementById("splashVolSlider");
+  if (splashVolSlider) {
+    _splashVol = (+splashVolSlider.value) / 100;
+    if (_splashGain) _splashGain.gain.value = _splashVol;
+    splashVolSlider.addEventListener("input", function () { setSplashVol((+this.value) / 100); });
+  }
   const fishPlusBtn = document.getElementById("fishPlusBtn");
   const fishMinusBtn = document.getElementById("fishMinusBtn");
   if (fishPlusBtn) fishPlusBtn.addEventListener("click", function () { setFishCount(+1); });
@@ -1304,6 +1338,8 @@
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
       case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
       case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
+      case "BracketRight": e.preventDefault(); setSplashVol(_splashVol + 0.1); break;   // 물소리 크게 ]
+      case "BracketLeft": e.preventDefault(); setSplashVol(_splashVol - 0.1); break;    // 물소리 작게 [
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;
       case "Digit2": case "Numpad2": e.preventDefault(); adjust("DAMPING", -1); break;
       case "Digit3": case "Numpad3": e.preventDefault(); adjust("DISP", +1); break;
