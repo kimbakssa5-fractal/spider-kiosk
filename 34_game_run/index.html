@@ -44,14 +44,14 @@ main{
 /* ---- 게임바(타이머·오늘최고) ---- */
 .gamebar{
   flex:0 0 auto; background:var(--card); border-radius:22px; box-shadow:var(--shadow);
-  display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 24px;
+  display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px; padding:8px 24px;
 }
-.gb-best{ font-weight:900; font-size:clamp(16px,1.8vw,24px); color:#8b7a6a; white-space:nowrap; }
+.gb-best{ font-weight:900; font-size:clamp(16px,1.8vw,24px); color:#8b7a6a; white-space:nowrap; justify-self:start; }
 .gb-best b{ color:var(--coral); font-size:clamp(30px,3.4vw,52px); }
-.gb-len{ font-weight:700; font-size:14px; color:#a89a8c; white-space:nowrap; }
+.gb-len{ font-weight:700; font-size:14px; color:#a89a8c; white-space:nowrap; justify-self:end; }
 .gb-timer{
   font-weight:900; font-size:clamp(42px,5.2vw,84px); line-height:1; color:var(--ink);
-  font-variant-numeric:tabular-nums; letter-spacing:1px;
+  font-variant-numeric:tabular-nums; letter-spacing:1px; justify-self:center; text-align:center;
 }
 .gb-timer.warn{ color:var(--coral); animation:tpulse .5s ease infinite; }
 @keyframes tpulse{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
