@@ -57,6 +57,10 @@ main{
   font-weight:700; font-size:18px; padding:20px; z-index:5;
 }
 .overlay.hidden{ display:none; }
+.overlay.ready{ background:rgba(255,248,243,.42); }   /* 준비 카운트다운: 카메라가 비쳐 보이게 */
+.ready-title{ font-weight:900; font-size:clamp(20px,2.6vw,32px); color:var(--ink); text-shadow:0 2px 10px rgba(255,248,243,.9); }
+.ready-num{ font-weight:900; font-size:clamp(72px,13vw,150px); line-height:1; color:var(--coral); margin-top:4px; text-shadow:0 3px 14px rgba(255,248,243,.9); animation:readyPop .4s ease; }
+@keyframes readyPop{ 0%{ transform:scale(1.6); opacity:.2 } 100%{ transform:scale(1); opacity:1 } }
 .spinner{
   width:38px; height:38px; border-radius:50%;
   border:4px solid var(--coral-soft); border-top-color:var(--coral);
@@ -383,9 +387,38 @@ function updateAvatar(id, p, now, active){
 }
 function resetAvatars(){ for(const id of [1,2]){ const v=avatars[id]; if(v){ v.pause(); try{ v.currentTime=0; }catch(_){} } } }
 
-function setOverlay(html,spin){ omsg.innerHTML=html; spinner.style.display=spin?'block':'none'; overlay.classList.remove('hidden'); }
-function hideOverlay(){ overlay.classList.add('hidden'); }
+function setOverlay(html,spin){ omsg.innerHTML=html; spinner.style.display=spin?'block':'none'; overlay.classList.remove('ready','hidden'); }
+function hideOverlay(){ overlay.classList.add('hidden'); overlay.classList.remove('ready'); }
 function setStatus(t,live){ statusText.textContent=t; statusDot.classList.toggle('live',!!live); }
+
+/* ===== 시작 준비 카운트다운: "마커 위치에서 준비하세요" → 3 · 2 · 1 · 시작! =====
+   이 구간 동안 자동 보정(필터/기준선 안정)이 이뤄지고 카운트는 억제된다. */
+let readyTimeouts=[];
+function clearReady(){ readyTimeouts.forEach(clearTimeout); readyTimeouts=[]; readyCountdown=false; }
+function showReady(num, go){
+  spinner.style.display='none';
+  omsg.innerHTML='<div class="ready-title">🏃 마커 위치에서 준비하세요</div>'
+    + (num?`<div class="ready-num" style="${go?'color:#37c26e':''}">${num}</div>`:'');
+  overlay.classList.add('ready'); overlay.classList.remove('hidden');
+}
+function readyBeep(go){
+  if(!soundChk.checked) return;
+  try{
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain(), t0=audioCtx.currentTime;
+    o.frequency.value = go?880:520; o.type='sine';
+    g.gain.setValueAtTime(0.0001,t0); g.gain.linearRampToValueAtTime(0.04,t0+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0008,t0+(go?0.25:0.12));
+    o.connect(g).connect(audioCtx.destination); o.start(t0); o.stop(t0+(go?0.28:0.14));
+  }catch(_){}
+}
+function runReadyCountdown(onDone){
+  clearReady(); readyCountdown=true;
+  showReady('');                                   // "준비하세요"
+  const seq=[[800,'3',0],[1600,'2',0],[2400,'1',0],[3200,'시작!',1]];
+  for(const [ms,n,go] of seq){ readyTimeouts.push(setTimeout(()=>{ showReady(n,go); readyBeep(go); }, ms)); }
+  readyTimeouts.push(setTimeout(()=>{ readyCountdown=false; hideOverlay(); if(onDone) onDone(); }, 3900));
+}
 
 /* ================= One Euro 필터 =================
    정지 시 안정(저역), 이동 시 즉각 반응(속도에 비례해 컷오프 상승). */
@@ -418,6 +451,7 @@ class OneEuro{
 let SENS = 1.0;
 let DEBUG = false;   // 실시간 신호 계측기(키 'd' 토글) — 실기 튜닝용
 let camOpacity = 0;  // 실시간 캠 영상 불투명도(0=100% 투명, 1=완전 표시). 시작은 완전 투명.
+let readyCountdown = false;  // 시작 카운트다운(마커 위치에서 준비하세요 3·2·1) 동안 true → 카운트 억제
 class StepDetector{
   constructor(){ this.reset(); }
   reset(){
@@ -469,7 +503,7 @@ class PlayerRunner{
       if(t-this.calStart>=CAL_MS) this.calibrated=true;
       return [];
     }
-    if(side){
+    if(side && !readyCountdown){          // 준비 카운트다운 동안은 카운트 안 함
       this.count++; this.stepTimes.push(t);
       if(this.stepTimes.length>40) this.stepTimes.shift();
       return [side];
@@ -818,11 +852,12 @@ async function start(){
     await video.play();
     canvas.width=video.videoWidth||960; canvas.height=video.videoHeight||540;
     players[1].fullReset(); players[2].fullReset();
-    hideOverlay(); running=true; recovering=false; detectErrs=0;
+    running=true; recovering=false; detectErrs=0;
     setStatus('실행 중 (카메라)',true);
     stopBtn.disabled=false;
     startWatchdog();
     camLoop();
+    runReadyCountdown();      // 마커 위치에서 준비하세요 3·2·1·시작 (그동안 카운트 억제)
   }catch(e){
     console.error(e);
     setOverlay(cameraErrorMsg(e),false);
@@ -832,6 +867,7 @@ async function start(){
 }
 function stop(){
   running=false; recovering=false;
+  clearReady();
   stopWatchdog();
   if(raf) cancelAnimationFrame(raf); raf=null;
   if(stream){ stream.getTracks().forEach(tr=>tr.stop()); stream=null; }
@@ -911,14 +947,15 @@ function startDemo(){
   demoActive=true; demoT0=performance.now();
   canvas.width=960; canvas.height=540;
   players[1].fullReset(); players[2].fullReset();
-  hideOverlay();
   setStatus('데모 모드',true);
   demoBtn.textContent='🤖 데모 정지';
   demoLoop();
+  runReadyCountdown();       // 데모도 준비 카운트다운으로 시작
 }
 function stopDemo(){
   if(!demoActive) return;
   demoActive=false;
+  clearReady();
   if(demoRaf) cancelAnimationFrame(demoRaf); demoRaf=null;
   demoBtn.textContent='🤖 데모 모드';
   if(!running){
@@ -931,11 +968,13 @@ function stopDemo(){
 }
 function resetCounts(){
   for(const id of [1,2]){
-    players[id].count=0; players[id].stepTimes=[];
+    players[id].count=0; players[id].stepTimes=[]; players[id].fullReset();
     $('count'+id).textContent='0'; $('cad'+id).innerHTML='&nbsp;';
   }
   tickerEl.innerHTML='<span style="color:var(--muted);letter-spacing:0;font-size:14px;font-weight:400">발이 땅에 닿으면 숫자가 찍힙니다</span>';
   tickerCount=0;
+  resetAvatars();
+  if(running||demoActive) runReadyCountdown();   // 다시 시작(r): 준비 카운트다운부터
 }
 
 startBtn.addEventListener('click',start);
