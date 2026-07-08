@@ -1073,20 +1073,33 @@
                   .catch(function () { soundOn = false; });
   }
 
-  // ---- 물 찰방 효과음 (WebAudio 절차 생성, 에셋 불필요) ----
-  //   접근/터치로 파문이 생길 때 재생. 물방울 하강 사인(bloop) + 밴드패스 노이즈(찰방).
-  //   사운드 토글(soundOn) 연동 + 쓰로틀(남발 방지) + 세기 비례 음량 + 개별 변주.
+  // ---- 물 찰방 효과음 (실제 음원 water_sound/short_*.WAV → assets/splash1~4.wav) ----
+  //   접근/터치로 파문이 생길 때 4종 랜덤 재생(피치 살짝 변주). WebAudio 버퍼로 저지연·중첩.
+  //   사운드 토글(soundOn) 연동 + 쓰로틀(남발 방지) + 세기 비례 음량.
   let _actx = null, _splashGain = null, _lastSplashMs = 0;
+  let _splashBufs = [], _splashLoading = false;
   const SPLASH_SND_MIN_MS = 85;        // 최소 재생 간격(파문 남발 시 소리 겹침 방지)
+  const SPLASH_FILES = ["assets/splash1.wav", "assets/splash2.wav", "assets/splash3.wav", "assets/splash4.wav"];
   function ensureAudio() {
     if (_actx) return _actx;
     try {
       _actx = new (window.AudioContext || window.webkitAudioContext)();
       _splashGain = _actx.createGain();
-      _splashGain.gain.value = 0.85;
+      _splashGain.gain.value = 0.95;
       _splashGain.connect(_actx.destination);
+      loadSplashBuffers();
     } catch (e) { _actx = null; }
     return _actx;
+  }
+  function loadSplashBuffers() {
+    if (_splashLoading || !_actx) return;
+    _splashLoading = true;
+    SPLASH_FILES.forEach(function (url, i) {
+      fetch(url + "?v=" + ASSET_VER).then(function (r) { return r.arrayBuffer(); })
+        .then(function (ab) { return _actx.decodeAudioData(ab); })
+        .then(function (buf) { _splashBufs[i] = buf; })
+        .catch(function () { /* 한 파일 실패해도 나머지로 재생 */ });
+    });
   }
   function playSplash(strength) {
     if (!soundOn) return;              // S 토글로 음소거 시 함께 꺼짐
@@ -1095,36 +1108,17 @@
     const ac = ensureAudio();
     if (!ac) return;
     if (ac.state === "suspended") { try { ac.resume(); } catch (_) {} }
+    const ready = _splashBufs.filter(Boolean);
+    if (!ready.length) return;         // 아직 디코딩 전
     _lastSplashMs = ms;
     const s = Math.max(0.15, Math.min(1, strength == null ? 0.6 : strength));
-    const vol = 0.14 + 0.42 * s;
-    const t = ac.currentTime;
-    // 1) 물방울 bloop: 하강 사인(개체별 시작 주파수)
-    const f0 = 360 + Math.random() * 540;
-    const osc = ac.createOscillator();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(f0, t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(120, f0 * 0.36), t + 0.09);
-    const g1 = ac.createGain();
-    g1.gain.setValueAtTime(0.0001, t);
-    g1.gain.exponentialRampToValueAtTime(vol, t + 0.006);
-    g1.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-    osc.connect(g1); g1.connect(_splashGain);
-    osc.start(t); osc.stop(t + 0.17);
-    // 2) 찰방 노이즈: 밴드패스 노이즈 버스트(세기 클수록 큼)
-    const dur = 0.10 + 0.05 * s;
-    const buf = ac.createBuffer(1, Math.max(1, Math.ceil(ac.sampleRate * dur)), ac.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-    const src = ac.createBufferSource(); src.buffer = buf;
-    const bp = ac.createBiquadFilter(); bp.type = "bandpass";
-    bp.frequency.value = 1300 + Math.random() * 2400; bp.Q.value = 0.7;
-    const g2 = ac.createGain();
-    g2.gain.setValueAtTime(0.0001, t);
-    g2.gain.exponentialRampToValueAtTime(vol * 0.55, t + 0.004);
-    g2.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(bp); bp.connect(g2); g2.connect(_splashGain);
-    src.start(t); src.stop(t + dur + 0.02);
+    const src = ac.createBufferSource();
+    src.buffer = ready[(Math.random() * ready.length) | 0];
+    src.playbackRate.value = 0.92 + Math.random() * 0.18;   // 개별 피치 변주
+    const g = ac.createGain();
+    g.gain.value = 0.28 + 0.72 * s;                         // 세기 비례 음량
+    src.connect(g); g.connect(_splashGain);
+    src.start();
   }
   // 첫 사용자 제스처에 소리 시작 + 전체화면 진입(동기 호출이라야 허용됨).
   //   처음 켤 땐 비번 통과 시점에 전체화면(index 게이트에서 처리). 여기선 재방문(게이트 없음) 대비.
