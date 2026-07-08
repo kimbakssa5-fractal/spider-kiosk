@@ -207,6 +207,11 @@ footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px
         <b id="sensVal">100</b>%
         <button class="sbtn" id="sensUp" title="더 예민 ( ] 또는 ↑ )">+</button>
       </span>
+      <span class="pill sens-pill">📷 카메라
+        <button class="sbtn" id="camDown" title="더 투명하게 ( , )">−</button>
+        <b id="camVal">0</b>%
+        <button class="sbtn" id="camUp" title="더 진하게 ( . )">+</button>
+      </span>
     </div>
   </div>
 
@@ -244,6 +249,7 @@ footer{ margin-top:18px; text-align:center; color:var(--muted); font-size:12.5px
 <footer>
   모든 처리는 <b>브라우저 안에서</b> 실행됩니다 — 영상은 서버로 전송되지 않습니다.<br>
   🎚️ 센싱 민감도 조절: <b>] · ↑ · +</b> 더 예민 &nbsp;/&nbsp; <b>[ · ↓ · −</b> 덜 예민 (화면 −/+ 버튼도 동일) &nbsp;·&nbsp; <b>d</b> 키: 실시간 신호 계측기<br>
+  📷 카메라 영상 투명도: <b>.</b> 더 진하게 &nbsp;/&nbsp; <b>,</b> 더 투명하게 (시작은 완전 투명 · 화면 −/+ 버튼도 동일)<br>
   향후 아바타 연동용 이벤트: <code>document.addEventListener('run:step', e => e.detail /* {player, foot, count, t} */)</code>
 </footer>
 
@@ -367,6 +373,7 @@ class OneEuro{
 // 센싱 민감도(현장 단축키/버튼). 1.0=기본, 클수록 예민(band↓). 범위 0.5~2.5
 let SENS = 1.0;
 let DEBUG = false;   // 실시간 신호 계측기(키 'd' 토글) — 실기 튜닝용
+let camOpacity = 0;  // 실시간 캠 영상 불투명도(0=100% 투명, 1=완전 표시). 시작은 완전 투명.
 class StepDetector{
   constructor(){ this.reset(); }
   reset(){
@@ -743,7 +750,8 @@ function camLoop(){
   ctx.fillStyle='#f5ede6'; ctx.fillRect(0,0,canvas.width,canvas.height);
   let assignC=null;
   withMirror(()=>{
-    if(videoChk.checked) ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const va = videoChk.checked ? camOpacity : 0;   // 시작 0=완전 투명, 단축키로 페이드인
+    if(va>0){ ctx.save(); ctx.globalAlpha=va; ctx.drawImage(video,0,0,canvas.width,canvas.height); ctx.restore(); }
     assignC=processPoses(res.landmarks||[],t);
     for(const id of [1,2]) if(assignC[id]) drawPlayer(assignC[id],id,t);
     drawRipples(t);
@@ -907,11 +915,28 @@ function bumpSens(dir){
 }
 $('sensUp').addEventListener('click',()=>bumpSens(+1));
 $('sensDown').addEventListener('click',()=>bumpSens(-1));
+/* ===== 실시간 캠 영상 투명도 조절 =====
+   단축키: . 더 진하게(투명↓) / , 더 투명하게. 화면 −/+ 버튼도 동일. 시작은 완전 투명(0%).
+   유지 안 함 — 켤 때마다 완전 투명에서 시작(사용자 요청). */
+const camValEl=$('camVal'); let camToastT=null;   // 토스트(sensToast)는 공용 재사용
+function applyCam(){
+  const pct=Math.round(camOpacity*100);
+  camValEl.textContent=pct;
+  sensToast.textContent='📷 카메라 표시 '+pct+'%'+(pct===0?' (완전 투명)':pct>=100?' (완전 표시)':'');
+  sensToast.classList.add('show');
+  clearTimeout(camToastT); camToastT=setTimeout(()=>sensToast.classList.remove('show'),900);
+}
+function bumpCam(dir){ camOpacity=Math.min(1,Math.max(0, Math.round((camOpacity+dir*0.1)*100)/100)); applyCam(); }
+$('camUp').addEventListener('click',()=>bumpCam(+1));
+$('camDown').addEventListener('click',()=>bumpCam(-1));
+
 window.addEventListener('keydown',e=>{
   if(document.getElementById('gate')) return;              // 비번 게이트 중엔 무시
   if(e.key===']'||e.key==='ArrowUp'||e.key==='+'||e.key==='='){ bumpSens(+1); e.preventDefault(); }
   else if(e.key==='['||e.key==='ArrowDown'||e.key==='-'||e.key==='_'){ bumpSens(-1); e.preventDefault(); }
   else if(e.key==='d'||e.key==='D'){ DEBUG=!DEBUG; }       // 실시간 신호 계측기 토글
+  else if(e.key==='.'||e.key==='>'){ bumpCam(+1); e.preventDefault(); }   // 카메라 더 진하게
+  else if(e.key===','||e.key==='<'){ bumpCam(-1); e.preventDefault(); }   // 카메라 더 투명하게
 });
 sensValEl.textContent=Math.round(SENS*100);                 // 초기 표시(토스트 없이)
 window.RunGame.setSensitivity=v=>{ SENS=Math.min(SENS_MAX,Math.max(SENS_MIN,v)); applySens(); return SENS; };
