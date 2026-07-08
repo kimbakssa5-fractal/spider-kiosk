@@ -569,12 +569,14 @@
   canvas.style.touchAction = "none";
   canvas.addEventListener("pointerdown", function (e) {
     splash(e.clientX, e.clientY);
+    playSplash(1);                       // 접촉 파문 → 찰방
     notePointer(e.pointerId, e.clientX, e.clientY);
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   });
   canvas.addEventListener("pointermove", function (e) {
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evs) splash(ev.clientX, ev.clientY);
+    playSplash(0.4);                      // 이동/드래그 파문 → 잔잔한 찰방(쓰로틀됨)
     notePointer(e.pointerId, e.clientX, e.clientY);
   });
   canvas.addEventListener("pointerup", function (e) { dropPointer(e.pointerId); });
@@ -686,12 +688,15 @@
     if (fbCooldown) return;    // 되먹임 냉각 중(넓게 퍼진 일렁임 지속) — updateMotion 이 판정
     const W = window.innerWidth, H = window.innerHeight;
     const n = Math.min(MOTION_SPLASH_N, cells.length);
+    let maxd = 0;
     for (let i = 0; i < n; i++) {
       const c = cells[(Math.random() * cells.length) | 0];   // 강한 영역일수록 셀이 많아 더 자주 뽑힘
       const sx = ((c.x + Math.random()) / MW) * W;            // 셀 내부 지터(연속 위치)
       const sy = ((c.y + Math.random()) / MH) * H;
       splash(sx, sy, 70 + 90 * Math.min(1, c.d / 100));       // 작은 물결 다수 → 자연스러운 교란
+      if (c.d > maxd) maxd = c.d;
     }
+    playSplash(0.35 + 0.65 * Math.min(1, maxd / 100));         // 카메라 앞 사람 접근 → 찰방(세기 비례)
   }
 
   function applyCamClass() {
@@ -1066,6 +1071,60 @@
   function trySound() {
     ambient.play().then(function () { soundOn = true; })
                   .catch(function () { soundOn = false; });
+  }
+
+  // ---- 물 찰방 효과음 (WebAudio 절차 생성, 에셋 불필요) ----
+  //   접근/터치로 파문이 생길 때 재생. 물방울 하강 사인(bloop) + 밴드패스 노이즈(찰방).
+  //   사운드 토글(soundOn) 연동 + 쓰로틀(남발 방지) + 세기 비례 음량 + 개별 변주.
+  let _actx = null, _splashGain = null, _lastSplashMs = 0;
+  const SPLASH_SND_MIN_MS = 85;        // 최소 재생 간격(파문 남발 시 소리 겹침 방지)
+  function ensureAudio() {
+    if (_actx) return _actx;
+    try {
+      _actx = new (window.AudioContext || window.webkitAudioContext)();
+      _splashGain = _actx.createGain();
+      _splashGain.gain.value = 0.85;
+      _splashGain.connect(_actx.destination);
+    } catch (e) { _actx = null; }
+    return _actx;
+  }
+  function playSplash(strength) {
+    if (!soundOn) return;              // S 토글로 음소거 시 함께 꺼짐
+    const ms = performance.now();
+    if (ms - _lastSplashMs < SPLASH_SND_MIN_MS) return;
+    const ac = ensureAudio();
+    if (!ac) return;
+    if (ac.state === "suspended") { try { ac.resume(); } catch (_) {} }
+    _lastSplashMs = ms;
+    const s = Math.max(0.15, Math.min(1, strength == null ? 0.6 : strength));
+    const vol = 0.14 + 0.42 * s;
+    const t = ac.currentTime;
+    // 1) 물방울 bloop: 하강 사인(개체별 시작 주파수)
+    const f0 = 360 + Math.random() * 540;
+    const osc = ac.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(f0, t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(120, f0 * 0.36), t + 0.09);
+    const g1 = ac.createGain();
+    g1.gain.setValueAtTime(0.0001, t);
+    g1.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g1.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+    osc.connect(g1); g1.connect(_splashGain);
+    osc.start(t); osc.stop(t + 0.17);
+    // 2) 찰방 노이즈: 밴드패스 노이즈 버스트(세기 클수록 큼)
+    const dur = 0.10 + 0.05 * s;
+    const buf = ac.createBuffer(1, Math.max(1, Math.ceil(ac.sampleRate * dur)), ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const bp = ac.createBiquadFilter(); bp.type = "bandpass";
+    bp.frequency.value = 1300 + Math.random() * 2400; bp.Q.value = 0.7;
+    const g2 = ac.createGain();
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(vol * 0.55, t + 0.004);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp); bp.connect(g2); g2.connect(_splashGain);
+    src.start(t); src.stop(t + dur + 0.02);
   }
   // 첫 사용자 제스처에 소리 시작 + 전체화면 진입(동기 호출이라야 허용됨).
   //   처음 켤 땐 비번 통과 시점에 전체화면(index 게이트에서 처리). 여기선 재방문(게이트 없음) 대비.
