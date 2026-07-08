@@ -1078,7 +1078,7 @@
   //   사운드 토글(soundOn) 연동 + 쓰로틀(남발 방지) + 세기 비례 음량.
   let _actx = null, _splashGain = null;
   let _splashBufs = [], _splashLoading = false;
-  let _splashVol = 0.9;                          // 물소리 마스터 볼륨(0~1) — 슬라이더 / [ ] 키
+  let _splashVol = 0.1;                          // 물소리 마스터 볼륨(0~1) — 슬라이더 / [ ] 키 (초기 10%)
   // 버스트 제한(따발총 방지): 한 번에 최대 2회(2번째는 작게), 이후 ~1초 프리즈.
   let _burstActive = false, _burstStartMs = 0, _chainUsed = false, _freezeUntil = 0;
   const SPLASH_2ND_MIN_MS = 70;                  // 2번째 최소 간격(1번째와 겹침 방지)
