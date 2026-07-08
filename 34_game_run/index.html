@@ -143,6 +143,10 @@ main{
 .p1 .plabel{ color:var(--coral); }
 .p2 .plabel{ color:var(--blue); }
 .pcount{ font-weight:900; font-size:clamp(40px,5vw,72px); line-height:1; font-variant-numeric:tabular-nums; }
+/* 승리 카드 위 불꽃놀이 오버레이(투명 WebM) */
+.fw{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:3;
+  pointer-events:none; opacity:0; transition:opacity .25s; border-radius:26px; }
+.fw.show{ opacity:1; }
 .pmeta{ color:var(--muted); font-size:13px; font-weight:700; margin-top:2px; min-height:19px; }
 .pstate{
   display:inline-block; margin-top:9px; border-radius:999px; padding:4px 14px;
@@ -246,6 +250,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
     <div class="pcount" id="count1">0</div>
     <div class="pmeta" id="cad1">&nbsp;</div>
     <div class="pstate" id="state1">대기</div>
+    <video class="fw" id="fw1" src="assets/firework.webm" muted loop playsinline preload="auto"></video>
   </section>
 
   <!-- 가운데: 게임바 · 카메라 · 입력 스트림 · 컨트롤 -->
@@ -306,6 +311,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
     <div class="pcount" id="count2">0</div>
     <div class="pmeta" id="cad2">&nbsp;</div>
     <div class="pstate" id="state2">대기</div>
+    <video class="fw" id="fw2" src="assets/firework.webm" muted loop playsinline preload="auto"></video>
   </section>
 </main>
 
@@ -522,7 +528,7 @@ showBest(); showTimer(GAME_SEC);
 
 let lastTickSec=99;
 function beginGame(){
-  zeroScores();               // 점수만 0(감지기 워밍업은 유지 → 시작 즉시 카운트)
+  zeroScores(); fwStop();     // 점수만 0(감지기 워밍업은 유지 → 시작 즉시 카운트), 이전 불꽃 정리
   gamePhase='play';
   gameEndT=performance.now()+GAME_SEC*1000;
   lastTickSec=99;
@@ -547,7 +553,7 @@ function endGame(){
   let title, color='#8b7a6a';
   if(c1===0 && c2===0) title='기록 없음';
   else if(c1===c2) title='무승부! '+c1+'점';
-  else { const w=c1>c2?1:2; color=PCOLORS[w]; title='PLAYER '+w+' 승리! '+Math.max(c1,c2)+'점'; spawnConfetti(w); fanfare(); }
+  else { const w=c1>c2?1:2; color=PCOLORS[w]; title='PLAYER '+w+' 승리! '+Math.max(c1,c2)+'점'; spawnConfetti(w); fanfare(); fwPlay(w); }
   const nb = best>0 && best===todayBest ? '<div style="margin-top:6px;color:var(--coral);font-weight:900;font-size:14px">🏆 오늘의 최고 점수!</div>' : '';
   setOverlay('<div style="font-weight:900;font-size:clamp(24px,3.2vw,42px);color:'+color+'">🎉 '+title+'</div>'
     +'<div style="margin-top:8px;font-weight:900;color:var(--ink);font-size:20px"><span style="color:var(--coral)">P1 '+c1+'</span> · <span style="color:var(--blue)">P2 '+c2+'</span></div>'
@@ -586,7 +592,11 @@ function fxLoop(){
     fxctx.save(); fxctx.translate(p.x,p.y); fxctx.rotate(p.rot); fxctx.fillStyle=p.c; fxctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.62); fxctx.restore(); }
   confetti=confetti.filter(p=>p.y<H+24);
 }
-function clearGame(){ gamePhase='idle'; clearInterval(gameTimer); confetti=[]; if(fxRaf){cancelAnimationFrame(fxRaf);fxRaf=null;} if(fxctx)fxctx.clearRect(0,0,fxcanvas.width,fxcanvas.height); timerEl.classList.remove('warn'); showTimer(GAME_SEC); }
+/* 승리 카드 불꽃놀이 오버레이(투명 WebM 반복 재생) */
+const fws={1:$('fw1'), 2:$('fw2')};
+function fwStop(){ for(const id of [1,2]){ const v=fws[id]; if(v){ v.pause(); v.classList.remove('show'); try{v.currentTime=0;}catch(_){} } } }
+function fwPlay(w){ fwStop(); const v=fws[w]; if(!v) return; v.loop=true; v.classList.add('show'); try{v.currentTime=0;}catch(_){} v.play().catch(()=>{}); }
+function clearGame(){ gamePhase='idle'; clearInterval(gameTimer); confetti=[]; if(fxRaf){cancelAnimationFrame(fxRaf);fxRaf=null;} if(fxctx)fxctx.clearRect(0,0,fxcanvas.width,fxcanvas.height); timerEl.classList.remove('warn'); showTimer(GAME_SEC); fwStop(); }
 
 /* ================= One Euro 필터 =================
    정지 시 안정(저역), 이동 시 즉각 반응(속도에 비례해 컷오프 상승). */
