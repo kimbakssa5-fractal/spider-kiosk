@@ -1016,8 +1016,8 @@ resetBtn.addEventListener('click',resetCounts);
 
 /* ================= 센싱 민감도 조절 =================
    단축키: ] · ↑ · + → 더 예민(문턱↓) / [ · ↓ · - → 덜 예민(문턱↑)
-   화면 −/+ 버튼도 동일. 10%씩, 범위 50~250%. localStorage 유지(키오스크 재부팅 대비). */
-const SENS_MIN=0.5, SENS_MAX=2.5, SENS_STEP=0.1, SENS_KEY='run34_sens';
+   화면 −/+ 버튼도 동일. 10%씩, 범위 50~300%. localStorage 유지(키오스크 재부팅 대비). */
+const SENS_MIN=0.5, SENS_MAX=3.0, SENS_STEP=0.1, SENS_KEY='run34_sens';
 const sensValEl=$('sensVal'), sensToast=$('sensToast');
 let sensToastT=null;
 (function initSens(){ const s=parseFloat(localStorage.getItem(SENS_KEY)); if(s>=SENS_MIN&&s<=SENS_MAX) SENS=s; })();
