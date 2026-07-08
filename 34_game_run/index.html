@@ -547,6 +547,7 @@ function restartGame(){ if(running||demoActive) runReadyCountdown(beginGame); }
 function endGame(){
   if(gamePhase!=='play') return;
   gamePhase='over'; clearInterval(gameTimer); showTimer(0);
+  lastActivity=performance.now();        // 결과 화면부터 30초 뒤 어트랙트(데모) 카운트 시작
   timerEl.classList.remove('warn'); confetti=[];
   const c1=players[1].count, c2=players[2].count, best=Math.max(c1,c2);
   if(best>todayBest){ todayBest=best; saveBest(todayBest); showBest(); }
@@ -1219,9 +1220,11 @@ let lastActivity=performance.now();
 function scheduleAttract(){ lastActivity=performance.now(); }   // 활동 표시(유휴 클록 리셋)
 ['pointerdown','keydown','touchstart'].forEach(ev=> window.addEventListener(ev, scheduleAttract, {passive:true}));
 setInterval(()=>{
-  if(!running && !demoActive && !document.getElementById('gate') && performance.now()-lastActivity>ATTRACT_MS){
+  // 유휴(idle) 또는 게임 종료 결과화면(over)에서 30초 무조작 → 데모. 데모/준비/플레이/게이트 중엔 제외.
+  if(!demoActive && !document.getElementById('gate') && (gamePhase==='idle'||gamePhase==='over')
+     && performance.now()-lastActivity>ATTRACT_MS){
     lastActivity=performance.now();
-    startDemo();                                              // 유휴 30초 → 데모(어트랙트)
+    startDemo();                                              // 유휴/종료 30초 → 데모(어트랙트)
   }
 }, 1000);
 </script>
