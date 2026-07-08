@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="400" viewBox="0 0 340 400">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dcefff"/>
+      <stop offset=".62" stop-color="#f2f9ff"/>
+      <stop offset="1" stop-color="#fbf4ec"/>
+    </linearGradient>
+  </defs>
+  <rect width="340" height="400" fill="url(#sky)"/>
+  <!-- clouds (안쪽 배치 → 반복돼도 자연스러움) -->
+  <g fill="#ffffff" opacity=".92">
+    <ellipse cx="72" cy="66" rx="33" ry="15"/><ellipse cx="98" cy="58" rx="22" ry="13"/><ellipse cx="50" cy="60" rx="18" ry="11"/>
+    <ellipse cx="250" cy="112" rx="28" ry="13"/><ellipse cx="228" cy="106" rx="18" ry="11"/>
+  </g>
+  <!-- 먼 언덕 (양끝 y=300 일치 → 가로 타일링 이음새 없음) -->
+  <path d="M0,300 q85,-34 170,0 t170,0 L340,400 L0,400 Z" fill="#d3edcd"/>
+  <!-- 가까운 언덕/땅 -->
+  <path d="M0,346 q85,-20 170,0 t170,0 L340,400 L0,400 Z" fill="#c9e3b8"/>
+  <rect y="372" width="340" height="28" fill="#d9cbb2"/>
+  <!-- 풀·돌 (주기적) -->
+  <g fill="#a9cf8e">
+    <path d="M42,360 l4,-13 l4,13 z"/><path d="M126,364 l4,-13 l4,13 z"/><path d="M210,360 l4,-13 l4,13 z"/><path d="M296,364 l4,-13 l4,13 z"/>
+  </g>
+  <g fill="#c7b79a"><circle cx="84" cy="384" r="4"/><circle cx="258" cy="386" r="5"/></g>
+</svg>

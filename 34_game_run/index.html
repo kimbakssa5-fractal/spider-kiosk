@@ -108,8 +108,12 @@ main{
 }
 .pcol.p1::before{ background:var(--coral); }
 .pcol.p2::before{ background:var(--blue); }
-.avatar-wrap{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; margin:8px 0; }
+.avatar-wrap{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; margin:8px 0;
+  position:relative; overflow:hidden; border-radius:18px; }
 .p2 .avatar-wrap{ transform:scaleX(-1); }   /* 마주보기: P1(왼쪽)은 오른쪽을, P2(오른쪽)는 왼쪽을 향해 가운데서 마주봄 */
+/* 속도에 맞춰 뒤로 흐르는 배경(패럴랙스) — 타조 뒤에서 가로 반복 스크롤 */
+.run-bg{ position:absolute; inset:0; z-index:0; background:url('assets/runbg.svg') repeat-x; background-size:auto 100%; background-position-x:0; opacity:.9; }
+.avatar{ position:relative; z-index:1; }
 .avatar{
   height:100%; max-height:100%; max-width:100%; aspect-ratio:260/462;
   background-image:url('assets/ostrich_sheet.png');
@@ -222,7 +226,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
   <!-- 왼쪽: PLAYER 1 타조 -->
   <section class="pcol p1" id="card1">
     <div class="plabel">PLAYER 1</div>
-    <div class="avatar-wrap"><div class="avatar" id="avatar1"></div></div>
+    <div class="avatar-wrap"><div class="run-bg" id="runbg1"></div><div class="avatar" id="avatar1"></div></div>
     <div class="pcount" id="count1">0</div>
     <div class="pmeta" id="cad1">&nbsp;</div>
     <div class="pstate" id="state1">대기</div>
@@ -276,7 +280,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
   <!-- 오른쪽: PLAYER 2 타조 -->
   <section class="pcol p2" id="card2">
     <div class="plabel">PLAYER 2</div>
-    <div class="avatar-wrap"><div class="avatar" id="avatar2"></div></div>
+    <div class="avatar-wrap"><div class="run-bg" id="runbg2"></div><div class="avatar" id="avatar2"></div></div>
     <div class="pcount" id="count2">0</div>
     <div class="pmeta" id="cad2">&nbsp;</div>
     <div class="pstate" id="state2">대기</div>
@@ -373,6 +377,8 @@ const statusDot=$('statusDot'), statusText=$('statusText'), personCountEl=$('per
 const tickerEl=$('ticker');
 const PCOLORS={1:'#e8604c', 2:'#4c8fe8'};
 const avatars={1:$('avatar1'), 2:$('avatar2')};
+const runbgs={1:$('runbg1'), 2:$('runbg2')};      // 뒤로 흐르는 배경
+const bgOffset={1:0,2:0}, bgLastT={1:0,2:0};
 /* 타조 아바타: 12프레임 스프라이트 시트를 참여자의 발 위상에 물려 부드럽게 재생.
    스텝 하나 = 반 사이클(6프레임) → 참여자가 발을 딛는 리듬·속도 그대로 타조가 달린다.
    멈추면(마지막 스텝 0.5초 경과) 첫 프레임. 방향 반대로 느껴지면 PHASE_OFFSET 0↔0.5. */
@@ -386,19 +392,31 @@ function setFrame(el, idx){
 }
 function avatarHop(id){ const v=avatars[id]; if(!v) return; v.classList.remove('hop'); void v.offsetWidth; v.classList.add('hop'); }
 function updateAvatar(id, p, now, active){
-  const el=avatars[id]; if(!el) return;
+  const el=avatars[id];
   const st=p.stepTimes, n=st.length;
   const last = n ? st[n-1] : -1e9;
-  const running = active && (now-last)<500;       // 멈추면 첫 프레임(중립)
+  const running = active && (now-last)<500;       // 멈추면 중립·배경 정지
+  // 배경 스크롤: 케이던스에 비례해 뒤로 흐름(달릴 때만)
+  const bg=runbgs[id];
+  if(bg){
+    const dt = bgLastT[id] ? Math.min(0.1,(now-bgLastT[id])/1000) : 0; bgLastT[id]=now;
+    if(running){
+      const speed=Math.max(70, Math.min(700, (p.cadence(now)||120)*3.2));  // px/sec
+      bgOffset[id]+=speed*dt;
+      const tileW=(bg.clientHeight*0.85)||300;     // SVG 340x400 → 렌더 폭 = 높이×0.85
+      bg.style.backgroundPositionX=(-(bgOffset[id]%tileW))+'px';
+    }
+  }
+  // 자세(스프라이트 프레임)
+  if(!el) return;
   if(!running){ setFrame(el, 0); return; }
   let interval=400;                                // 최근 스텝 간격(ms)
   if(n>=2) interval=Math.min(900, Math.max(130, st[n-1]-st[n-2]));
   const frac=Math.min(1,(now-last)/interval)*0.5;  // 스텝 하나 동안 반 사이클 진행
-  // 좌우 교대는 누적 카운트 홀짝으로(stepTimes는 40개 상한이라 홀짝이 고정돼 한쪽 다리만 나오는 버그 방지)
-  const phase=((p.count%2)*0.5 + frac + PHASE_OFFSET)%1;
+  const phase=((p.count%2)*0.5 + frac + PHASE_OFFSET)%1;   // 좌우 교대(누적 카운트 홀짝)
   setFrame(el, Math.floor(phase*NFRAMES));
 }
-function resetAvatars(){ for(const id of [1,2]) setFrame(avatars[id], 0); }
+function resetAvatars(){ for(const id of [1,2]){ setFrame(avatars[id], 0); bgOffset[id]=0; bgLastT[id]=0; if(runbgs[id]) runbgs[id].style.backgroundPositionX='0px'; } }
 
 function setOverlay(html,spin){ omsg.innerHTML=html; spinner.style.display=spin?'block':'none'; overlay.classList.remove('ready','hidden'); }
 function hideOverlay(){ overlay.classList.add('hidden'); overlay.classList.remove('ready'); }
