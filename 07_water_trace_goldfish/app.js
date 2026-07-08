@@ -419,7 +419,7 @@
     { base: "goldfish-swim-g1", label: "1 (색변주 6종)", meta: null, img: null },
     { base: "goldfish-swim-g2", label: "2 (금붕어 원본)", meta: null, img: null },
   ];
-  let activeGroup = 1;                    // 기본 그룹2(금붕어 원본 3종)
+  let activeGroup = 0;                    // 기본 = 색변주 6종(g1). T키로 원본 3종(g2) 전환. (2026-07-08 사용자 지정)
   function uploadGroup(i) {
     const G = KOI_GROUPS[i];
     if (!G.meta || !G.img) return;
