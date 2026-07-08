@@ -512,7 +512,7 @@ function runReadyCountdown(onDone){
 
 /* ===== 게임: 시간 제한 타이머 · 승자 팡파르 · 오늘의 최고 점수 ===== */
 let gamePhase='idle';   // idle | ready(카운트다운) | play(타이머 진행) | over(결과)
-let GAME_SEC=30, gameEndT=0, gameTimer=null;
+let GAME_SEC=30, gameEndT=0, gameTimer=null, demoLoopTimer=null;
 const timerEl=$('timer'), todayBestEl=$('todayBest'), gameLenEl=$('gameLen');
 const fxcanvas=$('fxcanvas'), fxctx=fxcanvas.getContext('2d');
 function todayKey(){ const d=new Date(); return 'run34_best_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
@@ -558,6 +558,9 @@ function endGame(){
   setOverlay('<div style="font-weight:900;font-size:clamp(24px,3.2vw,42px);color:'+color+'">🎉 '+title+'</div>'
     +'<div style="margin-top:8px;font-weight:900;color:var(--ink);font-size:20px"><span style="color:var(--coral)">P1 '+c1+'</span> · <span style="color:var(--blue)">P2 '+c2+'</span></div>'
     +nb+'<div style="margin-top:12px;color:var(--muted);font-weight:400;font-size:14px">스페이스 또는 <b>다시 시작(r)</b> 으로 재시작</div>', false);
+  // 데모(어트랙트)면 몇 초 뒤 자동으로 다음 판 → 순환
+  clearTimeout(demoLoopTimer);
+  if(demoActive) demoLoopTimer=setTimeout(()=>{ if(demoActive) restartGame(); }, 5000);
 }
 /* 승리 팡파르: 상승 아르페지오 멜로디 → 큰 코드 + 심벌 크래시 */
 function fanfare(){
@@ -596,7 +599,7 @@ function fxLoop(){
 const fws={1:$('fw1'), 2:$('fw2')};
 function fwStop(){ for(const id of [1,2]){ const v=fws[id]; if(v){ v.pause(); v.classList.remove('show'); try{v.currentTime=0;}catch(_){} } } }
 function fwPlay(w){ fwStop(); const v=fws[w]; if(!v) return; v.loop=true; v.classList.add('show'); try{v.currentTime=0;}catch(_){} v.play().catch(()=>{}); }
-function clearGame(){ gamePhase='idle'; clearInterval(gameTimer); confetti=[]; if(fxRaf){cancelAnimationFrame(fxRaf);fxRaf=null;} if(fxctx)fxctx.clearRect(0,0,fxcanvas.width,fxcanvas.height); timerEl.classList.remove('warn'); showTimer(GAME_SEC); fwStop(); }
+function clearGame(){ gamePhase='idle'; clearInterval(gameTimer); clearTimeout(demoLoopTimer); confetti=[]; if(fxRaf){cancelAnimationFrame(fxRaf);fxRaf=null;} if(fxctx)fxctx.clearRect(0,0,fxcanvas.width,fxcanvas.height); timerEl.classList.remove('warn'); showTimer(GAME_SEC); fwStop(); }
 
 /* ================= One Euro 필터 =================
    정지 시 안정(저역), 이동 시 즉각 반응(속도에 비례해 컷오프 상승). */
@@ -1029,6 +1032,7 @@ async function start(){
     startWatchdog();
     camLoop();
     runReadyCountdown(beginGame);   // 준비 카운트다운 → 게임(타이머) 시작
+    scheduleAttract();              // 게임 시작 → 유휴 타이머 해제
   }catch(e){
     console.error(e);
     setOverlay(cameraErrorMsg(e),false);
@@ -1050,6 +1054,7 @@ function stop(){
   for(const id of [1,2]){ $('state'+id).textContent='대기'; $('state'+id).classList.remove('on'); }
   personCountEl.textContent='0';
   resetAvatars();
+  scheduleAttract();               // 정지 → 유휴 상태 → 어트랙트 예약
 }
 
 /* ================= 데모 모드 =================
@@ -1122,6 +1127,7 @@ function startDemo(){
   demoBtn.textContent='🤖 데모 정지';
   demoLoop();
   runReadyCountdown(beginGame);   // 데모도 준비 카운트다운 → 게임 시작
+  scheduleAttract();              // 데모 시작 → 유휴 타이머 해제
 }
 function stopDemo(){
   if(!demoActive) return;
@@ -1135,6 +1141,7 @@ function stopDemo(){
     for(const id of [1,2]){ $('state'+id).textContent='대기'; $('state'+id).classList.remove('on'); }
     personCountEl.textContent='0';
     resetAvatars();
+    scheduleAttract();             // 데모 종료 → 유휴 → 어트랙트 예약
   }
 }
 function zeroScores(){        // 점수·틱커·아바타만 초기화(감지기 상태 유지)
@@ -1204,6 +1211,19 @@ window.addEventListener('keydown',e=>{
 sensValEl.textContent=Math.round(SENS*100);                 // 초기 표시(토스트 없이)
 window.RunGame.setSensitivity=v=>{ SENS=Math.min(SENS_MAX,Math.max(SENS_MIN,v)); applySens(); return SENS; };
 window.RunGame.getSensitivity=()=>SENS;
+
+/* ===== 어트랙트 모드: 유휴 30초 → 데모 자동 시작 =====
+   활동 타임스탬프 + 1초 폴링(게이트 통과 이후에도 견고). 게임/데모/게이트 중엔 트리거 안 함. */
+const ATTRACT_MS=30000;
+let lastActivity=performance.now();
+function scheduleAttract(){ lastActivity=performance.now(); }   // 활동 표시(유휴 클록 리셋)
+['pointerdown','keydown','touchstart'].forEach(ev=> window.addEventListener(ev, scheduleAttract, {passive:true}));
+setInterval(()=>{
+  if(!running && !demoActive && !document.getElementById('gate') && performance.now()-lastActivity>ATTRACT_MS){
+    lastActivity=performance.now();
+    startDemo();                                              // 유휴 30초 → 데모(어트랙트)
+  }
+}, 1000);
 </script>
 </body>
 </html>
