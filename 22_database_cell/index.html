@@ -1004,9 +1004,8 @@ $('#stage').addEventListener('wheel', e => {
 }, {passive:false});
 $('#stage').addEventListener('pointerdown', e => {
   if(e.pointerType==='touch') return;         // 터치는 아래 제스처 핸들러가 처리
-  if(!zoom.on) return;
-  zoom.downX=e.clientX; zoom.downY=e.clientY; zoom.moved=false;
-  if(zoom.scale>1){ zoom.drag=true; zoom.px=e.clientX; zoom.py=e.clientY; $('#stage').style.cursor='grabbing'; }
+  zoom.downOnStage = true; zoom.downX=e.clientX; zoom.downY=e.clientY; zoom.moved=false;
+  if(zoom.on && zoom.scale>1){ zoom.drag=true; zoom.px=e.clientX; zoom.py=e.clientY; $('#stage').style.cursor='grabbing'; }
 });
 addEventListener('pointermove', e => {
   if(e.pointerType==='touch' || !zoom.drag) return;
@@ -1015,12 +1014,14 @@ addEventListener('pointermove', e => {
 });
 addEventListener('pointerup', e => {
   if(e.pointerType==='touch') return;
-  const wasDrag = zoom.drag; zoom.drag=false; if($('#stage')) $('#stage').style.cursor='grab';
-  // 전체화면 확대 중 (드래그 아닌) 탭 → 확대 해제
-  if(zoom.on && $('#stage').classList.contains('zoom') && !zoom.moved && !(wasDrag && zoom.moved)){
-    const onStage = e.target && (e.target.id==='bigImg' || e.target.id==='stage');
-    if(onStage){ exitZoom(); }
-  }
+  zoom.drag=false; if($('#stage')) $('#stage').style.cursor='grab';
+  if(!zoom.downOnStage) return; zoom.downOnStage=false;
+  const moved = Math.abs(e.clientX-zoom.downX)>6 || Math.abs(e.clientY-zoom.downY)>6;
+  const onStage = e.target && (e.target.id==='bigImg' || e.target.id==='stage');
+  if(moved || !onStage) return;
+  // 드래그 아닌 클릭: 확대 전엔 2차 확대 진입, 확대 중엔 해제
+  if(zoom.on){ if($('#stage').classList.contains('zoom')) exitZoom(); }
+  else if($('#overlay').classList.contains('on')) enterZoom();
 });
 
 /* ══════════ 폰 터치 제스처 ══════════
@@ -1057,6 +1058,7 @@ $('#stage').addEventListener('touchend', e => {
   if(T.mode==='swipe'){
     const t=e.changedTouches[0], dx=t.clientX-T.sx, dy=t.clientY-T.sy;
     if(Math.abs(dx)>45 && Math.abs(dx)>Math.abs(dy)*1.4) step(dx<0 ? 1 : -1);   // ← 왼쪽으로 밀면 다음
+    else if(!T.moved) enterZoom();               // 펼쳐진 사진을 탭 → 2차 확대
   } else if((T.mode==='tap' || T.mode==='pan') && !T.moved){
     if(zoom.on) exitZoom();                        // 확대 중 (움직임 없는) 탭 → 해제
   } else if(T.mode==='pinch' && zoom.on && zoom.scale<=1.03){
