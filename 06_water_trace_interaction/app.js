@@ -42,6 +42,8 @@
   // ---- 황금 잉어 파라미터 ----
   //   fish01 헤엄 사이클(73프레임, 머리=위) 프레임 애니메이션 사용 → 몸이 자연스럽게 일렁임.
   let FISH_COUNT = 12;                // 동시에 헤엄치는 잉어 수 (9/0 키로 가감, 0~24)
+  try { const _fq = parseInt(new URLSearchParams(location.search).get("fish"), 10);
+        if (Number.isFinite(_fq)) FISH_COUNT = Math.max(0, Math.min(24, _fq)); } catch (e) {}  // ?fish=N 시작수 지정(exe 런처용)
   const FISH_LEN_MIN = 0.22, FISH_LEN_MAX = 0.34;  // 화면 짧은변 대비 몸길이 비율 (크게)
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
