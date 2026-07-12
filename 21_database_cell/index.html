@@ -76,7 +76,8 @@
   #focus.left{flex-direction:row-reverse;}
   #focus.stack{flex-direction:column;align-items:center;gap:14px;}
   .pcol{display:flex;flex-direction:column;align-items:center;gap:14px;flex:0 0 auto;}
-  .stage{position:relative;flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
+  .stage{position:relative;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    touch-action:none;}   /* 폰 제스처(스와이프·핀치)를 브라우저가 가로채지 않게 */
   #bigImg{display:block;border-radius:8px;object-fit:contain;background:#fff;
     box-shadow:0 30px 90px rgba(0,0,0,.75), 0 0 0 6px rgba(255,255,255,.9);}
   .stage.zoom{position:fixed;inset:0;max-width:none;z-index:60;background:rgba(0,0,0,.93);cursor:grab;}
@@ -817,23 +818,69 @@ $('#stage').addEventListener('wheel', e => {
   if(zoom.scale===1){ zoom.x=0; zoom.y=0; } applyZoom();
 }, {passive:false});
 $('#stage').addEventListener('pointerdown', e => {
-  if(!zoom.on) return;
-  zoom.downX=e.clientX; zoom.downY=e.clientY; zoom.moved=false;
-  if(zoom.scale>1){ zoom.drag=true; zoom.px=e.clientX; zoom.py=e.clientY; $('#stage').style.cursor='grabbing'; }
+  if(e.pointerType==='touch') return;         // 터치는 아래 제스처 핸들러가 처리
+  zoom.downOnStage = true; zoom.downX=e.clientX; zoom.downY=e.clientY; zoom.moved=false;
+  if(zoom.on && zoom.scale>1){ zoom.drag=true; zoom.px=e.clientX; zoom.py=e.clientY; $('#stage').style.cursor='grabbing'; }
 });
 addEventListener('pointermove', e => {
-  if(!zoom.drag) return;
+  if(e.pointerType==='touch' || !zoom.drag) return;
   if(Math.abs(e.clientX-zoom.downX)>6 || Math.abs(e.clientY-zoom.downY)>6) zoom.moved=true;
   zoom.x += e.clientX-zoom.px; zoom.y += e.clientY-zoom.py; zoom.px=e.clientX; zoom.py=e.clientY; applyZoom();
 });
 addEventListener('pointerup', e => {
-  const wasDrag = zoom.drag; zoom.drag=false; if($('#stage')) $('#stage').style.cursor='grab';
-  // 전체화면 확대 중 (드래그 아닌) 탭 → 확대 해제
-  if(zoom.on && $('#stage').classList.contains('zoom') && !zoom.moved && !(wasDrag && zoom.moved)){
-    const onStage = e.target && (e.target.id==='bigImg' || e.target.id==='stage');
-    if(onStage){ exitZoom(); }
-  }
+  if(e.pointerType==='touch') return;
+  zoom.drag=false; if($('#stage')) $('#stage').style.cursor='grab';
+  if(!zoom.downOnStage) return; zoom.downOnStage=false;
+  const moved = Math.abs(e.clientX-zoom.downX)>6 || Math.abs(e.clientY-zoom.downY)>6;
+  const onStage = e.target && (e.target.id==='bigImg' || e.target.id==='stage');
+  if(moved || !onStage) return;
+  // 드래그 아닌 클릭: 확대 전엔 2차 확대 진입, 확대 중엔 해제
+  if(zoom.on){ if($('#stage').classList.contains('zoom')) exitZoom(); }
+  else if($('#overlay').classList.contains('on')) enterZoom();
 });
+
+/* ══════════ 폰 터치 제스처 ══════════
+   확대 전: 사진 위 좌우 스와이프=이전/다음, 두 손가락 핀치=확대. 펼쳐진 사진 탭=2차 확대.
+   확대 중: 한 손가락 팬, 핀치 배율(1로 되돌리면 해제), 탭=해제. */
+const T = { mode:null, sx:0, sy:0, px:0, py:0, moved:false, startDist:0, startScale:1 };
+function tdist(ts){ return Math.hypot(ts[0].clientX-ts[1].clientX, ts[0].clientY-ts[1].clientY); }
+$('#stage').addEventListener('touchstart', e => {
+  if(e.touches.length === 2){
+    T.mode='pinch'; T.startDist=tdist(e.touches) || 1; T.startScale = zoom.on ? zoom.scale : 1;
+    e.preventDefault();
+  } else if(e.touches.length === 1){
+    const t=e.touches[0]; T.sx=t.clientX; T.sy=t.clientY; T.px=t.clientX; T.py=t.clientY; T.moved=false;
+    T.mode = (zoom.on && zoom.scale>1) ? 'pan' : (zoom.on ? 'tap' : 'swipe');
+  }
+}, {passive:false});
+$('#stage').addEventListener('touchmove', e => {
+  if(T.mode==='pinch' && e.touches.length>=2){
+    e.preventDefault();
+    let s = Math.min(6, Math.max(1, T.startScale * (tdist(e.touches)/T.startDist)));
+    if(!zoom.on && s>1.03) enterZoom();
+    if(zoom.on){ zoom.scale=s; if(s<=1){ zoom.x=0; zoom.y=0; } applyZoom(); }
+  } else if(T.mode==='pan' && e.touches.length===1){
+    e.preventDefault();
+    const t=e.touches[0];
+    if(Math.abs(t.clientX-T.sx)>8 || Math.abs(t.clientY-T.sy)>8) T.moved=true;
+    zoom.x += t.clientX-T.px; zoom.y += t.clientY-T.py; T.px=t.clientX; T.py=t.clientY; applyZoom();
+  } else if((T.mode==='swipe'||T.mode==='tap') && e.touches.length===1){
+    const t=e.touches[0];
+    if(Math.abs(t.clientX-T.sx)>8 || Math.abs(t.clientY-T.sy)>8) T.moved=true;
+  }
+}, {passive:false});
+$('#stage').addEventListener('touchend', e => {
+  if(T.mode==='swipe'){
+    const t=e.changedTouches[0], dx=t.clientX-T.sx, dy=t.clientY-T.sy;
+    if(Math.abs(dx)>45 && Math.abs(dx)>Math.abs(dy)*1.4) step(dx<0 ? 1 : -1);   // ← 왼쪽으로 밀면 다음
+    else if(!T.moved) enterZoom();               // 펼쳐진 사진을 탭 → 2차 확대
+  } else if((T.mode==='tap' || T.mode==='pan') && !T.moved){
+    if(zoom.on) exitZoom();                        // 확대 중 (움직임 없는) 탭 → 해제
+  } else if(T.mode==='pinch' && zoom.on && zoom.scale<=1.03){
+    exitZoom();                                    // 핀치로 원배율까지 축소 → 해제
+  }
+  if(e.touches.length===0) T.mode=null;
+}, {passive:false});
 
 /* ══════════ 관리자 ══════════ */
 function setAdmin(on){
