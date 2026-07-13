@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "51";   // 그룹4 소스 교체: _still_jelly_2.mp4 영상 프레임(실제 펄스)
+  const ASSET_VER = "52";   // 그룹4 영상 시퀀스 전부 적용(72f 핑퐁 142f, 24fps)
   const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
@@ -42,6 +42,8 @@
   // ---- 황금 잉어 파라미터 ----
   //   fish01 헤엄 사이클(73프레임, 머리=위) 프레임 애니메이션 사용 → 몸이 자연스럽게 일렁임.
   let FISH_COUNT = 20;                // 동시에 헤엄치는 금붕어 수 (9/0 키로 가감, 0~40)
+  try { const _fq = parseInt(new URLSearchParams(location.search).get("fish"), 10);
+        if (Number.isFinite(_fq)) FISH_COUNT = Math.max(0, Math.min(40, _fq)); } catch (e) {}  // ?fish=N 시작수 지정(exe 런처용)
   const FISH_LEN_MIN = 0.145, FISH_LEN_MAX = 0.225;  // 화면 짧은변 대비 몸길이 비율(꼬리 포함) — 06 잉어보다 작게, 마릿수↑
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
