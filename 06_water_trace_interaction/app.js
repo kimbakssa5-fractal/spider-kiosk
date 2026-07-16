@@ -188,16 +188,28 @@
         vec3 gcol = mix(vec3(glint), glint * vec3(1.45, 0.82, 0.38) * 1.35, uSunset);
         gcol = mix(gcol, vec3(glint) * vec3(0.70, 0.82, 1.25) * 1.25, uNight);   // 밤=은청 반짝임
         outc += gcol * (1.0 - 0.5 * fish);                    // 물고기 위는 살짝 약하게
-        // 별빛 반사(밤 전용): 물이 잔잔해도 보이는 별 — 드문 큰 별 + 미세 별가루
+        // 별빛 반사(밤 전용): 물이 잔잔해도 보이는 별.
+        //  ⚠ sin-해시는 셀좌표가 크면 GPU 정밀도 한계로 격자무늬(돗자리) 발생 → Hoskins 해시 사용.
         if (uNight > 0.0) {
           vec2 gpS = vUv * vec2(240.0, 158.0);
           vec2 cidS = floor(gpS); vec2 cfS = fract(gpS) - 0.5;
-          float sR1 = fract(sin(dot(cidS, vec2(41.3, 289.1))) * 43758.5453);
-          float sR2 = fract(sin(dot(cidS, vec2(153.7, 61.7))) * 43758.5453);
+          vec2 hS = fract(cidS * vec2(0.1031, 0.1030));
+          hS += dot(hS, hS.yx + 33.33);
+          float sR1 = fract((hS.x + hS.y) * hS.x);
+          float sR2 = fract((hS.x + hS.y) * hS.y);
           float sPulse = 0.55 + 0.45 * sin(uTime * (0.6 + 1.8 * sR2) + sR1 * 6.2831);
           float star = pow(sPulse, 3.0) * smoothstep(0.30, 0.02, length(cfS)) * step(0.993, sR1);
           outc += vec3(0.62, 0.74, 1.0) * star * 0.95 * uNight * (1.0 - 0.6 * fish);
-          outc += vec3(0.55, 0.68, 1.0) * (cTw * 0.30) * uNight;   // 미세 별가루
+          // 미세 별가루(2차 레이어, 동일 해시 — cTw 재사용 금지: 그 격자가 돗자리 원인)
+          vec2 gpT = vUv * vec2(520.0, 342.0);
+          vec2 cidT = floor(gpT); vec2 cfT = fract(gpT) - 0.5;
+          vec2 hT = fract(cidT * vec2(0.1131, 0.0973));
+          hT += dot(hT, hT.yx + 19.19);
+          float tR1 = fract((hT.x + hT.y) * hT.x);
+          float tR2 = fract((hT.x + hT.y) * hT.y);
+          float tPulse = 0.5 + 0.5 * sin(uTime * (1.0 + 2.4 * tR2) + tR1 * 6.2831);
+          float dust = pow(tPulse, 4.0) * smoothstep(0.34, 0.04, length(cfT)) * step(0.972, tR1);
+          outc += vec3(0.55, 0.68, 1.0) * dust * 0.5 * uNight * (1.0 - 0.6 * fish);
         }
       }
       // 노을 틴트(N 키): 어두운 물=진한 적갈, 밝은 부분=금빛 — 사진의 석양 반사 톤
