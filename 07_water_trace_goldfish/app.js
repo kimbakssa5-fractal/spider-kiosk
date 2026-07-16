@@ -1320,6 +1320,48 @@
   }
 
   // 키보드 — 물리 키 기준(e.code). 토글 B/S/F/M · 미세조정 1~8 · 잉어수 0(▲)/9(▼) · 배경간격 ↑/↓
+  // ── 폰 원격 제어 적용부 ── {k:"KeyC"}=단축키 실행 / {set,v}=값 지정. __remoteState()=상태 스냅샷.
+  var _rbright = 100;
+  window.__remoteApply = function (m) {
+    try {
+      if (!m) return;
+      if (m.k) { window.dispatchEvent(new KeyboardEvent("keydown", { code: m.k, bubbles: true })); return; }
+      var v = +m.v;
+      switch (m.set) {
+        case "fish": FISH_COUNT = clamp(Math.round(v), 0, 40); spawnFishes(); showHud("FISH  " + FISH_COUNT); break;
+        case "sens": if (sensSlider) { sensSlider.value = clamp(Math.round(v), 0, 100); applySens(+sensSlider.value); showHud("센싱 민감도  " + sensSlider.value); } break;
+        case "glitter": GLITTER_ON = true; GLITTER_AMT = clamp(v, 0, 100) / 100; if (glitterSlider) glitterSlider.value = Math.round(v); applyGlitter(); refreshGlitterUI(); showHud("윤슬 강도  " + Math.round(v)); break;
+        case "bright": _rbright = clamp(Math.round(v), 10, 200); gl.useProgram(progBg); gl.uniform1f(locBg.uBgBright, _rbright / 100); showHud("배경 밝기  " + _rbright + "%"); break;
+        case "slide": SLIDE_HOLD_MS = clamp(Math.round(v), 0, 60) * 1000; holdAcc = 0; showHud(SLIDE_HOLD_MS > 0 ? ("배경 전환 간격  " + (SLIDE_HOLD_MS / 1000) + "초") : "배경 슬라이드 정지 (0초)"); break;
+      }
+    } catch (e) {}
+  };
+  window.__remoteState = function () {
+    return { fish: FISH_COUNT, sens: sensSlider ? +sensSlider.value : null,
+      glitterOn: GLITTER_ON, glitter: Math.round(GLITTER_AMT * 100), bright: _rbright,
+      slide: SLIDE_HOLD_MS / 1000, group: activeGroup, cam: camOn, xray: xrayOn };
+  };
+  (function () {
+    try {
+      var rp = new URLSearchParams(location.search), rkey = rp.get("rkey"), room = rp.get("room");
+      if (!rkey || !room) return;
+      var sc = document.createElement("script");
+      sc.src = "https://cdn.ably.com/lib/ably.min-1.js";
+      sc.onload = function () {
+        try {
+          var ably = new Ably.Realtime({ key: rkey, clientId: "kiosk" });
+          var ch = ably.channels.get("koi-remote:" + room);
+          function pubState() { try { ch.publish("state", window.__remoteState()); } catch (e) {} }
+          ch.subscribe("cmd", function (mm) { window.__remoteApply(mm.data); setTimeout(pubState, 60); });
+          ably.connection.on("connected", function () { pubState(); showHud("원격 연결됨"); });
+          setInterval(pubState, 3000);
+        } catch (e) {}
+      };
+      sc.onerror = function () {};
+      document.head.appendChild(sc);
+    } catch (e) {}
+  })();
+
   window.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     switch (e.code) {
