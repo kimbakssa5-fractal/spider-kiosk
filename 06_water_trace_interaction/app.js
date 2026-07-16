@@ -97,9 +97,29 @@
     uniform vec2 uBgScale;
     uniform vec2 uBgOffset;
     uniform float uBgBright;   // 배경 밝기(d/b 키, 기본 1.0)
+    uniform sampler2D uEmblem; // 골드 엠블럼(물 밑 가라앉음) — E 키
+    uniform float uEmblemOn;
+    uniform vec2 uEmbFit;      // contain-fit 스케일(<=1)
+    uniform float uTime;
     void main() {
       vec2 imgUv = vUv * uBgScale + uBgOffset;
-      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb * uBgBright, 0.0);
+      vec3 col = texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb * uBgBright;
+      if (uEmblemOn > 0.0) {
+        vec2 euv = (vUv - 0.5) / uEmbFit + 0.5;
+        if (euv.x > 0.0 && euv.x < 1.0 && euv.y > 0.0 && euv.y < 1.0) {
+          vec4 em = texture2D(uEmblem, euv);
+          vec3 emc = em.rgb * 0.66;                          // 물 밑 깊이감(어둡게)
+          // 대각 스캔 광(좌하→우상)이 훑고 지나가며 골드 반사
+          float diag = euv.x * 0.60 + (1.0 - euv.y) * 0.40;
+          float phase = fract(uTime * 0.11) * 1.4 - 0.2;
+          float dd = abs(diag - phase);
+          float band = smoothstep(0.035, 0.0, dd) * 1.4      // 밝은 코어
+                     + 0.55 * smoothstep(0.20, 0.0, dd);     // 넓은 글로우
+          emc += vec3(1.0, 0.95, 0.68) * band * em.a * 3.4;  // 반사 스윕(강)
+          col = mix(col, emc, clamp(em.a * 0.85 + band * em.a * 0.4, 0.0, 1.0));
+        }
+      }
+      gl_FragColor = vec4(col, 0.0);
     }`;
 
   // ② 잉어 패스: 클립공간 정점 + 아틀라스 UV, 알파 블렌딩으로 scene 위 합성.
@@ -262,6 +282,10 @@
     uBgScale: gl.getUniformLocation(progBg, "uBgScale"),
     uBgOffset: gl.getUniformLocation(progBg, "uBgOffset"),
     uBgBright: gl.getUniformLocation(progBg, "uBgBright"),
+    uEmblem: gl.getUniformLocation(progBg, "uEmblem"),
+    uEmblemOn: gl.getUniformLocation(progBg, "uEmblemOn"),
+    uEmbFit: gl.getUniformLocation(progBg, "uEmbFit"),
+    uTime: gl.getUniformLocation(progBg, "uTime"),
   };
   const locFish = {
     aClip: gl.getAttribLocation(progFish, "aClip"),
@@ -304,6 +328,23 @@
   const heightTex = makeTex(1, gl.CLAMP_TO_EDGE, gl.LINEAR);
   const koiTex = makeTex(2, gl.CLAMP_TO_EDGE, gl.LINEAR);
   const sceneTex = makeTex(3, gl.CLAMP_TO_EDGE, gl.LINEAR);
+  const emblemTex = makeTex(4, gl.CLAMP_TO_EDGE, gl.LINEAR);
+  // 골드 엠블럼(hillstate) 로드 + contain-fit 계산
+  let EMBLEM_ON = false, embW = 1, embH = 1;
+  const embImg = new Image();
+  embImg.onload = function () {
+    embW = embImg.naturalWidth; embH = embImg.naturalHeight;
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, emblemTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, embImg);
+    embFit();
+  };
+  embImg.src = "assets/emblem.png?v=" + ASSET_VER;
+  let embFitX = 0.9, embFitY = 0.5;
+  function embFit() {
+    const ea = embW / embH, ca = canvasW / Math.max(1, canvasH);
+    if (ea >= ca) { embFitX = 0.94; embFitY = 0.94 * ca / ea; }
+    else { embFitY = 0.94; embFitX = 0.94 * ea / ca; }
+  }
 
   // scene FBO
   const fbo = gl.createFramebuffer();
@@ -554,6 +595,7 @@
     resizeSceneTex();
     applyDispScale();
     updateBgCover();
+    embFit();                                          // 엠블럼 contain-fit 재계산
     if (curImg) { sizeBgCanvas(); composeUpload(); }   // 새 크기로 배경 재합성
   }
   function applyDispScale() {
@@ -995,6 +1037,10 @@
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.viewport(0, 0, canvasW, canvasH);
     gl.useProgram(progBg);
+    gl.uniform1i(locBg.uEmblem, 4);
+    gl.uniform1f(locBg.uEmblemOn, EMBLEM_ON ? 1.0 : 0.0);
+    gl.uniform2f(locBg.uEmbFit, embFitX, embFitY);
+    gl.uniform1f(locBg.uTime, (performance.now() - startT) / 1000);
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     gl.enableVertexAttribArray(locBg.aPos);
     gl.vertexAttribPointer(locBg.aPos, 2, gl.FLOAT, false, 0, 0);
@@ -1184,7 +1230,7 @@
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
-    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
+    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
   ];
@@ -1231,6 +1277,11 @@
   function toggleNight() {
     NIGHT_ON = !NIGHT_ON; if (NIGHT_ON) SUNSET_ON = false;
     applyTimeMode(); showHud(NIGHT_ON ? "별빛 밤하늘 모드" : "주간 모드");
+  }
+  // 골드 엠블럼(hillstate): 물 밑에 가라앉은 로고 + 대각 스캔 반사. E 키.
+  function toggleEmblem() {
+    EMBLEM_ON = !EMBLEM_ON;
+    showHud(EMBLEM_ON ? "엠블럼 ON" : "엠블럼 OFF");
   }
 
   function toggleGlitter() { GLITTER_ON = !GLITTER_ON; applyGlitter(); refreshGlitterUI(); showHud("윤슬 " + (GLITTER_ON ? "ON" : "OFF")); }
@@ -1401,6 +1452,7 @@
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
       case "KeyN": if (e.repeat) return; e.preventDefault(); toggleSunset(); break;
       case "KeyU": if (e.repeat) return; e.preventDefault(); toggleNight(); break;
+      case "KeyE": if (e.repeat) return; e.preventDefault(); toggleEmblem(); break;
       case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
       case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
       case "BracketRight": e.preventDefault(); setSplashVol(_splashVol + 0.1); break;   // 물소리 크게 ]
