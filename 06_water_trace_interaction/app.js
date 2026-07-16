@@ -133,6 +133,7 @@
     uniform vec2 uDispUv;
     uniform float uGlitter;   // 윤슬 강도(0=off)
     uniform float uSunset;    // 노을 모드(0=주간, 1=노을) — N 키
+    uniform float uNight;     // 별빛 밤하늘 모드(0=주간, 1=밤) — U 키
     uniform float uTime;      // 반짝임 시간
     uniform vec2 uHTexel;     // 높이맵 텍셀 크기(1/gridW,1/gridH)
     void main() {
@@ -185,7 +186,19 @@
         float glint = spec * slope * twDot * uGlitter * 2.9;  // 세 레이어 합 → 더욱 풍부
         // 노을 모드: 윤슬을 금빛으로 + 살짝 강하게(태양 반사길 느낌)
         vec3 gcol = mix(vec3(glint), glint * vec3(1.45, 0.82, 0.38) * 1.35, uSunset);
+        gcol = mix(gcol, vec3(glint) * vec3(0.70, 0.82, 1.25) * 1.25, uNight);   // 밤=은청 반짝임
         outc += gcol * (1.0 - 0.5 * fish);                    // 물고기 위는 살짝 약하게
+        // 별빛 반사(밤 전용): 물이 잔잔해도 보이는 별 — 드문 큰 별 + 미세 별가루
+        if (uNight > 0.0) {
+          vec2 gpS = vUv * vec2(240.0, 158.0);
+          vec2 cidS = floor(gpS); vec2 cfS = fract(gpS) - 0.5;
+          float sR1 = fract(sin(dot(cidS, vec2(41.3, 289.1))) * 43758.5453);
+          float sR2 = fract(sin(dot(cidS, vec2(153.7, 61.7))) * 43758.5453);
+          float sPulse = 0.55 + 0.45 * sin(uTime * (0.6 + 1.8 * sR2) + sR1 * 6.2831);
+          float star = pow(sPulse, 3.0) * smoothstep(0.30, 0.02, length(cfS)) * step(0.993, sR1);
+          outc += vec3(0.62, 0.74, 1.0) * star * 0.95 * uNight * (1.0 - 0.6 * fish);
+          outc += vec3(0.55, 0.68, 1.0) * (cTw * 0.30) * uNight;   // 미세 별가루
+        }
       }
       // 노을 틴트(N 키): 어두운 물=진한 적갈, 밝은 부분=금빛 — 사진의 석양 반사 톤
       if (uSunset > 0.0) {
@@ -193,6 +206,13 @@
         vec3 grade = outc * mix(vec3(1.14, 0.50, 0.22), vec3(1.36, 0.86, 0.48), smoothstep(0.08, 0.80, lum));
         grade += vec3(0.075, 0.028, 0.004);                     // 은은한 주황 앰비언트
         outc = mix(outc, grade, uSunset);
+      }
+      // 별빛 밤하늘 틴트(U 키): 깊은 울트라마린 — 어두운 물=남색, 밝은 부분=청백
+      if (uNight > 0.0) {
+        float lum2 = dot(outc, vec3(0.299, 0.587, 0.114));
+        vec3 ngrade = outc * mix(vec3(0.14, 0.20, 0.52), vec3(0.60, 0.74, 1.18), smoothstep(0.06, 0.85, lum2));
+        ngrade += vec3(0.006, 0.014, 0.055);
+        outc = mix(outc, ngrade, uNight);
       }
       gl_FragColor = vec4(min(outc, 1.0), 1.0);
     }`;
@@ -243,12 +263,13 @@
     uDispUv: gl.getUniformLocation(progWater, "uDispUv"),
     uGlitter: gl.getUniformLocation(progWater, "uGlitter"),
     uSunset: gl.getUniformLocation(progWater, "uSunset"),
+    uNight: gl.getUniformLocation(progWater, "uNight"),
     uTime: gl.getUniformLocation(progWater, "uTime"),
     uHTexel: gl.getUniformLocation(progWater, "uHTexel"),
   };
   gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0); gl.uniform1f(locBg.uBgBright, 1.0);
   gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
-  gl.useProgram(progWater); gl.uniform1i(locWater.uScene, 3); gl.uniform1i(locWater.uHeight, 1); gl.uniform1f(locWater.uSunset, 0.0);
+  gl.useProgram(progWater); gl.uniform1i(locWater.uScene, 3); gl.uniform1i(locWater.uHeight, 1); gl.uniform1f(locWater.uSunset, 0.0); gl.uniform1f(locWater.uNight, 0.0);
 
   // ---------------------------------------------------------------
   // 텍스처: 배경(0) · 높이맵(1) · 잉어아틀라스(2) · scene FBO(3)
@@ -1151,7 +1172,7 @@
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
-    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
+    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
   ];
@@ -1185,11 +1206,19 @@
   const glitterSlider = document.getElementById("glitterSlider");
   function refreshGlitterUI() { if (glitterBtn) glitterBtn.textContent = GLITTER_ON ? "윤슬 ON (Y)" : "윤슬 OFF (Y)"; }
   // 노을 모드(N): 물 반사를 석양 톤(금빛 윤슬+주황 틴트)으로. 주간은 기존 그대로.
-  let SUNSET_ON = false;
+  let SUNSET_ON = false, NIGHT_ON = false;
+  function applyTimeMode() {
+    gl.useProgram(progWater);
+    gl.uniform1f(locWater.uSunset, SUNSET_ON ? 1.0 : 0.0);
+    gl.uniform1f(locWater.uNight, NIGHT_ON ? 1.0 : 0.0);
+  }
   function toggleSunset() {
-    SUNSET_ON = !SUNSET_ON;
-    gl.useProgram(progWater); gl.uniform1f(locWater.uSunset, SUNSET_ON ? 1.0 : 0.0);
-    showHud(SUNSET_ON ? "노을 모드" : "주간 모드");
+    SUNSET_ON = !SUNSET_ON; if (SUNSET_ON) NIGHT_ON = false;
+    applyTimeMode(); showHud(SUNSET_ON ? "노을 모드" : "주간 모드");
+  }
+  function toggleNight() {
+    NIGHT_ON = !NIGHT_ON; if (NIGHT_ON) SUNSET_ON = false;
+    applyTimeMode(); showHud(NIGHT_ON ? "별빛 밤하늘 모드" : "주간 모드");
   }
 
   function toggleGlitter() { GLITTER_ON = !GLITTER_ON; applyGlitter(); refreshGlitterUI(); showHud("윤슬 " + (GLITTER_ON ? "ON" : "OFF")); }
@@ -1359,6 +1388,7 @@
       case "KeyT": if (e.repeat) return; e.preventDefault(); toggleKoiGroup(); break;
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
       case "KeyN": if (e.repeat) return; e.preventDefault(); toggleSunset(); break;
+      case "KeyU": if (e.repeat) return; e.preventDefault(); toggleNight(); break;
       case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
       case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
       case "BracketRight": e.preventDefault(); setSplashVol(_splashVol + 0.1); break;   // 물소리 크게 ]
