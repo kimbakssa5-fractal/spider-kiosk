@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.ably.com; connect-src 'self' https://*.ably.io wss://*.ably.io https://*.ably-realtime.com wss://*.ably-realtime.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<title>물결 Trace 원격 제어</title>
+<style>
+  :root{ --bg:#fff8f3; --card:#ffffff; --ink:#33302e; --sub:#8a827c; --accent:#e8604c; --line:#efe6dd; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Noto Sans KR','Noto Sans',system-ui,sans-serif; padding:14px 12px 40px; }
+  h1{ font-size:19px; font-weight:900; margin:4px 2px 2px; }
+  .status{ font-size:12px; color:var(--sub); margin:0 2px 12px; }
+  .status b{ color:var(--accent); }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 14px 16px; margin-bottom:12px; box-shadow:0 4px 14px rgba(0,0,0,.04); }
+  .card h2{ font-size:13px; font-weight:900; margin:0 0 10px; color:var(--sub); letter-spacing:.5px; }
+  .row{ display:flex; align-items:center; gap:10px; margin:12px 0; }
+  .row .lab{ width:74px; font-size:13px; font-weight:700; flex:none; }
+  .row .val{ width:44px; text-align:right; font-variant-numeric:tabular-nums; font-weight:900; color:var(--accent); flex:none; }
+  input[type=range]{ flex:1; accent-color:var(--accent); height:30px; }
+  .btns{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  button{ font-family:inherit; font-weight:800; font-size:14px; color:var(--ink); background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:13px 6px; cursor:pointer; }
+  button:active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .step{ display:flex; gap:8px; }
+  .step button{ flex:1; font-size:20px; padding:10px; }
+  .gate{ position:fixed; inset:0; background:rgba(255,248,243,.98); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:24px; z-index:50; }
+  .gate input{ width:100%; max-width:340px; padding:12px; border:1.5px solid var(--line); border-radius:12px; font-size:14px; }
+  .gate button{ background:var(--accent); color:#fff; border:none; padding:13px 24px; border-radius:12px; }
+  .small{ font-size:11px; color:var(--sub); text-align:center; max-width:340px; }
+</style>
+</head>
+<body>
+  <h1>🐟 물결 Trace 원격 제어</h1>
+  <div class="status">방: <b id="room">-</b> · 연결: <b id="conn">연결 중…</b></div>
+
+  <div class="card">
+    <h2>값 조절 (슬라이더)</h2>
+    <div class="row"><span class="lab">물고기</span><input id="s-fish" type="range" min="0" max="40" value="12"><span class="val" id="v-fish">12</span></div>
+    <div class="row"><span class="lab">배경밝기</span><input id="s-bright" type="range" min="10" max="200" value="100"><span class="val" id="v-bright">100</span></div>
+    <div class="row"><span class="lab">캠 민감도</span><input id="s-sens" type="range" min="0" max="100" value="35"><span class="val" id="v-sens">35</span></div>
+    <div class="row"><span class="lab">윤슬 강도</span><input id="s-glitter" type="range" min="0" max="100" value="50"><span class="val" id="v-glitter">50</span></div>
+    <div class="row"><span class="lab">배경 간격</span><input id="s-slide" type="range" min="0" max="60" value="0"><span class="val" id="v-slide">0</span></div>
+  </div>
+
+  <div class="card">
+    <h2>켜기 / 끄기 (토글)</h2>
+    <div class="btns">
+      <button data-k="KeyC">카메라</button>
+      <button data-k="KeyX">엑스레이</button>
+      <button data-k="KeyA">캠 좌우반전</button>
+      <button data-k="KeyV">동영상 배경</button>
+      <button data-k="KeyT">물고기 그룹</button>
+      <button data-k="KeyY">윤슬 ON/OFF</button>
+      <button data-k="KeyS">소리</button>
+      <button data-k="KeyM">메뉴</button>
+      <button data-k="KeyI">손아이콘</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>화면</h2>
+    <div class="step">
+      <button data-k="KeyF">전체화면</button>
+    </div>
+  </div>
+
+  <div id="gate" class="gate" style="display:none">
+    <div style="font-weight:900;font-size:16px">최초 1회 — Ably 키 입력</div>
+    <input id="keyin" placeholder="xxxx.yyyy:zzzz... (붙여넣기)" autocapitalize="off" autocomplete="off" spellcheck="false">
+    <button id="keyok">저장하고 연결</button>
+    <div class="small">이 폰에만 저장됩니다. 다음부터는 링크만 열면 바로 연결됩니다.</div>
+  </div>
+
+  <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+  <script>
+  (function(){
+    var room = new URLSearchParams(location.search).get('room') || 'goyang';
+    document.getElementById('room').textContent = room;
+    var KEYLS = 'ably_key';
+    var key = null;
+    try { key = localStorage.getItem(KEYLS); } catch(e){}
+
+    function start(){
+      var ably = new Ably.Realtime({ key:key });
+      var ch = ably.channels.get('koi-remote:'+room);
+      var connEl = document.getElementById('conn');
+      ably.connection.on(function(s){
+        connEl.textContent = (s.current==='connected') ? '연결됨 ✓' : s.current;
+        connEl.style.color = (s.current==='connected') ? '#2e9e5b' : '';
+        if(s.current==='failed'){ connEl.textContent='키 오류 — 다시'; localStorage.removeItem(KEYLS); }
+      });
+      // 상태 수신 → 슬라이더/표시 갱신(내가 조작 중이 아닐 때만)
+      var dragging = null;
+      ch.subscribe('state', function(m){
+        var d = m.data||{};
+        setV('fish', d.fish); setV('bright', d.bright); setV('sens', d.sens);
+        setV('glitter', d.glitter); setV('slide', d.slide);
+      });
+      function setV(name, val){
+        if(val==null || dragging===name) return;
+        var s=document.getElementById('s-'+name), v=document.getElementById('v-'+name);
+        if(s){ s.value=val; } if(v){ v.textContent=val; }
+      }
+      function pub(data){ try{ ch.publish('cmd', data); }catch(e){} }
+      // 슬라이더 → cmd
+      [['fish','fish'],['bright','bright'],['sens','sens'],['glitter','glitter'],['slide','slide']].forEach(function(p){
+        var id=p[0], setname=p[1];
+        var s=document.getElementById('s-'+id), v=document.getElementById('v-'+id);
+        s.addEventListener('input', function(){ dragging=id; v.textContent=s.value; pub({set:setname, v:+s.value}); });
+        s.addEventListener('change', function(){ setTimeout(function(){ dragging=null; }, 800); });
+      });
+      // 토글 버튼 → key
+      Array.prototype.forEach.call(document.querySelectorAll('button[data-k]'), function(b){
+        b.addEventListener('click', function(){ pub({k:b.getAttribute('data-k')}); });
+      });
+    }
+
+    if(!key){
+      var g=document.getElementById('gate'); g.style.display='flex';
+      document.getElementById('keyok').addEventListener('click', function(){
+        var val=document.getElementById('keyin').value.trim();
+        if(val.indexOf(':')<0){ alert('키 형식이 아닙니다 (xxxx.yyyy:zzzz)'); return; }
+        try{ localStorage.setItem(KEYLS, val); }catch(e){}
+        key=val; g.style.display='none'; start();
+      });
+    } else { start(); }
+  })();
+  </script>
+</body>
+</html>
