@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "52";   // 그룹4 영상 시퀀스 전부 적용(72f 핑퐁 142f, 24fps)
+  const ASSET_VER = "53";   // 노을(N)/밤하늘(U)/엠블럼(E) 모드 이식(06→07)
   const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
@@ -97,9 +97,29 @@
     uniform vec2 uBgScale;
     uniform vec2 uBgOffset;
     uniform float uBgBright;   // 배경 밝기(d/b 키, 기본 1.0)
+    uniform sampler2D uEmblem; // 골드 엠블럼(물 밑 가라앉음) — E 키
+    uniform float uEmblemOn;
+    uniform vec2 uEmbFit;      // contain-fit 스케일(<=1)
+    uniform float uTime;
     void main() {
       vec2 imgUv = vUv * uBgScale + uBgOffset;
-      gl_FragColor = vec4(texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb * uBgBright, 0.0);
+      vec3 col = texture2D(uBg, clamp(imgUv, 0.0, 1.0)).rgb * uBgBright;
+      if (uEmblemOn > 0.0) {
+        vec2 euv = (vUv - 0.5) / uEmbFit + 0.5;
+        if (euv.x > 0.0 && euv.x < 1.0 && euv.y > 0.0 && euv.y < 1.0) {
+          vec4 em = texture2D(uEmblem, euv);
+          vec3 emc = em.rgb * 0.66;                          // 물 밑 깊이감(어둡게)
+          // 대각 스캔 광(좌하→우상)이 훑고 지나가며 골드 반사
+          float diag = euv.x * 0.60 + (1.0 - euv.y) * 0.40;
+          float phase = fract(uTime * 0.11) * 1.4 - 0.2;
+          float dd = abs(diag - phase);
+          float band = smoothstep(0.035, 0.0, dd) * 1.4      // 밝은 코어
+                     + 0.55 * smoothstep(0.20, 0.0, dd);     // 넓은 글로우
+          emc += vec3(1.0, 0.95, 0.68) * band * em.a * 3.4;  // 반사 스윕(강)
+          col = mix(col, emc, clamp(em.a * 0.85 + band * em.a * 0.4, 0.0, 1.0));
+        }
+      }
+      gl_FragColor = vec4(col, 0.0);
     }`;
 
   // ② 잉어 패스: 클립공간 정점 + 아틀라스 UV, 알파 블렌딩으로 scene 위 합성.
@@ -132,6 +152,8 @@
     uniform sampler2D uHeight;
     uniform vec2 uDispUv;
     uniform float uGlitter;   // 윤슬 강도(0=off)
+    uniform float uSunset;    // 노을 모드(0=주간, 1=노을) — N 키
+    uniform float uNight;     // 별빛 밤하늘 모드(0=주간, 1=밤) — U 키
     uniform float uTime;      // 반짝임 시간
     uniform vec2 uHTexel;     // 높이맵 텍셀 크기(1/gridW,1/gridH)
     void main() {
@@ -182,7 +204,46 @@
         float cTw = cPulse * smoothstep(0.42, 0.04, length(cfC)) * step(0.42, cR1);
         float twDot = aTw + bTw * 0.85 + cTw * 0.7;
         float glint = spec * slope * twDot * uGlitter * 2.9;  // 세 레이어 합 → 더욱 풍부
-        outc += vec3(glint) * (1.0 - 0.5 * fish);             // 물고기 위는 살짝 약하게
+        // 노을 모드: 윤슬을 금빛으로 + 살짝 강하게(태양 반사길 느낌)
+        vec3 gcol = mix(vec3(glint), glint * vec3(1.45, 0.82, 0.38) * 1.35, uSunset);
+        gcol = mix(gcol, vec3(glint) * vec3(0.70, 0.82, 1.25) * 1.25, uNight);   // 밤=은청 반짝임
+        outc += gcol * (1.0 - 0.5 * fish);                    // 물고기 위는 살짝 약하게
+        // 별빛 반사(밤 전용): 물이 잔잔해도 보이는 별.
+        //  ⚠ sin-해시는 셀좌표가 크면 GPU 정밀도 한계로 격자무늬(돗자리) 발생 → Hoskins 해시 사용.
+        if (uNight > 0.0) {
+          vec2 gpS = vUv * vec2(240.0, 158.0);
+          vec2 cidS = floor(gpS); vec2 cfS = fract(gpS) - 0.5;
+          vec2 hS = fract(cidS * vec2(0.1031, 0.1030));
+          hS += dot(hS, hS.yx + 33.33);
+          float sR1 = fract((hS.x + hS.y) * hS.x);
+          float sR2 = fract((hS.x + hS.y) * hS.y);
+          float sPulse = 0.55 + 0.45 * sin(uTime * (0.6 + 1.8 * sR2) + sR1 * 6.2831);
+          float star = pow(sPulse, 3.0) * smoothstep(0.30, 0.02, length(cfS)) * step(0.993, sR1);
+          outc += vec3(0.62, 0.74, 1.0) * star * 0.95 * uNight * (1.0 - 0.6 * fish);
+          vec2 gpT = vUv * vec2(520.0, 342.0);
+          vec2 cidT = floor(gpT); vec2 cfT = fract(gpT) - 0.5;
+          vec2 hT = fract(cidT * vec2(0.1131, 0.0973));
+          hT += dot(hT, hT.yx + 19.19);
+          float tR1 = fract((hT.x + hT.y) * hT.x);
+          float tR2 = fract((hT.x + hT.y) * hT.y);
+          float tPulse = 0.5 + 0.5 * sin(uTime * (1.0 + 2.4 * tR2) + tR1 * 6.2831);
+          float dust = pow(tPulse, 4.0) * smoothstep(0.34, 0.04, length(cfT)) * step(0.972, tR1);
+          outc += vec3(0.55, 0.68, 1.0) * dust * 0.5 * uNight * (1.0 - 0.6 * fish);
+        }
+      }
+      // 노을 틴트(N 키): 어두운 물=진한 적갈, 밝은 부분=금빛 — 사진의 석양 반사 톤
+      if (uSunset > 0.0) {
+        float lum = dot(outc, vec3(0.299, 0.587, 0.114));
+        vec3 grade = outc * mix(vec3(1.14, 0.50, 0.22), vec3(1.36, 0.86, 0.48), smoothstep(0.08, 0.80, lum));
+        grade += vec3(0.075, 0.028, 0.004);                     // 은은한 주황 앰비언트
+        outc = mix(outc, grade, uSunset);
+      }
+      // 별빛 밤하늘 틴트(U 키): 깊은 울트라마린 — 어두운 물=남색, 밝은 부분=청백
+      if (uNight > 0.0) {
+        float lum2 = dot(outc, vec3(0.299, 0.587, 0.114));
+        vec3 ngrade = outc * mix(vec3(0.14, 0.20, 0.52), vec3(0.60, 0.74, 1.18), smoothstep(0.06, 0.85, lum2));
+        ngrade += vec3(0.006, 0.014, 0.055);
+        outc = mix(outc, ngrade, uNight);
       }
       gl_FragColor = vec4(min(outc, 1.0), 1.0);
     }`;
@@ -220,6 +281,10 @@
     uBgScale: gl.getUniformLocation(progBg, "uBgScale"),
     uBgOffset: gl.getUniformLocation(progBg, "uBgOffset"),
     uBgBright: gl.getUniformLocation(progBg, "uBgBright"),
+    uEmblem: gl.getUniformLocation(progBg, "uEmblem"),
+    uEmblemOn: gl.getUniformLocation(progBg, "uEmblemOn"),
+    uEmbFit: gl.getUniformLocation(progBg, "uEmbFit"),
+    uTime: gl.getUniformLocation(progBg, "uTime"),
   };
   const locFish = {
     aClip: gl.getAttribLocation(progFish, "aClip"),
@@ -232,12 +297,14 @@
     uHeight: gl.getUniformLocation(progWater, "uHeight"),
     uDispUv: gl.getUniformLocation(progWater, "uDispUv"),
     uGlitter: gl.getUniformLocation(progWater, "uGlitter"),
+    uSunset: gl.getUniformLocation(progWater, "uSunset"),
+    uNight: gl.getUniformLocation(progWater, "uNight"),
     uTime: gl.getUniformLocation(progWater, "uTime"),
     uHTexel: gl.getUniformLocation(progWater, "uHTexel"),
   };
   gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0); gl.uniform1f(locBg.uBgBright, 1.0);
   gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
-  gl.useProgram(progWater); gl.uniform1i(locWater.uScene, 3); gl.uniform1i(locWater.uHeight, 1);
+  gl.useProgram(progWater); gl.uniform1i(locWater.uScene, 3); gl.uniform1i(locWater.uHeight, 1); gl.uniform1f(locWater.uSunset, 0.0); gl.uniform1f(locWater.uNight, 0.0);
 
   // ---------------------------------------------------------------
   // 텍스처: 배경(0) · 높이맵(1) · 잉어아틀라스(2) · scene FBO(3)
@@ -260,6 +327,23 @@
   const heightTex = makeTex(1, gl.CLAMP_TO_EDGE, gl.LINEAR);
   const koiTex = makeTex(2, gl.CLAMP_TO_EDGE, gl.LINEAR);
   const sceneTex = makeTex(3, gl.CLAMP_TO_EDGE, gl.LINEAR);
+  const emblemTex = makeTex(4, gl.CLAMP_TO_EDGE, gl.LINEAR);
+  // 골드 엠블럼(hillstate) 로드 + contain-fit 계산 — E 키
+  let EMBLEM_ON = false, embW = 1, embH = 1;
+  const embImg = new Image();
+  embImg.onload = function () {
+    embW = embImg.naturalWidth; embH = embImg.naturalHeight;
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, emblemTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, embImg);
+    embFit();
+  };
+  embImg.src = "assets/emblem.png?v=" + ASSET_VER;
+  let embFitX = 0.9, embFitY = 0.5;
+  function embFit() {
+    const ea = embW / embH, ca = canvasW / Math.max(1, canvasH);
+    if (ea >= ca) { embFitX = 0.94; embFitY = 0.94 * ca / ea; }
+    else { embFitY = 0.94; embFitX = 0.94 * ea / ca; }
+  }
 
   // scene FBO
   const fbo = gl.createFramebuffer();
@@ -517,6 +601,7 @@
     for (let i = 3; i < heightData.length; i += 4) heightData[i] = 255;
 
     resizeSceneTex();
+    embFit();                                          // 엠블럼 contain-fit 재계산
     applyDispScale();
     updateBgCover();
     if (curImg) { sizeBgCanvas(); composeUpload(); }   // 새 크기로 배경 재합성
@@ -999,6 +1084,10 @@
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.viewport(0, 0, canvasW, canvasH);
     gl.useProgram(progBg);
+    gl.uniform1i(locBg.uEmblem, 4);
+    gl.uniform1f(locBg.uEmblemOn, EMBLEM_ON ? 1.0 : 0.0);
+    gl.uniform2f(locBg.uEmbFit, embFitX, embFitY);
+    gl.uniform1f(locBg.uTime, (performance.now() - startT) / 1000);
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     gl.enableVertexAttribArray(locBg.aPos);
     gl.vertexAttribPointer(locBg.aPos, 2, gl.FLOAT, false, 0, 0);
@@ -1192,7 +1281,7 @@
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
-    ["KeyY", "윤슬 Y"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
+    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
   ];
@@ -1226,6 +1315,16 @@
   const glitterSlider = document.getElementById("glitterSlider");
   function refreshGlitterUI() { if (glitterBtn) glitterBtn.textContent = GLITTER_ON ? "윤슬 ON (Y)" : "윤슬 OFF (Y)"; }
   function toggleGlitter() { GLITTER_ON = !GLITTER_ON; applyGlitter(); refreshGlitterUI(); showHud("윤슬 " + (GLITTER_ON ? "ON" : "OFF")); }
+  // 노을(N)/밤하늘(U): 물 반사·틴트 톤 전환. 엠블럼(E): 물 밑 골드 로고 + 대각 스캔 반사.
+  let SUNSET_ON = false, NIGHT_ON = false;
+  function applyTimeMode() {
+    gl.useProgram(progWater);
+    gl.uniform1f(locWater.uSunset, SUNSET_ON ? 1.0 : 0.0);
+    gl.uniform1f(locWater.uNight, NIGHT_ON ? 1.0 : 0.0);
+  }
+  function toggleSunset() { SUNSET_ON = !SUNSET_ON; if (SUNSET_ON) NIGHT_ON = false; applyTimeMode(); showHud(SUNSET_ON ? "노을 모드" : "주간 모드"); }
+  function toggleNight() { NIGHT_ON = !NIGHT_ON; if (NIGHT_ON) SUNSET_ON = false; applyTimeMode(); showHud(NIGHT_ON ? "별빛 밤하늘 모드" : "주간 모드"); }
+  function toggleEmblem() { EMBLEM_ON = !EMBLEM_ON; showHud(EMBLEM_ON ? "엠블럼 ON" : "엠블럼 OFF"); }
   if (glitterBtn) glitterBtn.addEventListener("click", toggleGlitter);
   if (glitterSlider) {
     GLITTER_AMT = (+glitterSlider.value) / 100; applyGlitter();
@@ -1381,6 +1480,9 @@
       case "KeyW": if (e.repeat) return; e.preventDefault(); toggleCamMonitor(); break;
       case "KeyT": if (e.repeat) return; e.preventDefault(); toggleKoiGroup(); break;
       case "KeyY": if (e.repeat) return; e.preventDefault(); toggleGlitter(); break;
+      case "KeyN": if (e.repeat) return; e.preventDefault(); toggleSunset(); break;
+      case "KeyU": if (e.repeat) return; e.preventDefault(); toggleNight(); break;
+      case "KeyE": if (e.repeat) return; e.preventDefault(); toggleEmblem(); break;
       case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
       case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
       case "BracketRight": e.preventDefault(); setSplashVol(_splashVol + 0.1); break;   // 물소리 크게 ]
