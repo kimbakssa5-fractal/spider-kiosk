@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "53";   // 노을(N)/밤하늘(U)/엠블럼(E) 모드 이식(06→07)
+  const ASSET_VER = "54";   // 멀티프로젝터 엣지블렌딩(2/3대, O/G/, . 키)
   const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
@@ -45,6 +45,20 @@
   try { const _fq = parseInt(new URLSearchParams(location.search).get("fish"), 10);
         if (Number.isFinite(_fq)) FISH_COUNT = Math.max(0, Math.min(40, _fq)); } catch (e) {}  // ?fish=N 시작수 지정(exe 런처용)
   const FISH_LEN_MIN = 0.145, FISH_LEN_MAX = 0.225;  // 화면 짧은변 대비 몸길이 비율(꼬리 포함) — 06 잉어보다 작게, 마릿수↑
+  // 멀티프로젝터 엣지블렌딩(1PC 넓은창, 겹침 소프트블렌딩). 설치 현장에서 O/G/, . 키로 조정.
+  let PROJ_N = 1;                     // 프로젝터 수(1=off/2/3), ?proj=N + localStorage
+  let PROJ_OVERLAP = 0.12;            // 겹침 비율(프로젝터폭 대비 0~0.45)
+  let ALIGN_GRID = false;            // 정렬 그리드 오버레이
+  let outW = 0, outH = 0;            // 데스크톱(출력) 픽셀 — canvasW/H 는 유효 벽폭(렌더)
+  try {
+    const _sp = new URLSearchParams(location.search);
+    const _pn = parseInt(_sp.get("proj"), 10);
+    if ([1, 2, 3].indexOf(_pn) >= 0) PROJ_N = _pn;
+    else { const _ls = parseInt(localStorage.getItem("proj_n"), 10); if ([1, 2, 3].indexOf(_ls) >= 0) PROJ_N = _ls; }
+    const _ov = parseFloat(_sp.get("overlap"));
+    if (Number.isFinite(_ov)) PROJ_OVERLAP = Math.max(0, Math.min(0.45, _ov));
+    else { const _lo = parseFloat(localStorage.getItem("proj_overlap")); if (Number.isFinite(_lo)) PROJ_OVERLAP = Math.max(0, Math.min(0.45, _lo)); }
+  } catch (e) {}
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
@@ -248,6 +262,41 @@
       gl_FragColor = vec4(min(outc, 1.0), 1.0);
     }`;
 
+  // ④ 프로젝터 엣지블렌딩 패스: wallTex(유효폭 연속 렌더) → 데스크톱.
+  //   겹침 구간을 양쪽에 복제(wallU 접힘) + 코사인 그라데이션(합=1) → 이음새 소거.
+  //   uN=1 이면 통과(wallU=vUv.x, w=1). uGrid=정렬 격자.
+  const FS_BLEND = `
+    precision highp float;
+    varying vec2 vUv;
+    uniform sampler2D uWall;
+    uniform float uN;        // 프로젝터 수(1=off)
+    uniform float uOverlap;  // 겹침 비율(0~0.49)
+    uniform float uGrid;     // 정렬 그리드(0/1)
+    void main() {
+      float N = max(uN, 1.0);
+      float f = clamp(uOverlap, 0.0, 0.49);
+      float px = clamp(vUv.x, 0.0, 0.999999) * N;      // 프로젝터폭 단위 [0,N)
+      float p = floor(px);
+      float lx = px - p;                                // 프로젝터 내 [0,1)
+      float wallU = (p * (1.0 - f) + lx) / (N - (N - 1.0) * f);
+      vec3 col = texture2D(uWall, vec2(clamp(wallU, 0.0, 1.0), 1.0 - vUv.y)).rgb;
+      float w = 1.0;
+      if (p < N - 1.0 && lx > 1.0 - f) { float x = (lx - (1.0 - f)) / f; w = 0.5 * (1.0 + cos(3.14159265 * x)); }
+      if (p > 0.5 && lx < f)           { float x = lx / f;               w = 0.5 * (1.0 - cos(3.14159265 * x)); }
+      col *= w;
+      if (uGrid > 0.5) {
+        float lw = 0.0016 * N;
+        if (p < N - 1.0 && abs(lx - (1.0 - f)) < lw) col = vec3(1.0, 0.0, 1.0);   // 겹침 경계(마젠타)
+        if (p > 0.5 && abs(lx - f) < lw)             col = vec3(1.0, 0.0, 1.0);
+        float edge = min(fract(px), 1.0 - fract(px));
+        if (edge < lw) col = vec3(0.0, 1.0, 1.0);                                  // 프로젝터 경계(시안)
+        float gv = min(abs(lx - 0.3333), abs(lx - 0.6667));
+        float gh = min(abs(vUv.y - 0.3333), abs(vUv.y - 0.6667));
+        if (gv < 0.0011 * N || gh < 0.0011) col = mix(col, vec3(1.0), 0.45);       // 3분할 격자
+      }
+      gl_FragColor = vec4(col, 1.0);
+    }`;
+
   function compile(type, src) {
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
@@ -268,6 +317,7 @@
   const progBg = makeProg(VS_FULL, FS_BG);
   const progFish = makeProg(VS_FISH, FS_FISH);
   const progWater = makeProg(VS_FULL, FS_WATER);
+  const progBlend = makeProg(VS_FULL, FS_BLEND);
 
   // 풀스크린 삼각형 스트립
   const quad = gl.createBuffer();
@@ -302,9 +352,17 @@
     uTime: gl.getUniformLocation(progWater, "uTime"),
     uHTexel: gl.getUniformLocation(progWater, "uHTexel"),
   };
+  const locBlend = {
+    aPos: gl.getAttribLocation(progBlend, "aPos"),
+    uWall: gl.getUniformLocation(progBlend, "uWall"),
+    uN: gl.getUniformLocation(progBlend, "uN"),
+    uOverlap: gl.getUniformLocation(progBlend, "uOverlap"),
+    uGrid: gl.getUniformLocation(progBlend, "uGrid"),
+  };
   gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0); gl.uniform1f(locBg.uBgBright, 1.0);
   gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
   gl.useProgram(progWater); gl.uniform1i(locWater.uScene, 3); gl.uniform1i(locWater.uHeight, 1); gl.uniform1f(locWater.uSunset, 0.0); gl.uniform1f(locWater.uNight, 0.0);
+  gl.useProgram(progBlend); gl.uniform1i(locBlend.uWall, 5);
 
   // ---------------------------------------------------------------
   // 텍스처: 배경(0) · 높이맵(1) · 잉어아틀라스(2) · scene FBO(3)
@@ -353,6 +411,17 @@
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvasW, canvasH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+  // wall FBO(유효폭 렌더 → 엣지블렌딩 입력). canvasW=유효폭, outW=데스크톱.
+  const wallTex = makeTex(5, gl.CLAMP_TO_EDGE, gl.LINEAR);
+  const wallFBO = gl.createFramebuffer();
+  function resizeWallTex() {
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_2D, wallTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvasW, canvasH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, wallFBO);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, wallTex, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
@@ -585,12 +654,16 @@
 
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvasW = Math.round(window.innerWidth * dpr);
-    canvasH = Math.round(window.innerHeight * dpr);
-    canvas.width = canvasW;
-    canvas.height = canvasH;
+    outW = Math.round(window.innerWidth * dpr);        // 데스크톱(N개 프로젝터 폭 합)
+    outH = Math.round(window.innerHeight * dpr);
+    canvas.width = outW;
+    canvas.height = outH;
     canvas.style.width = window.innerWidth + "px";
     canvas.style.height = window.innerHeight + "px";
+    // 유효 벽폭(Weff): 겹침 접힘. 1대면 = 데스크톱. 씬/물은 canvasW(=Weff)로 렌더.
+    const eff = (PROJ_N > 1) ? (PROJ_N - (PROJ_N - 1) * PROJ_OVERLAP) / PROJ_N : 1;
+    canvasW = Math.max(1, Math.round(outW * eff));
+    canvasH = outH;
     gl.viewport(0, 0, canvasW, canvasH);
 
     gridW = Math.max(1, Math.round(canvasW / LATE));
@@ -601,6 +674,7 @@
     for (let i = 3; i < heightData.length; i += 4) heightData[i] = 255;
 
     resizeSceneTex();
+    resizeWallTex();
     embFit();                                          // 엠블럼 contain-fit 재계산
     applyDispScale();
     updateBgCover();
@@ -1111,14 +1185,27 @@
       gl.disable(gl.BLEND);
     }
 
-    // ③ 물 패스 → 화면
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // ③ 물 패스 → wallFBO (유효폭 연속 렌더)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, wallFBO);
     gl.viewport(0, 0, canvasW, canvasH);
     gl.useProgram(progWater);
     gl.uniform1f(locWater.uTime, (performance.now() - startT) / 1000);  // 윤슬 반짝임
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     gl.enableVertexAttribArray(locWater.aPos);
     gl.vertexAttribPointer(locWater.aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // ④ 엣지블렌딩 → 화면(데스크톱). PROJ_N=1 이면 통과.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, outW, outH);
+    gl.useProgram(progBlend);
+    gl.uniform1f(locBlend.uN, PROJ_N);
+    gl.uniform1f(locBlend.uOverlap, PROJ_OVERLAP);
+    gl.uniform1f(locBlend.uGrid, ALIGN_GRID ? 1.0 : 0.0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.enableVertexAttribArray(locBlend.aPos);
+    gl.vertexAttribPointer(locBlend.aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.disable(gl.BLEND);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -1250,6 +1337,23 @@
     window.removeEventListener("pointerdown", once);
   });
 
+  // ── 멀티프로젝터 엣지블렌딩 조정(설치 현장) ──
+  function saveProjCfg() {
+    try { localStorage.setItem("proj_n", String(PROJ_N)); localStorage.setItem("proj_overlap", PROJ_OVERLAP.toFixed(3)); } catch (e) {}
+  }
+  function setProjN(n) {
+    PROJ_N = [1, 2, 3].indexOf(n) >= 0 ? n : 1;
+    saveProjCfg(); resize();
+    showHud(PROJ_N > 1 ? ("프로젝터 " + PROJ_N + "대 (겹침 " + Math.round(PROJ_OVERLAP * 100) + "%)") : "단일 화면");
+  }
+  function cycleProj() { setProjN(PROJ_N >= 3 ? 1 : PROJ_N + 1); }
+  function setOverlap(delta) {
+    PROJ_OVERLAP = Math.max(0, Math.min(0.45, PROJ_OVERLAP + delta));
+    saveProjCfg(); resize();
+    showHud(PROJ_N > 1 ? ("겹침 " + Math.round(PROJ_OVERLAP * 100) + "% (프로젝터 " + PROJ_N + "대)") : "겹침 " + Math.round(PROJ_OVERLAP * 100) + "% (프로젝터 1대라 미적용)");
+  }
+  function toggleAlignGrid() { ALIGN_GRID = !ALIGN_GRID; showHud(ALIGN_GRID ? "정렬 그리드 ON (G)" : "정렬 그리드 OFF"); }
+
   function openBgPicker() { bgInput.click(); }
   function toggleSound() {
     if (soundOn) { ambient.pause(); soundOn = false; }
@@ -1281,7 +1385,9 @@
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
-    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
+    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"],
+    ["KeyO", "프로젝터 O"], ["KeyG", "정렬격자 G"], ["Comma", "겹침- ,"], ["Period", "겹침+ ."],
+    ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
   ];
@@ -1483,6 +1589,10 @@
       case "KeyN": if (e.repeat) return; e.preventDefault(); toggleSunset(); break;
       case "KeyU": if (e.repeat) return; e.preventDefault(); toggleNight(); break;
       case "KeyE": if (e.repeat) return; e.preventDefault(); toggleEmblem(); break;
+      case "KeyO": if (e.repeat) return; e.preventDefault(); cycleProj(); break;      // 프로젝터 수 1→2→3
+      case "KeyG": if (e.repeat) return; e.preventDefault(); toggleAlignGrid(); break; // 정렬 그리드
+      case "Comma": e.preventDefault(); setOverlap(-0.01); break;                      // 겹침 -
+      case "Period": e.preventDefault(); setOverlap(+0.01); break;                     // 겹침 +
       case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
       case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
       case "BracketRight": e.preventDefault(); setSplashVol(_splashVol + 0.1); break;   // 물소리 크게 ]
