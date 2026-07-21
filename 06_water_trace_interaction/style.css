@@ -59,6 +59,28 @@ html, body {
   #vkbd button { font-size: 11px; padding: 8px 4px; }
 }
 
+/* 단축키 모음 도움말(H) */
+#help {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.55); padding: 24px;
+  font-family: "Noto Sans KR", "Noto Sans", sans-serif;
+}
+#help.hidden { display: none; }
+#help .help-card {
+  background: rgba(20, 22, 28, 0.94); border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 16px; padding: 20px 22px; max-width: 92vw; max-height: 88vh; overflow: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+#help .help-title { color: #ffd9cf; font-weight: 900; font-size: 17px; margin-bottom: 14px; text-align: center; }
+#help .help-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px 14px; }
+#help .help-item {
+  color: #fff; font-size: 13px; font-weight: 600; padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 8px;
+  white-space: nowrap;
+}
+@media (max-width: 760px) { #help .help-grid { grid-template-columns: repeat(2, 1fr); } }
+
 /* 우측 상단 구석 빈곳 핫스팟(보이지 않음) → 클릭 시 메뉴 토글 */
 #menuHotspot {
   position: fixed;
