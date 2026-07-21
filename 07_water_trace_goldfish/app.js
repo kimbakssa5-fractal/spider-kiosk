@@ -1385,7 +1385,7 @@
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
-    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"],
+    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["KeyH", "도움말 H"],
     ["KeyO", "프로젝터 O"], ["KeyG", "정렬격자 G"], ["Comma", "겹침- ,"], ["Period", "겹침+ ."],
     ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
@@ -1416,6 +1416,28 @@
     showHud("가상 키보드 " + (open ? "표시" : "숨김"));
   }
   if (kbdBtn) kbdBtn.addEventListener("click", toggleVkbd);
+
+  // ── 단축키 모음 도움말 (H 키) ── VKEYS + 목록에 없는 키를 한 화면에.
+  const helpEl = document.getElementById("help");
+  const HELP_EXTRA = [["BracketLeft", "물소리- ["], ["BracketRight", "물소리+ ]"], ["KeyK", "가상키보드 K"]];
+  if (helpEl) {
+    const card = document.createElement("div"); card.className = "help-card";
+    const h = document.createElement("div"); h.className = "help-title"; h.textContent = "⌨ 단축키 모음 — H 로 닫기";
+    card.appendChild(h);
+    const grid = document.createElement("div"); grid.className = "help-grid";
+    VKEYS.concat(HELP_EXTRA).forEach(function (k) {
+      const item = document.createElement("div"); item.className = "help-item"; item.textContent = k[1];
+      grid.appendChild(item);
+    });
+    card.appendChild(grid);
+    helpEl.appendChild(card);
+    helpEl.addEventListener("click", function () { helpEl.classList.add("hidden"); });   // 아무데나 터치=닫기
+  }
+  function toggleHelp() {
+    if (!helpEl) return;
+    const open = !helpEl.classList.toggle("hidden");
+    showHud(open ? "단축키 도움말 (H로 닫기)" : "");
+  }
 
   const glitterBtn = document.getElementById("glitterBtn");
   const glitterSlider = document.getElementById("glitterSlider");
@@ -1595,6 +1617,7 @@
       case "Period": e.preventDefault(); setOverlap(+0.01); break;                     // 겹침 +
       case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
       case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
+      case "KeyH": if (e.repeat) return; e.preventDefault(); toggleHelp(); break;      // 단축키 모음 보기
       case "BracketRight": e.preventDefault(); setSplashVol(_splashVol + 0.1); break;   // 물소리 크게 ]
       case "BracketLeft": e.preventDefault(); setSplashVol(_splashVol - 0.1); break;    // 물소리 작게 [
       case "Digit1": case "Numpad1": e.preventDefault(); adjust("DAMPING", +1); break;

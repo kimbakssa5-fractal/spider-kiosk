@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>물결 Trace 금붕어</title>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
   <canvas id="scene"></canvas>
@@ -46,6 +46,9 @@
 
   <!-- 가상 키보드(K 토글): 버튼이 키 입력을 발생시켜 모든 단축키를 터치로 사용 -->
   <div id="vkbd" class="hidden"></div>
+
+  <!-- 단축키 모음 도움말(H 토글) -->
+  <div id="help" class="hidden"></div>
 
   <audio id="ambient" src="assets/ambient.mp3" loop preload="auto"></audio>
 
@@ -104,6 +107,6 @@
   })();
   </script>
 
-  <script src="app.js?v=108"></script>
+  <script src="app.js?v=109"></script>
 </body>
 </html>
