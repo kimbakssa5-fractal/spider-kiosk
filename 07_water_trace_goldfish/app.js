@@ -718,10 +718,14 @@
   // ---------------------------------------------------------------
   function splash(cssX, cssY, peak) {
     const amp = peak == null ? 255 : peak;
-    const dpr = canvasW / (window.innerWidth || canvasW);
-    const gx = (cssX * dpr) / LATE;
-    const gy = (cssY * dpr) / LATE;
-    const r = Math.max(1.5, (SPLASH_RADIUS_PX * dpr) / LATE);
+    // 멀티스크린: X=콘텐츠폭(gridW)·Y=콘텐츠높이(gridH) 로 분리 매핑.
+    //   canvasW=Weff(겹침 접힘)라 dpr=canvasW/innerWidth 를 세로에도 쓰면 Y가 eff 만큼 압축되던 버그 수정.
+    //   입력(cssX)은 콘텐츠-CSS px: Kinect/마우스=투영모서리 선형보정이라 데스크톱-UV≈콘텐츠-UV, 웹캠=카메라FOV=벽 직접.
+    const sw = gridW / (window.innerWidth || gridW);
+    const sh = gridH / (window.innerHeight || gridH);
+    const gx = cssX * sw;
+    const gy = cssY * sh;
+    const r = Math.max(1.5, SPLASH_RADIUS_PX * sh);
     const minX = Math.max(0, Math.floor(gx - r)), maxX = Math.min(gridW - 1, Math.ceil(gx + r));
     const minY = Math.max(0, Math.floor(gy - r)), maxY = Math.min(gridH - 1, Math.ceil(gy + r));
     for (let y = minY; y <= maxY; y++) {
@@ -741,18 +745,24 @@
   //   POINTER_TTL 동안 움직임이 없으면 비활성 → 물고기 진정.
   const pointers = new Map();   // id -> {x, y, t(sec)}
   let motionPoints = [];        // 카메라 모션 점 [{x,y,w}] (CSS px) — 매 모션틱 갱신
+  // ── 입력 소스 자동 전환: Kinect(=OS 터치주입) 있으면 터치 우선, 없으면 웹캠 유지 ──
+  let lastTouchT = -999;                       // 마지막 '터치'(Kinect 주입/터치스크린) 시각(초)
+  const TOUCH_SUPPRESS_S = 6;                   // 터치 후 이 시간 동안 웹캠 모션 억제(Kinect 우선)
   function nowSec() { return performance.now() / 1000; }
+  function touchActiveNow() { return (nowSec() - lastTouchT) < TOUCH_SUPPRESS_S; }
   function notePointer(id, x, y) { pointers.set(id, { x: x, y: y, t: nowSec() }); }
   function dropPointer(id) { pointers.delete(id); }
 
   canvas.style.touchAction = "none";
   canvas.addEventListener("pointerdown", function (e) {
+    if (e.pointerType === "touch") lastTouchT = nowSec();   // Kinect 주입/터치스크린 → 웹캠 억제
     splash(e.clientX, e.clientY);
     playSplash(1);                       // 접촉 파문 → 찰방
     notePointer(e.pointerId, e.clientX, e.clientY);
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   });
   canvas.addEventListener("pointermove", function (e) {
+    if (e.pointerType === "touch") lastTouchT = nowSec();
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evs) splash(ev.clientX, ev.clientY);
     playSplash(0.4);                      // 이동/드래그 파문 → 잔잔한 찰방(쓰로틀됨)
@@ -855,7 +865,7 @@
           if (fbCalmAcc > FB_CALM_MS) { fbCooldown = false; fbWideAcc = 0; }
         } else { fbCalmAcc = 0; }
       }
-      motionPoints = fbCooldown ? [] : pts;   // 냉각 중엔 도망점도 차단
+      motionPoints = (fbCooldown || touchActiveNow()) ? [] : pts;   // 냉각 중 or 터치(Kinect) 활성 시 도망점 차단
     }
     prevLuma = luma;
   }
@@ -865,6 +875,7 @@
     const cells = motionCells;
     if (!cells.length) return;
     if (fbCooldown) return;    // 되먹임 냉각 중(넓게 퍼진 일렁임 지속) — updateMotion 이 판정
+    if (touchActiveNow()) return;   // 터치(Kinect) 활성 시 웹캠 물결 억제 → Kinect 우선
     const W = window.innerWidth, H = window.innerHeight;
     const n = Math.min(MOTION_SPLASH_N, cells.length);
     let maxd = 0;
