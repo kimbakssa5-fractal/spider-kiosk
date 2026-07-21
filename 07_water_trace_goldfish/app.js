@@ -45,9 +45,11 @@
   try { const _fq = parseInt(new URLSearchParams(location.search).get("fish"), 10);
         if (Number.isFinite(_fq)) FISH_COUNT = Math.max(0, Math.min(40, _fq)); } catch (e) {}  // ?fish=N 시작수 지정(exe 런처용)
   const FISH_LEN_MIN = 0.145, FISH_LEN_MAX = 0.225;  // 화면 짧은변 대비 몸길이 비율(꼬리 포함) — 06 잉어보다 작게, 마릿수↑
-  // 멀티프로젝터 엣지블렌딩(1PC 넓은창, 겹침 소프트블렌딩). 설치 현장에서 O/G/, . 키로 조정.
+  // 멀티프로젝터 엣지블렌딩(1PC 넓은창, 겹침 소프트블렌딩). 설치 현장에서 O/G/겹침(;')/커브γ(-=)/디스플레이γ(,.) 키로 조정(61_edge 방식).
   let PROJ_N = 1;                     // 프로젝터 수(1=off/2/3), ?proj=N + localStorage
   let PROJ_OVERLAP = 0.12;            // 겹침 비율(프로젝터폭 대비 0~0.45)
+  let BLEND_CURVE_GAMMA = 2.0;        // 블렌드 커브 γ(Paul Bourke, 이음새 램프 형태) 1.0~4.0
+  let DISP_GAMMA = 2.2;              // 디스플레이 γ 역보정 — 밝은 장면 경계 거뭇함 방지(신호=f^(1/γ)) 1.0~3.0
   let ALIGN_GRID = false;            // 정렬 그리드 오버레이
   let outW = 0, outH = 0;            // 데스크톱(출력) 픽셀 — canvasW/H 는 유효 벽폭(렌더)
   try {
@@ -58,6 +60,8 @@
     const _ov = parseFloat(_sp.get("overlap"));
     if (Number.isFinite(_ov)) PROJ_OVERLAP = Math.max(0, Math.min(0.45, _ov));
     else { const _lo = parseFloat(localStorage.getItem("proj_overlap")); if (Number.isFinite(_lo)) PROJ_OVERLAP = Math.max(0, Math.min(0.45, _lo)); }
+    const _cg = parseFloat(localStorage.getItem("proj_curvegamma")); if (Number.isFinite(_cg)) BLEND_CURVE_GAMMA = Math.max(1.0, Math.min(4.0, _cg));
+    const _dg = parseFloat(localStorage.getItem("proj_dispgamma")); if (Number.isFinite(_dg)) DISP_GAMMA = Math.max(1.0, Math.min(3.0, _dg));
   } catch (e) {}
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
@@ -269,9 +273,17 @@
     precision highp float;
     varying vec2 vUv;
     uniform sampler2D uWall;
-    uniform float uN;        // 프로젝터 수(1=off)
-    uniform float uOverlap;  // 겹침 비율(0~0.49)
-    uniform float uGrid;     // 정렬 그리드(0/1)
+    uniform float uN;         // 프로젝터 수(1=off)
+    uniform float uOverlap;   // 겹침 비율(0~0.49)
+    uniform float uGrid;      // 정렬 그리드(0/1)
+    uniform float uCurveG;    // 블렌드 커브 γ(Paul Bourke)
+    uniform float uDispG;     // 디스플레이 γ 역보정
+    // 빛 세기 분율 b∈[0,1] (반대편 프로젝터와 b+ (1-b)=1 로 합=1). t=램프 위치.
+    float blendFrac(float t, float g) {
+      t = clamp(t, 0.0, 1.0);
+      if (t < 0.5) return 0.5 * pow(2.0 * t, g);
+      return 1.0 - 0.5 * pow(2.0 * (1.0 - t), g);
+    }
     void main() {
       float N = max(uN, 1.0);
       float f = clamp(uOverlap, 0.0, 0.49);
@@ -280,9 +292,12 @@
       float lx = px - p;                                // 프로젝터 내 [0,1)
       float wallU = (p * (1.0 - f) + lx) / (N - (N - 1.0) * f);
       vec3 col = texture2D(uWall, vec2(clamp(wallU, 0.0, 1.0), 1.0 - vUv.y)).rgb;
-      float w = 1.0;
-      if (p < N - 1.0 && lx > 1.0 - f) { float x = (lx - (1.0 - f)) / f; w = 0.5 * (1.0 + cos(3.14159265 * x)); }
-      if (p > 0.5 && lx < f)           { float x = lx / f;               w = 0.5 * (1.0 - cos(3.14159265 * x)); }
+      // b = 이 프로젝터가 내야 할 빛 분율(커브 γ). 반대편과 빛 공간에서 합=1.
+      float b = 1.0;
+      if (p < N - 1.0 && lx > 1.0 - f) { float x = (lx - (1.0 - f)) / f; b = blendFrac(1.0 - x, uCurveG); }
+      if (p > 0.5 && lx < f)           { float x = lx / f;               b = blendFrac(x,       uCurveG); }
+      // 디스플레이 γ 역보정: 실제 광량=신호^γ 이므로 신호=b^(1/γ) → 광량 합이 정확히 1(밝은 장면도 거뭇함 없음).
+      float w = pow(clamp(b, 0.0, 1.0), 1.0 / max(uDispG, 0.1));
       col *= w;
       if (uGrid > 0.5) {
         float lw = 0.0016 * N;
@@ -358,6 +373,8 @@
     uN: gl.getUniformLocation(progBlend, "uN"),
     uOverlap: gl.getUniformLocation(progBlend, "uOverlap"),
     uGrid: gl.getUniformLocation(progBlend, "uGrid"),
+    uCurveG: gl.getUniformLocation(progBlend, "uCurveG"),
+    uDispG: gl.getUniformLocation(progBlend, "uDispG"),
   };
   gl.useProgram(progBg);    gl.uniform1i(locBg.uBg, 0); gl.uniform1f(locBg.uBgBright, 1.0);
   gl.useProgram(progFish);  gl.uniform1i(locFish.uKoi, 2);
@@ -1202,6 +1219,8 @@
     gl.uniform1f(locBlend.uN, PROJ_N);
     gl.uniform1f(locBlend.uOverlap, PROJ_OVERLAP);
     gl.uniform1f(locBlend.uGrid, ALIGN_GRID ? 1.0 : 0.0);
+    gl.uniform1f(locBlend.uCurveG, BLEND_CURVE_GAMMA);
+    gl.uniform1f(locBlend.uDispG, DISP_GAMMA);
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     gl.enableVertexAttribArray(locBlend.aPos);
     gl.vertexAttribPointer(locBlend.aPos, 2, gl.FLOAT, false, 0, 0);
@@ -1339,7 +1358,12 @@
 
   // ── 멀티프로젝터 엣지블렌딩 조정(설치 현장) ──
   function saveProjCfg() {
-    try { localStorage.setItem("proj_n", String(PROJ_N)); localStorage.setItem("proj_overlap", PROJ_OVERLAP.toFixed(3)); } catch (e) {}
+    try {
+      localStorage.setItem("proj_n", String(PROJ_N));
+      localStorage.setItem("proj_overlap", PROJ_OVERLAP.toFixed(3));
+      localStorage.setItem("proj_curvegamma", BLEND_CURVE_GAMMA.toFixed(2));
+      localStorage.setItem("proj_dispgamma", DISP_GAMMA.toFixed(2));
+    } catch (e) {}
   }
   function setProjN(n) {
     PROJ_N = [1, 2, 3].indexOf(n) >= 0 ? n : 1;
@@ -1351,6 +1375,16 @@
     PROJ_OVERLAP = Math.max(0, Math.min(0.45, PROJ_OVERLAP + delta));
     saveProjCfg(); resize();
     showHud(PROJ_N > 1 ? ("겹침 " + Math.round(PROJ_OVERLAP * 100) + "% (프로젝터 " + PROJ_N + "대)") : "겹침 " + Math.round(PROJ_OVERLAP * 100) + "% (프로젝터 1대라 미적용)");
+  }
+  function setCurveGamma(delta) {
+    BLEND_CURVE_GAMMA = Math.max(1.0, Math.min(4.0, +(BLEND_CURVE_GAMMA + delta).toFixed(2)));
+    saveProjCfg();
+    showHud(PROJ_N > 1 ? ("블렌드 커브 γ  " + BLEND_CURVE_GAMMA.toFixed(1)) : ("커브 γ " + BLEND_CURVE_GAMMA.toFixed(1) + " (프로젝터 1대라 미적용)"));
+  }
+  function setDispGamma(delta) {
+    DISP_GAMMA = Math.max(1.0, Math.min(3.0, +(DISP_GAMMA + delta).toFixed(2)));
+    saveProjCfg();
+    showHud(PROJ_N > 1 ? ("디스플레이 γ  " + DISP_GAMMA.toFixed(1) + " (경계 밝기 보정)") : ("디스플레이 γ " + DISP_GAMMA.toFixed(1) + " (프로젝터 1대라 미적용)"));
   }
   function toggleAlignGrid() { ALIGN_GRID = !ALIGN_GRID; showHud(ALIGN_GRID ? "정렬 그리드 ON (G)" : "정렬 그리드 OFF"); }
 
@@ -1386,7 +1420,7 @@
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
     ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["KeyH", "도움말 H"],
-    ["KeyO", "프로젝터 O"], ["KeyG", "정렬격자 G"], ["Comma", "겹침- ,"], ["Period", "겹침+ ."],
+    ["KeyO", "프로젝터 O"], ["KeyG", "정렬격자 G"], ["Semicolon", "겹침- ;"], ["Quote", "겹침+ '"], ["Minus", "커브γ- -"], ["Equal", "커브γ+ ="], ["Comma", "화면γ- ,"], ["Period", "화면γ+ ."],
     ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
     ["ArrowUp", "배경간격+ ▲"], ["ArrowDown", "배경간격- ▼"],
@@ -1613,8 +1647,12 @@
       case "KeyE": if (e.repeat) return; e.preventDefault(); toggleEmblem(); break;
       case "KeyO": if (e.repeat) return; e.preventDefault(); cycleProj(); break;      // 프로젝터 수 1→2→3
       case "KeyG": if (e.repeat) return; e.preventDefault(); toggleAlignGrid(); break; // 정렬 그리드
-      case "Comma": e.preventDefault(); setOverlap(-0.01); break;                      // 겹침 -
-      case "Period": e.preventDefault(); setOverlap(+0.01); break;                     // 겹침 +
+      case "Semicolon": e.preventDefault(); setOverlap(-0.01); break;                  // 겹침 - (;)
+      case "Quote": e.preventDefault(); setOverlap(+0.01); break;                      // 겹침 + (')
+      case "Minus": e.preventDefault(); setCurveGamma(-0.1); break;                    // 블렌드 커브 γ - (61 동일)
+      case "Equal": e.preventDefault(); setCurveGamma(+0.1); break;                    // 블렌드 커브 γ + (61 동일)
+      case "Comma": e.preventDefault(); setDispGamma(-0.1); break;                     // 디스플레이 γ - (61 동일)
+      case "Period": e.preventDefault(); setDispGamma(+0.1); break;                    // 디스플레이 γ + (61 동일)
       case "KeyI": if (e.repeat) return; e.preventDefault(); toggleHintIcon(); break;
       case "KeyK": if (e.repeat) return; e.preventDefault(); toggleVkbd(); break;
       case "KeyH": if (e.repeat) return; e.preventDefault(); toggleHelp(); break;      // 단축키 모음 보기
