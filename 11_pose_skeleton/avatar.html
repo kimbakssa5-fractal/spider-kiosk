@@ -40,6 +40,8 @@
   button:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
   button.primary{background:var(--accent);color:#05080d;border-color:var(--accent);font-weight:700}
   button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .skin{padding:8px 14px;font-size:13px;border-radius:999px}
+  .skin.on{background:var(--accent);color:#05080d;border-color:var(--accent);font-weight:700}
   .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);padding:8px 4px}
   .toggle input{width:38px;height:20px;appearance:none;background:#2a3442;border-radius:999px;position:relative;cursor:pointer;transition:.2s}
   .toggle input:checked{background:var(--accent)}
@@ -68,6 +70,7 @@
     </div>
   </div>
 
+  <div class="controls" id="skins"></div>
   <div class="controls">
     <button class="primary" id="startBtn">▶ 시작</button>
     <button id="stopBtn" disabled>■ 정지</button>
@@ -159,8 +162,8 @@ function smooth(lm){
   return P;
 }
 
-// ── 귀여운 마스코트 아바타 ──
-let hue=14;                 // 몸통 색상(코랄). 색상순환 토글로 회전
+// ── 아바타 스킨 시스템 ──
+let hue=190;
 function scaleOf(P){
   const sm={x:(P[11].x+P[12].x)/2,y:(P[11].y+P[12].y)/2};
   const hp={x:(P[23].x+P[24].x)/2,y:(P[23].y+P[24].y)/2};
@@ -171,121 +174,121 @@ function scaleOf(P){
 function vis(P,i){ return P[i]&&P[i].v>0.35; }
 function mid(A,B){ return {x:(A.x+B.x)/2,y:(A.y+B.y)/2}; }
 
-const OUTLINE='rgba(60,40,44,0.92)';
-// 눈 깜빡임/표정 상태
-let blinkT=0, nextBlink=2.2;
+const LIMBS=[[11,13],[13,15],[12,14],[14,16],[23,25],[25,27],[24,26],[26,28]];
+const pcv=document.createElement('canvas');
+function line(A,B,w){ if(!A||!B)return; ctx.lineWidth=w; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke(); }
+function seg(P,a,b,w){ if(!vis(P,a)||!vis(P,b))return; line(P[a],P[b],w); }
+function disc(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,6.2832); ctx.fill(); }
+function rrect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function bodyPoly(P){ if(!(vis(P,11)&&vis(P,12)&&vis(P,23)&&vis(P,24)))return false; ctx.beginPath(); ctx.moveTo(P[11].x,P[11].y); ctx.lineTo(P[12].x,P[12].y); ctx.lineTo(P[24].x,P[24].y); ctx.lineTo(P[23].x,P[23].y); ctx.closePath(); return true; }
+function groundShadow(g,color){ ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(g.hp.x,g.feetY+g.S*0.06,g.S*0.55,g.S*0.14,0,0,6.2832); ctx.fill(); }
+function lookX(P,g){ const ws=[P[15],P[16]].filter((_,i)=>vis(P,15+i)); if(!ws.length)return 0; const wc=ws.length===2?mid(P[15],P[16]):ws[0]; return Math.max(-1,Math.min(1,(wc.x-g.hc.x)/g.S)); }
 
-// 팔/다리 실루엣 그리기(a→중간→b, 라운드). mode:'out'=아웃라인 두껍게 / 'fill'=색 채움
-function limbPass(P,a,b,c,w,O,mode,col){
-  if(!vis(P,a)||!vis(P,c)) return;
-  const A=P[a], B=vis(P,b)?P[b]:mid(P[a],P[c]), C=P[c];
-  ctx.lineCap='round'; ctx.lineJoin='round';
-  ctx.strokeStyle = mode==='out'?OUTLINE:col;
-  ctx.lineWidth = mode==='out'? w+O*2 : w;
-  ctx.beginPath(); ctx.moveTo(A.x,A.y);
-  ctx.quadraticCurveTo(B.x,B.y, C.x,C.y); ctx.stroke();
-}
-function blob(cx,cy,rx,ry,rot,O,mode,col){
-  ctx.fillStyle = mode==='out'?OUTLINE:col;
-  ctx.beginPath(); ctx.ellipse(cx,cy,rx+(mode==='out'?O:0),ry+(mode==='out'?O:0),rot,0,6.2832); ctx.fill();
-}
-
-function drawAvatar(P){
-  const S=scaleOf(P);
-  const sm=mid(P[11],P[12]), hp=mid(P[23],P[24]);
-  const bodyC=`hsl(${hue},85%,64%)`, bodyD=`hsl(${hue},70%,54%)`;
-  const CREAM='#ffe9d6', SHOE='#5b4636', BLUSH='#ff8f7d', INK='#3a2b2c';
-  const O=Math.max(3,S*0.045);                       // 아웃라인 두께
-  const spineAng=Math.atan2(sm.x-hp.x, hp.y-sm.y);   // 척추 기울기(직립=0, 머리 기울임용)
-
-  // 몸통 중심/치수(통통한 콩 모양)
-  const bodyMid=mid(sm,hp);
-  const bodyLen=Math.hypot(sm.x-hp.x,sm.y-hp.y);
-  const bodyW=S*0.62;
-  const bodyRot=Math.atan2(hp.y-sm.y,hp.x-sm.x)-Math.PI/2;
-
-  // 머리(큰 원)
+function geoOf(P){
+  const S=scaleOf(P), sm=mid(P[11],P[12]), hp=mid(P[23],P[24]);
   let hc;
   if(vis(P,7)&&vis(P,8)) hc=mid(P[7],P[8]);
   else if(vis(P,0)) hc={x:P[0].x,y:P[0].y};
-  else hc={x:sm.x,y:sm.y-S*0.5};
-  const hr=S*0.56;                                   // 큰 머리(치비 비율)
-  hc={x:hc.x, y:hc.y - S*0.10};                      // 살짝 위로
-
-  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
-
-  // 바닥 그림자
+  else hc={x:sm.x,y:sm.y-S*0.4};
+  const hr=(vis(P,7)&&vis(P,8))? Math.hypot(P[7].x-P[8].x,P[7].y-P[8].y)*0.7+S*0.09 : S*0.3;
   const feetY=Math.max(vis(P,27)?P[27].y:0, vis(P,28)?P[28].y:0)||hp.y+S;
-  ctx.fillStyle='rgba(0,0,0,0.22)';
-  ctx.beginPath(); ctx.ellipse(hp.x,feetY+S*0.08,S*0.62,S*0.15,0,0,6.2832); ctx.fill();
+  const lean=Math.atan2(sm.x-hp.x, hp.y-sm.y);
+  return {S,sm,hp,hc,hr,feetY,lean};
+}
 
-  // 부드러운 드롭섀도(스티커 느낌)
-  ctx.shadowColor='rgba(20,10,15,0.28)'; ctx.shadowBlur=S*0.14; ctx.shadowOffsetY=S*0.05;
+// 실루엣/픽셀 공용: 임의 컨텍스트에 꽉 찬 몸체 채우기
+function paintSolid(c,P,g,body,head,foot,expand){
+  const S=g.S; c.lineCap='round'; c.lineJoin='round';
+  const L=(A,B,w)=>{ if(!A||!B)return; c.strokeStyle=body; c.lineWidth=w; c.beginPath(); c.moveTo(A.x,A.y); c.lineTo(B.x,B.y); c.stroke(); };
+  L(g.sm,g.hp,S*0.42+expand); L(P[11],P[12],S*0.16+expand); L(P[23],P[24],S*0.16+expand);
+  for(const [a,b] of LIMBS) if(vis(P,a)&&vis(P,b)) L(P[a],P[b],(a>=23?S*0.15:S*0.13)+expand);
+  L(g.sm,g.hc,S*0.12+expand);
+  c.fillStyle=foot||body; for(const i of [27,28]) if(vis(P,i)){ c.beginPath(); c.arc(P[i].x,P[i].y,S*0.10+expand,0,6.2832); c.fill(); }
+  c.fillStyle=body; for(const i of [15,16]) if(vis(P,i)){ c.beginPath(); c.arc(P[i].x,P[i].y,S*0.09+expand,0,6.2832); c.fill(); }
+  c.fillStyle=head||body; c.beginPath(); c.arc(g.hc.x,g.hc.y,g.hr+expand,0,6.2832); c.fill();
+}
 
-  // ===== 아웃라인 패스(어두운 실루엣) =====
-  for(const [a,b,c] of [[23,25,27],[24,26,28]]) limbPass(P,a,b,c,S*0.19,O,'out');   // 다리
-  for(const i of [27,28]) if(vis(P,i)) blob(P[i].x,P[i].y+S*0.02,S*0.14,S*0.10,0,O,'out',0); // 발
-  for(const [a,b,c] of [[11,13,15],[12,14,16]]) limbPass(P,a,b,c,S*0.16,O,'out');   // 팔
-  for(const i of [15,16]) if(vis(P,i)) blob(P[i].x,P[i].y,S*0.12,S*0.12,0,O,'out',0); // 손
-  blob(bodyMid.x,bodyMid.y,bodyW/2,bodyLen/2+bodyW*0.35,bodyRot,O,'out',0);          // 몸통
-  blob(hc.x,hc.y,hr,hr,0,O,'out',0);                                                 // 머리
-  ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
-
-  // ===== 색 채움 패스 =====
-  for(const [a,b,c] of [[23,25,27],[24,26,28]]) limbPass(P,a,b,c,S*0.19,O,'fill',bodyD);
-  for(const i of [27,28]) if(vis(P,i)) blob(P[i].x,P[i].y+S*0.02,S*0.14,S*0.10,0,O,'fill',SHOE);
-  for(const [a,b,c] of [[11,13,15],[12,14,16]]) limbPass(P,a,b,c,S*0.16,O,'fill',bodyC);
-  for(const i of [15,16]) if(vis(P,i)) blob(P[i].x,P[i].y,S*0.12,S*0.12,0,O,'fill',CREAM);
-  blob(bodyMid.x,bodyMid.y,bodyW/2,bodyLen/2+bodyW*0.35,bodyRot,O,'fill',bodyC);
-  // 배 하이라이트
-  ctx.fillStyle='rgba(255,255,255,0.16)';
-  ctx.beginPath(); ctx.ellipse(bodyMid.x,bodyMid.y+bodyLen*0.05,bodyW*0.28,bodyLen*0.28,bodyRot,0,6.2832); ctx.fill();
-  // 머리
-  blob(hc.x,hc.y,hr,hr,0,O,'fill',CREAM);
-
-  // ===== 얼굴 =====
-  // 시선: 두 손목 평균 쪽을 본다
-  let look={x:0,y:0.1};
-  const ws=[P[15],P[16]].filter((_,i)=>vis(P,15+i));
-  if(ws.length){ const wc=ws.length===2?mid(P[15],P[16]):ws[0]; const dx=wc.x-hc.x, dy=wc.y-hc.y; const d=Math.hypot(dx,dy)||1; look={x:dx/d,y:dy/d}; }
-  ctx.save();
-  ctx.translate(hc.x,hc.y); ctx.rotate(spineAng*0.5);
-  const eyeDX=hr*0.4, eyeY=-hr*0.05, eyeR=hr*0.24, pupR=hr*0.15;
-  const excited = (armRaiseLite(P))>0.5;
-  // 깜빡임
-  blinkT+=frameDt; const blinking = blinkT>nextBlink && blinkT<nextBlink+0.12;
-  if(blinkT>nextBlink+0.12){ nextBlink=blinkT+1.6+Math.random()*2.4; }
-  for(const sgn of [-1,1]){
-    const ex=sgn*eyeDX;
-    if(blinking){ ctx.strokeStyle=INK; ctx.lineWidth=hr*0.08; ctx.beginPath(); ctx.moveTo(ex-eyeR*0.7,eyeY); ctx.quadraticCurveTo(ex,eyeY+eyeR*0.5,ex+eyeR*0.7,eyeY); ctx.stroke(); }
-    else{
-      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(ex,eyeY,eyeR*0.8,eyeR,0,0,6.2832); ctx.fill();
-      ctx.fillStyle=INK; ctx.beginPath(); ctx.arc(ex+look.x*eyeR*0.35, eyeY+look.y*eyeR*0.35, pupR,0,6.2832); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.arc(ex+look.x*eyeR*0.35-pupR*0.3, eyeY+look.y*eyeR*0.35-pupR*0.35, pupR*0.35,0,6.2832); ctx.fill();
-    }
-  }
-  // 볼터치
-  ctx.fillStyle=BLUSH; ctx.globalAlpha=0.8;
-  for(const sgn of [-1,1]){ ctx.beginPath(); ctx.ellipse(sgn*hr*0.62, hr*0.28, hr*0.16, hr*0.11,0,0,6.2832); ctx.fill(); }
-  ctx.globalAlpha=1;
-  // 입
-  ctx.strokeStyle=INK; ctx.lineWidth=hr*0.07; ctx.lineCap='round';
-  if(excited){ ctx.fillStyle=INK; ctx.beginPath(); ctx.ellipse(0,hr*0.42,hr*0.16,hr*0.2,0,0,Math.PI); ctx.fill(); }
-  else { ctx.beginPath(); ctx.moveTo(-hr*0.16,hr*0.36); ctx.quadraticCurveTo(0,hr*0.5, hr*0.16,hr*0.36); ctx.stroke(); }
-  // 앞머리 곱슬(장식)
-  ctx.fillStyle=bodyC; ctx.beginPath(); ctx.arc(0,-hr*0.92,hr*0.16,0,6.2832); ctx.fill();
-  ctx.strokeStyle=OUTLINE; ctx.lineWidth=O; ctx.beginPath(); ctx.arc(0,-hr*0.92,hr*0.16,0,6.2832); ctx.stroke();
-  ctx.restore();
-
+// ===== 네온 와이어 =====
+function skinNeon(P,g){
+  const S=g.S, c1=`hsl(${hue},100%,60%)`, c2=`hsl(${(hue+45)%360},100%,66%)`;
+  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round'; ctx.globalCompositeOperation='lighter';
+  ctx.shadowColor=c1; ctx.shadowBlur=S*0.32; ctx.strokeStyle=c1;
+  seg(P,11,12,S*0.045); seg(P,23,24,S*0.045); line(g.sm,g.hp,S*0.045); line(g.sm,g.hc,S*0.04);
+  for(const [a,b] of LIMBS) seg(P,a,b,S*0.045);
+  ctx.beginPath(); ctx.arc(g.hc.x,g.hc.y,g.hr,0,6.2832); ctx.lineWidth=S*0.045; ctx.stroke();
+  ctx.fillStyle=c2; for(const i of [11,12,13,14,15,16,23,24,25,26,27,28]) if(vis(P,i)) disc(P[i].x,P[i].y,S*0.05);
+  ctx.shadowBlur=0; ctx.strokeStyle='#eafcff';
+  for(const [a,b] of LIMBS) seg(P,a,b,S*0.013);
+  line(g.sm,g.hp,S*0.013); line(g.sm,g.hc,S*0.012);
+  ctx.beginPath(); ctx.arc(g.hc.x,g.hc.y,g.hr,0,6.2832); ctx.lineWidth=S*0.013; ctx.stroke();
   ctx.restore();
 }
-// 얼굴 표정용 가벼운 팔들기 감지
-function armRaiseLite(P){
-  if(!vis(P,11)||!vis(P,12)) return 0;
-  const sy=(P[11].y+P[12].y)/2; let up=0;
-  if(vis(P,15)&&P[15].y<sy) up++; if(vis(P,16)&&P[16].y<sy) up++;
-  return up/2;
+
+// ===== 로봇 =====
+function skinRobot(P,g){
+  const S=g.S, EDGE='#141922', METAL='#c3ccd8', DARK='#5a636f', ACC=`hsl(${hue},90%,58%)`;
+  groundShadow(g,'rgba(0,0,0,0.28)'); ctx.lineCap='round'; ctx.lineJoin='round';
+  const seg3=(A,B,w)=>{ if(!A||!B)return; ctx.strokeStyle=EDGE; line(A,B,w+S*0.05); ctx.strokeStyle=METAL; line(A,B,w); ctx.strokeStyle='rgba(255,255,255,0.35)'; line(A,B,w*0.18); };
+  seg3(g.sm,g.hp,S*0.30); seg3(P[11],P[12],S*0.13); seg3(P[23],P[24],S*0.13);
+  for(const [a,b] of LIMBS) if(vis(P,a)&&vis(P,b)) seg3(P[a],P[b], a>=23?S*0.12:S*0.10);
+  seg3(g.sm,g.hc,S*0.09);
+  const cm=mid(g.sm,g.hp); ctx.fillStyle=ACC; ctx.shadowColor=ACC; ctx.shadowBlur=S*0.2; disc(cm.x,cm.y-S*0.04,S*0.06); ctx.shadowBlur=0;
+  for(const i of [11,12,13,14,15,16,23,24,25,26]) if(vis(P,i)){ ctx.fillStyle=EDGE; disc(P[i].x,P[i].y,S*0.075); ctx.fillStyle=METAL; disc(P[i].x,P[i].y,S*0.05); ctx.fillStyle=DARK; disc(P[i].x,P[i].y,S*0.02); }
+  ctx.save(); ctx.translate(g.hc.x,g.hc.y); ctx.rotate(g.lean*0.5);
+  const hw=g.hr*1.5, hh=g.hr*1.7;
+  ctx.fillStyle=EDGE; rrect(ctx,-hw/2-S*0.03,-hh/2-S*0.03,hw+S*0.06,hh+S*0.06,S*0.11); ctx.fill();
+  const gr=ctx.createLinearGradient(0,-hh/2,0,hh/2); gr.addColorStop(0,'#e3e9f1'); gr.addColorStop(1,METAL);
+  ctx.fillStyle=gr; rrect(ctx,-hw/2,-hh/2,hw,hh,S*0.09); ctx.fill();
+  ctx.fillStyle='#0f141b'; rrect(ctx,-hw*0.4,-hh*0.14,hw*0.8,hh*0.36,S*0.05); ctx.fill();
+  const lx=lookX(P,g); ctx.fillStyle=ACC; ctx.shadowColor=ACC; ctx.shadowBlur=S*0.16; disc(lx*hw*0.2,hh*0.03,S*0.06); ctx.shadowBlur=0;
+  ctx.strokeStyle=METAL; line({x:0,y:-hh/2},{x:0,y:-hh/2-S*0.18},S*0.03);
+  ctx.fillStyle=ACC; ctx.shadowColor=ACC; ctx.shadowBlur=S*0.12; disc(0,-hh/2-S*0.2,S*0.035); ctx.shadowBlur=0;
+  ctx.restore();
 }
+
+// ===== 실루엣 그림자(림라이트) =====
+function skinShadow(P,g){
+  groundShadow(g,'rgba(0,0,0,0.32)');
+  ctx.save(); ctx.shadowColor=`hsl(${hue},95%,62%)`; ctx.shadowBlur=g.S*0.22;
+  paintSolid(ctx,P,g,'#0b0e14','#0b0e14','#0b0e14',0);
+  ctx.restore();
+  paintSolid(ctx,P,g,'#0b0e14','#0b0e14','#0b0e14',0);
+}
+
+// ===== 픽셀 =====
+function skinPixel(P,g){
+  const S=g.S, px=Math.max(6,Math.round(S*0.12));
+  const ow=Math.ceil(canvas.width/px), oh=Math.ceil(canvas.height/px);
+  if(pcv.width!==ow||pcv.height!==oh){ pcv.width=ow; pcv.height=oh; }
+  const p=pcv.getContext('2d'); p.setTransform(1,0,0,1,0,0); p.clearRect(0,0,ow,oh); p.setTransform(1/px,0,0,1/px,0,0);
+  paintSolid(p,P,g,`hsl(${hue},68%,58%)`,`hsl(${(hue+28)%360},80%,66%)`,'#39465a',0);
+  ctx.imageSmoothingEnabled=false; ctx.drawImage(pcv,0,0,ow,oh,0,0,canvas.width,canvas.height); ctx.imageSmoothingEnabled=true;
+}
+
+// ===== 홀로그램 =====
+function skinHolo(P,g){
+  const S=g.S, col=(l,a)=>`hsla(${hue},90%,${l}%,${a})`;
+  const gd=ctx.createRadialGradient(g.hp.x,g.feetY,2,g.hp.x,g.feetY,S*1.1); gd.addColorStop(0,col(55,0.25)); gd.addColorStop(1,col(55,0));
+  ctx.fillStyle=gd; ctx.beginPath(); ctx.ellipse(g.hp.x,g.feetY,S,S*0.2,0,0,6.2832); ctx.fill();
+  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.shadowColor=col(60,0.9); ctx.shadowBlur=S*0.25; ctx.strokeStyle=col(60,0.22); ctx.fillStyle=col(60,0.22);
+  if(bodyPoly(P)) ctx.fill();
+  for(const [a,b] of LIMBS) seg(P,a,b,S*0.16); line(g.sm,g.hc,S*0.13);
+  ctx.beginPath(); ctx.arc(g.hc.x,g.hc.y,g.hr,0,6.2832); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle=col(80,0.95);
+  for(const [a,b] of LIMBS) seg(P,a,b,S*0.09); line(g.sm,g.hc,S*0.07);
+  const hg=ctx.createRadialGradient(g.hc.x,g.hc.y-g.hr*0.3,g.hr*0.2,g.hc.x,g.hc.y,g.hr); hg.addColorStop(0,col(92,0.95)); hg.addColorStop(1,col(65,0.5));
+  ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(g.hc.x,g.hc.y,g.hr,0,6.2832); ctx.fill();
+  ctx.fillStyle=col(92,0.95); for(const i of [11,12,13,14,15,16,23,24,25,26,27,28]) if(vis(P,i)) disc(P[i].x,P[i].y,S*0.05);
+}
+
+const SKINS=[{n:'네온',f:skinNeon,h:190},{n:'로봇',f:skinRobot,h:200},{n:'실루엣',f:skinShadow,h:280},{n:'픽셀',f:skinPixel,h:150},{n:'홀로그램',f:skinHolo,h:190}];
+let curSkin=0;
+function drawAvatar(P){ const g=geoOf(P); SKINS[curSkin].f(P,g); }
+const skinsEl=document.getElementById('skins');
+SKINS.forEach((s,i)=>{ const b=document.createElement('button'); b.className='skin'+(i===0?' on':''); b.textContent=s.n;
+  b.onclick=()=>{ curSkin=i; hue=s.h; [...skinsEl.children].forEach((c,j)=>c.classList.toggle('on',j===i)); }; skinsEl.appendChild(b); });
 
 function loop(){
   if(!running) return;
