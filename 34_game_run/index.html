@@ -1027,11 +1027,11 @@ function camLoop(){
 }
 
 let lastCamErr=null;                 // 마지막 카메라 오류(재시도 판단용: 권한 거부면 중단)
-async function start(){
+async function start(silent){        // silent=자동시작/재시도(에러 오버레이 억제, 조용히 데모 폴백)
   startBtn.disabled=true;
   try{
     if(!poseLandmarker) await loadModel();
-    if(!demoActive) setOverlay('카메라를 켜는 중…',true);
+    if(!demoActive && !silent) setOverlay('카메라를 켜는 중…',true);
     const s=await openCamera();        // ★ 카메라 확보에 성공해야만 커밋(데모/화면 유지)
     lastCamErr=null;
     stopDemo();                        // 카메라 확보 후에만 데모 중단(재시도 중 깜빡임 방지)
@@ -1050,7 +1050,7 @@ async function start(){
   }catch(e){
     lastCamErr=e;
     console.error(e);
-    if(!demoActive){ setOverlay(cameraErrorMsg(e),false); setStatus('오류',false); }
+    if(!demoActive && !silent){ setOverlay(cameraErrorMsg(e),false); setStatus('오류',false); }
     startBtn.disabled=false;
   }
 }
@@ -1247,11 +1247,13 @@ setInterval(()=>{
 let camRetryTimer=null;
 async function forceCamera(){
   if(running) return;
-  await start();                                  // 성공 시 카메라 커밋, 실패해도 데모/화면 유지
+  await start(true);                              // silent: 성공 시 커밋, 실패해도 에러화면 없이 데모 유지
   if(running){ if(camRetryTimer){ clearTimeout(camRetryTimer); camRetryTimer=null; } return; }
-  if(!demoActive) startDemo();                    // 카메라 실패 → 데모로 화면 유지(무인 대비)
+  if(!demoActive) startDemo();                    // 카메라 실패 → 데모로 화면 유지(무인 대비, 에러 오버레이 없음)
   if(lastCamErr && lastCamErr.name==='NotAllowedError') return;   // 권한 거부는 재프롬프트 불가 → 재시도 중단
-  if(!camRetryTimer) camRetryTimer=setTimeout(()=>{ camRetryTimer=null; forceCamera(); }, 8000);  // 점유/미발견 → 8초 재시도
+  // 점유(NotReadableError)/미발견 → 8초마다 조용히 재시도(캠이 풀리면 자동으로 카메라 전환)
+  if(lastCamErr) setStatus('카메라 연결 대기 중… (데모)',true);
+  if(!camRetryTimer) camRetryTimer=setTimeout(()=>{ camRetryTimer=null; forceCamera(); }, 8000);
 }
 window.RunGame.forceCamera=forceCamera;
 (function bootAutoStart(){
