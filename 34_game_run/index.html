@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" translate="no">
 <head>
+<meta name="google" content="notranslate">
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; worker-src 'self' blob:; child-src blob:; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1025,13 +1026,16 @@ function camLoop(){
   tickFps();
 }
 
+let lastCamErr=null;                 // 마지막 카메라 오류(재시도 판단용: 권한 거부면 중단)
 async function start(){
-  stopDemo();
   startBtn.disabled=true;
   try{
     if(!poseLandmarker) await loadModel();
-    setOverlay('카메라를 켜는 중…',true);
-    stream=await openCamera();
+    if(!demoActive) setOverlay('카메라를 켜는 중…',true);
+    const s=await openCamera();        // ★ 카메라 확보에 성공해야만 커밋(데모/화면 유지)
+    lastCamErr=null;
+    stopDemo();                        // 카메라 확보 후에만 데모 중단(재시도 중 깜빡임 방지)
+    stream=s;
     video.srcObject=stream;
     await video.play();
     canvas.width=video.videoWidth||960; canvas.height=video.videoHeight||540;
@@ -1044,9 +1048,9 @@ async function start(){
     runReadyCountdown(beginGame);   // 준비 카운트다운 → 게임(타이머) 시작
     scheduleAttract();              // 게임 시작 → 유휴 타이머 해제
   }catch(e){
+    lastCamErr=e;
     console.error(e);
-    setOverlay(cameraErrorMsg(e),false);
-    setStatus('오류',false);
+    if(!demoActive){ setOverlay(cameraErrorMsg(e),false); setStatus('오류',false); }
     startBtn.disabled=false;
   }
 }
@@ -1236,6 +1240,24 @@ setInterval(()=>{
     startDemo();                                              // 유휴/종료 30초 → 데모(어트랙트)
   }
 }, 1000);
+
+/* ===== 시작 시 카메라 강제 확보 (자동 시작 + 점유 시 8초 무한 재시도) =====
+   페이지 로드(게이트 통과) 즉시 카메라를 잡는다. 점유(NotReadableError)·일시 오류면
+   데모로 화면을 유지하며 8초마다 재시도, 권한 거부(NotAllowedError)일 때만 중단한다. */
+let camRetryTimer=null;
+async function forceCamera(){
+  if(running) return;
+  await start();                                  // 성공 시 카메라 커밋, 실패해도 데모/화면 유지
+  if(running){ if(camRetryTimer){ clearTimeout(camRetryTimer); camRetryTimer=null; } return; }
+  if(!demoActive) startDemo();                    // 카메라 실패 → 데모로 화면 유지(무인 대비)
+  if(lastCamErr && lastCamErr.name==='NotAllowedError') return;   // 권한 거부는 재프롬프트 불가 → 재시도 중단
+  if(!camRetryTimer) camRetryTimer=setTimeout(()=>{ camRetryTimer=null; forceCamera(); }, 8000);  // 점유/미발견 → 8초 재시도
+}
+window.RunGame.forceCamera=forceCamera;
+(function bootAutoStart(){
+  if(document.getElementById('gate')){ setTimeout(bootAutoStart, 400); return; }  // 게이트 통과 대기
+  forceCamera();
+})();
 </script>
 </body>
 </html>
