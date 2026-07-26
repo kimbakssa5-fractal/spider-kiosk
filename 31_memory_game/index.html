@@ -3,6 +3,7 @@
 <head>
 <meta name="google" content="notranslate">
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>기억력 퍼즐 — MEMORY</title>
 <meta property="og:title" content="기억력 퍼즐 — MEMORY">
@@ -204,6 +205,29 @@
     background:rgba(74,59,54,.45); backdrop-filter:blur(4px);
   }
   #coin-overlay.on{ display:flex; }
+  #coin-stage{ display:flex; flex-direction:column; align-items:center; gap:44px; will-change:transform; }
+  /* 동전 결과 후 선공 쪽으로 휙 쏠림 (반동 후 가속 이탈) */
+  #coin-stage.swooshL{ animation:coinSwooshL .62s cubic-bezier(.42,0,.25,1) forwards; }
+  #coin-stage.swooshR{ animation:coinSwooshR .62s cubic-bezier(.42,0,.25,1) forwards; }
+  @keyframes coinSwooshL{
+    0%{ transform:translateX(0) scale(1); opacity:1; }
+    28%{ transform:translateX(64px) scale(1.06); opacity:1; }
+    100%{ transform:translateX(-820px) scale(.66); opacity:0; }
+  }
+  @keyframes coinSwooshR{
+    0%{ transform:translateX(0) scale(1); opacity:1; }
+    28%{ transform:translateX(-64px) scale(1.06); opacity:1; }
+    100%{ transform:translateX(820px) scale(.66); opacity:0; }
+  }
+  /* 방향 스피드 라인 */
+  #coin-streaks{
+    position:absolute; inset:0; pointer-events:none; opacity:0;
+    background:repeating-linear-gradient(180deg, transparent 0 44px, rgba(255,255,255,.16) 44px 48px);
+  }
+  #coin-streaks.onL{ animation:streakL .58s ease-out; }
+  #coin-streaks.onR{ animation:streakR .58s ease-out; }
+  @keyframes streakL{ 0%{ opacity:0; transform:translateX(240px) scaleX(1.4); } 25%{ opacity:1; } 100%{ opacity:0; transform:translateX(-480px) scaleX(1.4); } }
+  @keyframes streakR{ 0%{ opacity:0; transform:translateX(-240px) scaleX(1.4); } 25%{ opacity:1; } 100%{ opacity:0; transform:translateX(480px) scaleX(1.4); } }
   #coin{ width:210px; height:210px; position:relative; transform-style:preserve-3d; }
   #coin.spin{ transition:transform 1.6s cubic-bezier(.25,.7,.3,1); }
   #coin .cf{
@@ -601,8 +625,11 @@
 
   <!-- coin toss -->
   <div id="coin-overlay">
-    <div id="coin"><div class="cf f1">1</div><div class="cf f2">2</div></div>
-    <div id="coin-txt">동전 던지기로 선공을 정해요!</div>
+    <div id="coin-streaks"></div>
+    <div id="coin-stage">
+      <div id="coin"><div class="cf f1">1</div><div class="cf f2">2</div></div>
+      <div id="coin-txt">동전 던지기로 선공을 정해요!</div>
+    </div>
   </div>
 
   <!-- attract mode join button -->
@@ -728,6 +755,31 @@ function sndPfft(){ // 짧게 피식 새는 소리
   }catch(e){}
 }
 const failSounds = [sndFart, sndBurp, sndPfft];
+function sndWhoosh(dir){ // dir: -1 좌 / +1 우 — 선공 쪽으로 휙
+  try{
+    const ctx = ac(), t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, .55);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = .8;
+    bp.frequency.setValueAtTime(320, t);
+    bp.frequency.exponentialRampToValueAtTime(2600, t + .17);
+    bp.frequency.exponentialRampToValueAtTime(480, t + .52);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(.001, t);
+    g.gain.exponentialRampToValueAtTime(.34, t + .14);
+    g.gain.exponentialRampToValueAtTime(.01, t + .54);
+    src.connect(bp).connect(g);
+    let out = g;
+    try{
+      const pan = ctx.createStereoPanner();
+      pan.pan.setValueAtTime(0, t);
+      pan.pan.linearRampToValueAtTime(dir, t + .42);
+      g.connect(pan); out = pan;
+    }catch(e){}
+    out.connect(ctx.destination);
+    src.start(t); src.stop(t + .6);
+    tone(560, .18, 'triangle', .06); tone(360, .3, 'triangle', .05, .12); // 저음 휙 곁들임
+  }catch(e){}
+}
 
 const sfx = {
   flip:  () => tone(640, .08, 'triangle', .1),
@@ -937,10 +989,14 @@ function coinToss(){
     const ov = document.getElementById('coin-overlay');
     const coin = document.getElementById('coin');
     const txt = document.getElementById('coin-txt');
+    const stageEl = document.getElementById('coin-stage');
+    const streaks = document.getElementById('coin-streaks');
     const winner = Math.random() < .5 ? 1 : 2;
     txt.textContent = '동전 던지기로 선공을 정해요!';
     coin.classList.remove('spin');
     coin.style.transform = 'rotateY(0deg)';
+    stageEl.classList.remove('swooshL','swooshR'); stageEl.style.animation = '';
+    streaks.classList.remove('onL','onR');
     ov.classList.add('on');
     [0,.2,.4,.6,.8].forEach(w => tone(680 + Math.random()*260, .06, 'triangle', .07, w));
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -949,9 +1005,18 @@ function coinToss(){
     }));
     setTimeout(() => {
       S.cur = winner;
-      txt.textContent = `플레이어 ${winner} 선공!`;
+      const side = winner === 1 ? '좌측' : '우측';
+      const arrow = winner === 1 ? '◀' : '▶';
+      txt.textContent = winner === 1 ? `${arrow} ${side} 선공!` : `${side} 선공! ${arrow}`;
       sfx.match();
     }, 1700);
+    // 선공 확정 후 그 쪽으로 휙 쏠림
+    setTimeout(() => {
+      const dir = winner === 1 ? 'L' : 'R';
+      stageEl.classList.add('swoosh' + dir);
+      streaks.classList.add('on' + dir);
+      sndWhoosh(winner === 1 ? -1 : 1);
+    }, 2150);
     setTimeout(() => { ov.classList.remove('on'); res(); }, 2900);
   });
 }
