@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" translate="no">
 <head>
+<meta name="google" content="notranslate">
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>기억력 퍼즐 — MEMORY</title>
 <meta property="og:title" content="기억력 퍼즐 — MEMORY">
@@ -267,11 +267,14 @@
   .score-panel[data-p="1"] .dot{ background:var(--p1); }
   .score-panel[data-p="2"] .dot{ background:var(--p2); }
   .score-panel .turn-chip{
-    display:none; margin:10px auto 0; width:fit-content;
-    font-size:19px; font-weight:700; color:#fff; background:var(--accent);
-    border-radius:999px; padding:4px 18px 5px;
+    display:none; margin:12px auto 0; width:fit-content;
+    font-size:26px; font-weight:900; color:#fff; background:var(--accent);
+    border-radius:999px; padding:8px 26px 10px; letter-spacing:.02em;
   }
-  .score-panel.active .turn-chip{ display:block; animation:pop .3s ease; }
+  .score-panel[data-p="1"].active .turn-chip{ background:var(--p1); }
+  .score-panel[data-p="2"].active .turn-chip{ background:var(--p2); }
+  .score-panel.active .turn-chip{ display:block; animation:chipBob .8s ease-in-out infinite; }
+  @keyframes chipBob{ 0%,100%{ transform:translateY(0) scale(1); } 50%{ transform:translateY(-4px) scale(1.05); } }
   .turn-timer{
     display:none; position:relative; height:24px; border-radius:12px;
     background:#f3e2da; margin-top:12px; overflow:hidden;
@@ -287,7 +290,7 @@
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     font-size:16px; font-weight:900; color:var(--ink);
   }
-  .score-panel.dim{ opacity:.42; }
+  .score-panel.dim{ opacity:.38; filter:grayscale(.6); transform:scale(.94); }
 
   /* 차례 교대 대형 고지 배너 */
   #turn-banner{
@@ -307,9 +310,34 @@
     78%{ opacity:1; }
     100%{ opacity:0; transform:translate(-50%,-50%) scale(.92); }
   }
-  .score-panel.active{ transform:scale(1.04); }
-  .score-panel[data-p="1"].active{ border-color:var(--p1); }
-  .score-panel[data-p="2"].active{ border-color:var(--p2); }
+  .score-panel.active{ transform:scale(1.07); }
+  .score-panel.active .who{ font-size:34px; }
+  .score-panel[data-p="1"].active{ border-color:var(--p1); background:linear-gradient(180deg,#e9f3fd,#fff); animation:glowP1 1.05s ease-in-out infinite; }
+  .score-panel[data-p="2"].active{ border-color:var(--p2); background:linear-gradient(180deg,#fdefe3,#fff); animation:glowP2 1.05s ease-in-out infinite; }
+  .score-panel[data-p="1"].active .who{ color:var(--p1); }
+  .score-panel[data-p="2"].active .who{ color:var(--p2); }
+  @keyframes glowP1{
+    0%,100%{ box-shadow:0 0 0 4px rgba(74,144,217,.4), 0 14px 30px rgba(74,144,217,.35); }
+    50%{ box-shadow:0 0 0 14px rgba(74,144,217,.1), 0 18px 44px rgba(74,144,217,.6); }
+  }
+  @keyframes glowP2{
+    0%,100%{ box-shadow:0 0 0 4px rgba(232,131,74,.4), 0 14px 30px rgba(232,131,74,.35); }
+    50%{ box-shadow:0 0 0 14px rgba(232,131,74,.1), 0 18px 44px rgba(232,131,74,.6); }
+  }
+  /* 활성 플레이어 쪽을 가리키는 대형 화살표 (보드 좌/우 가장자리) */
+  #turn-arrow{
+    position:absolute; top:50%; transform:translateY(-50%);
+    z-index:6; display:none; font-size:88px; font-weight:900; line-height:1;
+    text-shadow:0 6px 18px rgba(40,20,15,.25);
+    animation:arrowNudge 0.9s ease-in-out infinite;
+  }
+  #turn-arrow.p1{ display:block; left:-30px; color:var(--p1); }
+  #turn-arrow.p2{ display:block; right:-30px; color:var(--p2); }
+  @keyframes arrowNudge{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+  #turn-arrow.p1{ animation:arrowNudgeL 0.9s ease-in-out infinite; }
+  #turn-arrow.p2{ animation:arrowNudgeR 0.9s ease-in-out infinite; }
+  @keyframes arrowNudgeL{ 0%,100%{ opacity:.55; transform:translate(0,-50%); } 50%{ opacity:1; transform:translate(-10px,-50%); } }
+  @keyframes arrowNudgeR{ 0%,100%{ opacity:.55; transform:translate(0,-50%); } 50%{ opacity:1; transform:translate(10px,-50%); } }
   .score-panel .num{ font-size:76px; font-weight:900; line-height:1.1; margin-top:10px; }
   .score-panel .cap{ font-size:20px; color:var(--ink-soft); font-weight:500; }
   .score-panel .tries{ margin-top:14px; font-size:21px; color:var(--ink-soft); font-weight:500; }
@@ -516,7 +544,7 @@
         <div class="side" id="side-left">
           <div class="score-panel" data-p="1" id="panel-1">
             <div class="who"><span class="dot"></span><span id="p1-name">나의 점수</span></div>
-            <div class="turn-chip">내 차례!</div>
+            <div class="turn-chip">◀ 왼쪽 차례</div>
             <div class="turn-timer"><div class="turn-fill"></div><span class="turn-sec">10</span></div>
             <div class="num" id="p1-score">0</div>
             <div class="cap">찾은 짝</div>
@@ -529,11 +557,12 @@
           <div id="memo-tip">그림 위치를 기억하세요!</div>
           <div id="demo-cap"></div>
           <div id="turn-banner"></div>
+          <div id="turn-arrow"></div>
         </div>
         <div class="side" id="side-right">
           <div class="score-panel" data-p="2" id="panel-2">
             <div class="who"><span class="dot"></span><span>플레이어 2</span></div>
-            <div class="turn-chip">내 차례!</div>
+            <div class="turn-chip">오른쪽 차례 ▶</div>
             <div class="turn-timer"><div class="turn-fill"></div><span class="turn-sec">10</span></div>
             <div class="num" id="p2-score">0</div>
             <div class="cap">찾은 짝</div>
@@ -776,6 +805,7 @@ function stopGame(){
   document.getElementById('memo-tip').classList.remove('on');
   document.getElementById('demo-cap').classList.remove('on');
   document.getElementById('turn-banner').classList.remove('on');
+  document.getElementById('turn-arrow').className = '';
   try{ speechSynthesis.cancel(); }catch(e){}
 }
 
@@ -1036,8 +1066,10 @@ function renderTurnTimer(left){
 /* 차례 교대 고지: 대형 배너 + 플레이어별 신호음 + 음성 안내 */
 function announceTurn(){
   if(S.mode !== 2 || !S.playing) return;
+  const side = S.cur === 1 ? '좌측' : '우측';
+  const arrow = S.cur === 1 ? '◀' : '▶';
   const b = document.getElementById('turn-banner');
-  b.textContent = `플레이어 ${S.cur} 차례!`;
+  b.textContent = S.cur === 1 ? `${arrow} ${side} 플레이어 차례` : `${side} 플레이어 차례 ${arrow}`;
   b.className = 'p' + S.cur;
   void b.offsetWidth;                     // 애니메이션 재시작
   b.classList.add('on');
@@ -1047,7 +1079,7 @@ function announceTurn(){
   else{ tone(523, .12, 'sine', .15); tone(659, .2, 'sine', .15, .12); }
   try{
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(`플레이어 ${S.cur} 차례`);
+    const u = new SpeechSynthesisUtterance(`${side} 플레이어 차례`);
     u.lang = 'ko-KR'; u.rate = 1.05; u.volume = .9;
     speechSynthesis.speak(u);
   }catch(e){}
@@ -1134,6 +1166,10 @@ function updatePanels(){
   const twoP = S.mode === 2 && S.playing;
   document.getElementById('panel-1').classList.toggle('dim', twoP && S.cur !== 1);
   document.getElementById('panel-2').classList.toggle('dim', twoP && S.cur !== 2);
+  // 활성 플레이어 쪽 대형 화살표
+  const arrow = document.getElementById('turn-arrow');
+  if(twoP){ arrow.textContent = S.cur === 1 ? '◀' : '▶'; arrow.className = 'p' + S.cur; }
+  else{ arrow.className = ''; }
 }
 
 /* ================= end / result ================= */
