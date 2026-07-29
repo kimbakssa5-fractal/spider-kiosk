@@ -50,6 +50,13 @@
   const DASH_PEAK_MIN = 2.2, DASH_PEAK_MAX = 3.6;   // 순간 속도 배수(전진)
   const DASH_DUR_MIN = 1.0,  DASH_DUR_MAX = 2.4;    // 질주 지속(초)
   const DASH_GAP_MIN = 14,   DASH_GAP_MAX = 34;     // 질주와 질주 사이 간격(초) — 크게=동시에 덜 겹침(≈한두 마리)
+  // 사람 쪽으로 모임(gather, 하이브리드): 잔잔한 반응엔 다가가고(호기심), 급격/강한 움직임엔 흩어짐(도망)
+  let GATHER_ON = true;                              // J 토글 (기본 ON)
+  const ATTRACT_RADIUS_FRAC = 0.60;                 // 모임 감지 반경(도망보다 넓게 — 멀리서부터 다가옴)
+  const ATTRACT_DEAD_FRAC   = 0.13;                 // 자극점 이 반경 안에선 끌림 소멸(뭉치지 않고 주위를 맴돌게)
+  const ATTRACT_TURN        = 3.0;                  // 모임 선회 속도(도망 FLEE_TURN보다 느긋)
+  const ATTRACT_SPEED_BOOST = 0.6;                  // 모임 시 전진 가속(×(1+boost))
+  const GATHER_FLEE_LO = 0.60, GATHER_FLEE_HI = 0.92; // 자극 강도 이 구간에서 attract→flee 전환
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
   const FLEE_RADIUS_FRAC = 0.32;      // 도망 반경(화면 짧은변 대비) — 더 멀리서 반응
@@ -746,7 +753,12 @@
   const TOUCH_SUPPRESS_S = 6;                   // 터치 후 이 시간 동안 웹캠 모션 억제(Kinect 우선)
   function nowSec() { return performance.now() / 1000; }
   function touchActiveNow() { return (nowSec() - lastTouchT) < TOUCH_SUPPRESS_S; }
-  function notePointer(id, x, y) { pointers.set(id, { x: x, y: y, t: nowSec() }); }
+  function notePointer(id, x, y) {
+    const t = nowSec(), prev = pointers.get(id);
+    let spd = 0;                                     // px/초 — 느린 포인터=호기심(모임), 빠른 스와이프=놀람(도망)
+    if (prev) { const dt = Math.max(1e-3, t - prev.t); spd = Math.hypot(x - prev.x, y - prev.y) / dt; }
+    pointers.set(id, { x: x, y: y, t: t, spd: spd });
+  }
   function dropPointer(id) { pointers.delete(id); }
 
   canvas.style.touchAction = "none";
@@ -1007,9 +1019,11 @@
     const active = [];
     pointers.forEach(function (p, id) {
       if (tnow - p.t > POINTER_TTL) pointers.delete(id);
-      else active.push({ x: p.x, y: p.y, w: 1, r: 1 });
+      // it = 자극 강도(0~1): 느린 포인터(<150px/s)=0.2 호기심 → 빠른 스와이프(>1400)=1.0 놀람
+      else active.push({ x: p.x, y: p.y, w: 1, r: 1, it: 0.2 + 0.8 * Math.max(0, Math.min(1, ((p.spd || 0) - 150) / 1250)) });
     });
-    for (let mi = 0; mi < motionPoints.length; mi++) active.push(motionPoints[mi]);
+    // 모션 점: it = strength 가중 w (약한 모션=낮음=모임, 큰 모션=1=도망)
+    for (let mi = 0; mi < motionPoints.length; mi++) { const m = motionPoints[mi]; active.push({ x: m.x, y: m.y, w: m.w, r: m.r, it: m.w }); }
     const fleeR = FLEE_RADIUS_FRAC * minDim;
     let vi = 0;
     for (let k = 0; k < fishes.length; k++) {
@@ -1022,27 +1036,57 @@
       const headX = fx + Math.cos(oldHeading) * hl;
       const headY = fy + Math.sin(oldHeading) * hl;
 
-      // --- 도망: 가까운 포인터(들)로부터 멀어지는 방향으로 빠르게 선회 ---
-      let ax = 0, ay = 0, maxS = 0;
+      // --- 하이브리드: 잔잔한 자극엔 다가가고(모임), 강한 자극엔 멀어짐(도망) ---
+      //   자극 강도 it 로 flee01(0~1) 계산 → attract01=1-flee01. 도망은 좁은 반경/패닉, 모임은 넓은 반경/느긋.
+      let ax = 0, ay = 0, maxS = 0;                  // 도망 누적(멀어지는 방향)
+      let gx = 0, gy = 0, gSum = 0;                  // 모임 누적(다가가는 방향)
+      const atRad = ATTRACT_RADIUS_FRAC * minDim;
+      const atDead = ATTRACT_DEAD_FRAC * minDim;
       for (let pi = 0; pi < active.length; pi++) {
         const a = active[pi];
+        const dx = fx - a.x, dy = fy - a.y;          // 자극→물고기
+        const dist = Math.hypot(dx, dy) || 1;
+        const it = (a.it != null ? a.it : a.w);
+        // flee01: it 이 LO 이하=0(순수 모임) → HI 이상=1(순수 도망), 사이는 smoothstep
+        let ft = (it - GATHER_FLEE_LO) / (GATHER_FLEE_HI - GATHER_FLEE_LO);
+        ft = ft < 0 ? 0 : ft > 1 ? 1 : ft;
+        const flee01 = ft * ft * (3 - 2 * ft);
+        // 도망(좁은 반경)
         const rad = fleeR * (a.r || 1);
-        const dx = fx - a.x, dy = fy - a.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist < rad) {
-          const s = (1 - dist / rad) * a.w;          // 0~1, 모션 점은 strength 가중
-          const inv = s / (dist || 1);
-          ax += dx * inv; ay += dy * inv;            // 멀어지는 방향(가중)
+        if (flee01 > 0.01 && dist < rad) {
+          const s = (1 - dist / rad) * a.w * flee01;
+          const inv = s / dist;
+          ax += dx * inv; ay += dy * inv;
           if (s > maxS) maxS = s;
         }
+        // 모임(넓은 반경) — 자극점 주변 deadzone 안에선 끌림 소멸(뭉치지 않고 맴돌게)
+        if (GATHER_ON) {
+          const attract01 = 1 - flee01;
+          const arad = atRad * (a.r || 1);
+          if (attract01 > 0.01 && dist < arad) {
+            let ring = (dist - atDead * 0.4) / (atDead * 0.6);   // deadzone 안=0, 밖=1
+            ring = ring < 0 ? 0 : ring > 1 ? 1 : ring;
+            const s = attract01 * a.w * ring * (0.35 + 0.65 * (1 - dist / arad));
+            const inv = s / dist;
+            gx += -dx * inv; gy += -dy * inv;        // 자극 쪽으로(도망의 반대)
+            gSum += s;
+          }
+        }
       }
-      if (maxS > 0 && (ax || ay)) {
+      let gather01 = 0;                              // 이 프레임 모임 세기(전진 가속용)
+      if (maxS > 0 && (ax || ay)) {                  // 도망 우선(놀람)
         const desired = Math.atan2(ay, ax);
         let diff = desired - f.heading;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // [-π,π]
         f.heading += diff * Math.min(1, FLEE_TURN * (0.3 + maxS) * dtSec);
         const tgt = Math.min(1.2, maxS * PANIC_GAIN); // 근접 강도 증폭 → 더 예민
         if (tgt > f.panic) f.panic = tgt;            // 흥분도 상승
+      } else if (gSum > 0 && (gx || gy)) {           // 도망 없을 때만 느긋하게 모임
+        const desired = Math.atan2(gy, gx);
+        let diff = desired - f.heading;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        f.heading += diff * Math.min(1, ATTRACT_TURN * (0.4 + Math.min(1, gSum)) * dtSec);
+        gather01 = Math.min(1, gSum);
       }
       // 패닉 감쇠
       f.panic *= Math.exp(-dtSec / PANIC_DECAY);
@@ -1081,7 +1125,7 @@
       let cyC = fy + (headPivotCy - fy) * pivotW;
 
       // 전진(heading 방향)
-      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul;  // 패닉·질주 시 가속
+      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul * (1 + gather01 * ATTRACT_SPEED_BOOST);  // 패닉·질주·모임 시 가속
       cxC += Math.cos(f.heading) * speedPx * dtSec;
       cyC += Math.sin(f.heading) * speedPx * dtSec;
       f.nx = cxC / W; f.ny = cyC / H;
@@ -1372,7 +1416,7 @@
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
-    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["KeyH", "도움말 H"],
+    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyJ", "모임 J"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["KeyH", "도움말 H"],
     ["KeyO", "프로젝터 O"], ["KeyG", "정렬격자 G"], ["Semicolon", "겹침- ;"], ["Quote", "겹침+ '"], ["Minus", "커브γ- -"], ["Equal", "커브γ+ ="], ["Comma", "화면γ- ,"], ["Period", "화면γ+ ."],
     ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
@@ -1457,6 +1501,7 @@
     showHud(PROJ_N > 1 ? ("디스플레이 γ  " + DISP_GAMMA.toFixed(1) + " (경계 밝기 보정)") : ("디스플레이 γ " + DISP_GAMMA.toFixed(1) + " (프로젝터 1대라 미적용)"));
   }
   function toggleAlignGrid() { ALIGN_GRID = !ALIGN_GRID; showHud(ALIGN_GRID ? "정렬 그리드 ON (G)" : "정렬 그리드 OFF"); }
+  function toggleGather() { GATHER_ON = !GATHER_ON; showHud(GATHER_ON ? "사람 쪽으로 모임 ON (J)" : "모임 OFF (도망만)"); }
 
   const glitterBtn = document.getElementById("glitterBtn");
   const glitterSlider = document.getElementById("glitterSlider");
@@ -1656,6 +1701,7 @@
       case "KeyH": if (e.repeat) return; e.preventDefault(); toggleHelp(); break;      // 단축키 모음 보기
       case "KeyO": if (e.repeat) return; e.preventDefault(); cycleProj(); break;      // 프로젝터 수 1→2→3
       case "KeyG": if (e.repeat) return; e.preventDefault(); toggleAlignGrid(); break; // 정렬 그리드
+      case "KeyJ": if (e.repeat) return; e.preventDefault(); toggleGather(); break;    // 사람 쪽으로 모임 토글
       case "Semicolon": e.preventDefault(); setOverlap(-0.01); break;                  // 겹침 - (;)
       case "Quote": e.preventDefault(); setOverlap(+0.01); break;                      // 겹침 + (')
       case "Minus": e.preventDefault(); setCurveGamma(-0.1); break;                    // 블렌드 커브 γ - (61 동일)
