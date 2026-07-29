@@ -61,6 +61,8 @@
   const ATTRACT_TURN        = 1.7;                  // 모임 선회 속도(느긋 — 살살엔 천천히 반응, 도망 FLEE_TURN만 빠름)
   const ATTRACT_SPEED_BOOST = 0.35;                 // 모임 다가갈 때 전진 가속(×(1+boost)) — 작게: 다가가도 튀지 않게
   const SPEED_SMOOTH_RATE   = 1.5;                  // 평상시 속도 변화율(1/초, 낮을수록 완만) — 도망 때만 즉각
+  const ALOOF_FRAC = 0.3;                           // 사람에게 무관심한 개체 비율(모임 무시하고 제 갈 길) — 도망은 함
+  const ALOOF_MIN = 15, ALOOF_MAX = 45;             // 관심/무관심이 바뀌는 주기(초) — 고정 아님, 서서히 교대
   const SEP_FRAC            = 0.13;                  // 물고기끼리 이 반경 안이면 밀어내 몸통 겹침 방지
   const SEP_POS_FRAC        = 0.5;                   // 겹친 만큼 이 비율을 매 프레임 직접 벌림(0.5=양쪽이 반씩→완전분리)
   const SEP_GAIN_GATHER     = 1.1;                  // 모임 중 분리 조향 세기
@@ -653,6 +655,8 @@
       panic: 0,                                       // 도망 흥분도(0~1+), 시간에 따라 감쇠
       bend: 0, prevHeading: 0,                        // 몸 휨(라디안), 직전 heading
       spd: 0,                                         // 현재 전진 속도(px/s, 완만 추종 — 0=최초 프레임에 목표로 초기화)
+      aloof: Math.random() < ALOOF_FRAC,              // 사람에게 무관심(모임 무시) — 주기적으로 재추첨되어 교대
+      aloofT: rand(ALOOF_MIN, ALOOF_MAX),             // 관심/무관심 전환까지 남은 시간(초)
       dash: 0, dashT: 0,                              // 질주 강도(0~1, 램프)·남은 질주 시간(초)
       dashPeak: rand(DASH_PEAK_MIN, DASH_PEAK_MAX),   // 이 물고기의 질주 속도 배수
       nextDash: rand(2, DASH_GAP_MAX),                // 첫 질주까지 대기(스태거)
@@ -1150,6 +1154,9 @@
       let gather01 = 0;                              // 이 프레임 모임 세기(전진 가속용)
       let wanderMul = 1;                             // 배회 흔들림 배수(모임 중 크게 → 제자리 정체 방지)
       let inGather = false;                          // 이 프레임 모임 상태(질주 억제 → 모여선 천천히 유영)
+      // 관심/무관심 교대: 일정 시간마다 재추첨 → 항상 몇 마리는 사람에 무관심하게 제 갈 길(도망은 함)
+      f.aloofT -= dtSec;
+      if (f.aloofT <= 0) { f.aloof = Math.random() < ALOOF_FRAC; f.aloofT = rand(ALOOF_MIN, ALOOF_MAX); }
       if (maxS > 0 && (ax || ay)) {                  // 도망 우선(놀람)
         const desired = Math.atan2(ay, ax);
         let diff = desired - f.heading;
@@ -1157,7 +1164,7 @@
         f.heading += diff * Math.min(1, FLEE_TURN * (0.3 + maxS) * dtSec);
         const tgt = Math.min(1.2, maxS * PANIC_GAIN); // 근접 강도 증폭 → 더 예민
         if (tgt > f.panic) f.panic = tgt;            // 흥분도 상승
-      } else if (gatherAnchors.length > 0) {          // 도망 없을 때: 가장 가까운 anchor 주변을 '느슨하게 배회'(무리 분산)
+      } else if (gatherAnchors.length > 0 && !f.aloof) {  // 도망 없고 관심 있을 때만: 가까운 anchor 주변 배회(무관심 개체는 아래 자유 유영)
         let an = null, ad = 1e9;
         for (let j = 0; j < gatherAnchors.length; j++) { const g = gatherAnchors[j]; if (g.act <= 0.05) continue; const d = Math.hypot(g.x - fx, g.y - fy); if (d < ad) { ad = d; an = g; } }
         if (an) {
