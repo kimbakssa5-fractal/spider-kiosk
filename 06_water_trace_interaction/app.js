@@ -1146,7 +1146,9 @@
       // 물고기끼리 분리(몸통 겹침 방지) — 근처 개체로부터 밀려남
       //   sepx/sepy = 헤딩 조향용 방향 / pushX/pushY = 겹친 만큼 직접 벌릴 px(확실한 간격 유지)
       let sepx = 0, sepy = 0, pushX = 0, pushY = 0;
-      const sepR = SEP_FRAC * minDim, sepHard = SEP_HARD_FRAC * minDim;
+      // 분리 반경은 '몸 크기' 기준(화면 기준이면 작은 물고기 다수일 때 과도하게 밀쳐 안절부절)
+      const sepR = Math.max(SEP_FRAC * minDim * 0.38, lenPx * 0.45);
+      const sepHard = Math.max(SEP_HARD_FRAC * minDim * 0.4, lenPx * 0.26);
       for (let j = 0; j < fishes.length; j++) {
         if (j === k) continue;
         const o = fishes[j];

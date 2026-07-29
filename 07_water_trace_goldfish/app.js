@@ -64,6 +64,43 @@
     const _dg = parseFloat(localStorage.getItem("proj_dispgamma")); if (Number.isFinite(_dg)) DISP_GAMMA = Math.max(1.0, Math.min(3.0, _dg));
   } catch (e) {}
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
+  // 자발적 질주(dash): 평소엔 느리게, 이따금 한두 마리가 몇 초간 빠르게 치고 나감
+  const DASH_PEAK_MIN = 2.2, DASH_PEAK_MAX = 3.6;   // 순간 속도 배수(전진)
+  const DASH_DUR_MIN = 1.0,  DASH_DUR_MAX = 2.4;    // 질주 지속(초)
+  const DASH_GAP_MIN = 14,   DASH_GAP_MAX = 34;     // 질주 사이 간격(초) — 크게=동시에 덜 겹침
+  // 사람 쪽으로 모임(gather): 잔잔한 반응엔 다가가고(호기심), 급격/강한 움직임엔 흩어짐(놀람)
+  let GATHER_ON = true;                             // J 토글: ON=몰려들기(흩어지기+모임) / OFF=흩어지기만
+  let GATHER_RESP = 1.0;                            // 몰려드는 속도/민감도(0.3~2.5) — Q/Z 조절, R 리셋
+  const ATTRACT_RADIUS_FRAC = 0.85;                 // 모임 감지 반경(멀리서부터 알아챔)
+  const ATTRACT_BAND_FRAC   = 0.14;                 // 복귀 힘 정규화 폭
+  const ATTRACT_RADIAL      = 1.0;                  // 존 복귀/비켜남 세기
+  const ATTRACT_TURN        = 2.0;                  // 모임 선회 속도(도망 FLEE_TURN보다 느긋)
+  const ATTRACT_SPEED_BOOST = 0.55;                 // 모임 다가갈 때 전진 가속(속도 완만추종이 튐 방지)
+  const SEP_FRAC            = 0.13;                 // 분리 '소프트' 반경(조향만)
+  const SEP_HARD_FRAC       = 0.075;                // 분리 '하드' 반경(진짜 겹칠 때만 위치 보정)
+  const SEP_POS_FRAC        = 0.18;                 // 하드 겹침 해소 비율(작게=부드럽게)
+  const SEP_GAIN_GATHER     = 0.32;                 // 모임 중 분리 조향 세기
+  const SEP_GAIN_IDLE       = 0.35;                 // 평상시 분리 조향
+  const GATHER_FLEE_LO = 0.60, GATHER_FLEE_HI = 0.92; // 자극 강도 이 구간에서 attract→flee 전환
+  const WOB_AMP = 0.5;                              // 개체별 헤딩 지터 세기(저주파)
+  const ANCHOR_TAU  = 1.8;                          // 관심 중심 저주파 시정수(초) — 다리 좌우진동 무시
+  const ANCHOR_RISE = 0.6, ANCHOR_FALL = 2.5;       // 앵커 활성 상승/하강(초)
+  const MAX_ANCHORS = 3;                            // 동시 모임 지점 최대 수(여러 사람 → 무리 분리)
+  const CLUSTER_DIST_FRAC = 0.28;                   // 이 거리 밖이면 다른 사람(다른 클러스터)
+  const ANCHOR_MATCH_FRAC = 0.32;                   // 프레임 간 클러스터↔앵커 매칭 거리
+  const ROAM_RADIUS_FRAC = 0.17;                    // 배회 존 반경(작을수록 바짝 모임)
+  const ROAM_KEEP_FRAC   = 0.07;                    // 앵커 바로 위는 비워 배회(관통 방지)
+  const ROAM_PACK_FRAC   = 0.44;                    // 존 자동확장: √(마릿수)×몸길이×이 값 이상 확보(07은 마릿수 많아 06보다 크게)
+  const WANDER_GATHER    = 1.05;                    // 모임 중 배회 흔들림 배수
+  const SPEED_SMOOTH_RATE = 1.5;                    // 평상시 속도 변화율(1/초) — 도망만 즉각
+  const TURN_RATE_MAX     = 1.55;                   // 도망 아닐 때 각속도 상한(rad/s≈89°/s)
+  const ALOOF_FRAC = 0.13;                          // 사람에게 무관심한 개체 비율(도망은 함)
+  const ALOOF_MIN = 15, ALOOF_MAX = 45;             // 관심/무관심 교대 주기(초)
+  // 모션 도망 surge 게이트: 살살(지속) 모션엔 도망 억제, 갑작스런 급변에만 도망 허용
+  const MENV_ATK = 0.07, MENV_REL = 0.5;            // 포락 상승/하강
+  const MBASE_TAU = 1.6;                            // 기준선 시정수(지속 모션 흡수)
+  const SURGE_MARGIN = 0.10;                        // 이만큼 초과해야 도망 시작
+  const SURGE_SCALE  = 0.55;                        // surge 정규화
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
   const FLEE_RADIUS_FRAC = 0.32;      // 도망 반경(화면 짧은변 대비) — 더 멀리서 반응
@@ -640,6 +677,15 @@
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
       panic: 0,                                       // 도망 흥분도(0~1+), 시간에 따라 감쇠
       bend: 0, prevHeading: 0,                        // 몸 휨(라디안), 직전 heading
+      spd: 0,                                         // 현재 전진 속도(px/s, 완만 추종 — 0=최초 프레임에 목표로 초기화)
+      dash: 0, dashT: 0,                              // 질주 강도(0~1, 램프)·남은 질주 시간(초)
+      dashPeak: rand(DASH_PEAK_MIN, DASH_PEAK_MAX),   // 이 물고기의 질주 속도 배수
+      nextDash: rand(2, DASH_GAP_MAX),                // 첫 질주까지 대기(스태거)
+      orbitRad: rand(0.7, 1.45),                      // 개인별 배회 존 크기 배수(균일 링 방지)
+      jf1: rand(0.2, 0.6), jf2: rand(0.5, 1.1),       // 헤딩 지터 주파수 2종(저주파 meander)
+      jp1: Math.random() * 6.28, jp2: Math.random() * 6.28,
+      aloof: Math.random() < ALOOF_FRAC,              // 사람에게 무관심(모임 무시) — 주기적으로 재추첨
+      aloofT: rand(ALOOF_MIN, ALOOF_MAX),             // 관심/무관심 전환까지 남은 시간(초)
       // 행동 상태: cruise(순항) / circle(서행 회전 유영) / hover(정지·지느러미 노젓기)
       //   *Pend = 애니 전환 게이트(곧은 프레임) 대기
       mode: "cruise", modeT: rand(4, 14),
@@ -745,12 +791,19 @@
   //   POINTER_TTL 동안 움직임이 없으면 비활성 → 물고기 진정.
   const pointers = new Map();   // id -> {x, y, t(sec)}
   let motionPoints = [];        // 카메라 모션 점 [{x,y,w}] (CSS px) — 매 모션틱 갱신
+  let gatherAnchors = [];       // 모임 관심 중심 배열(다중 — 여러 사람이면 무리가 나뉨). 저주파 필터로 다리 진동 무시
+  let motionEnv = 0, motionBase = 0;  // 모션 에너지 포락(빠른)·기준선(느린) → 둘의 차 = 갑작스러움(surge)
   // ── 입력 소스 자동 전환: Kinect(=OS 터치주입) 있으면 터치 우선, 없으면 웹캠 유지 ──
   let lastTouchT = -999;                       // 마지막 '터치'(Kinect 주입/터치스크린) 시각(초)
   const TOUCH_SUPPRESS_S = 6;                   // 터치 후 이 시간 동안 웹캠 모션 억제(Kinect 우선)
   function nowSec() { return performance.now() / 1000; }
   function touchActiveNow() { return (nowSec() - lastTouchT) < TOUCH_SUPPRESS_S; }
-  function notePointer(id, x, y) { pointers.set(id, { x: x, y: y, t: nowSec() }); }
+  function notePointer(id, x, y) {
+    const t = nowSec(), prev = pointers.get(id);
+    let spd = 0;                                     // px/초 — 느린 포인터=호기심(모임), 빠른 스와이프=놀람(도망)
+    if (prev) { const dt = Math.max(1e-3, t - prev.t); spd = Math.hypot(x - prev.x, y - prev.y) / dt; }
+    pointers.set(id, { x: x, y: y, t: t, spd: spd });
+  }
   function dropPointer(id) { pointers.delete(id); }
 
   canvas.style.touchAction = "none";
@@ -1011,10 +1064,55 @@
     const active = [];
     pointers.forEach(function (p, id) {
       if (tnow - p.t > POINTER_TTL) pointers.delete(id);
-      else active.push({ x: p.x, y: p.y, w: 1, r: 1 });
+      // it = 자극 강도(0~1): 느린 포인터(<150px/s)=0.2 호기심 → 빠른 스와이프(>1400)=1.0 놀람
+      else active.push({ x: p.x, y: p.y, w: 1, r: 1, it: 0.2 + 0.8 * Math.max(0, Math.min(1, ((p.spd || 0) - 150) / 1250)), src: 'p' });
     });
-    for (let mi = 0; mi < motionPoints.length; mi++) active.push(motionPoints[mi]);
+    // 모션 점: it = strength 가중 w (약한 모션=낮음=모임, 큰 모션=1=도망)
+    let mNow = 0;
+    for (let mi = 0; mi < motionPoints.length; mi++) { const m = motionPoints[mi]; active.push({ x: m.x, y: m.y, w: m.w, r: m.r, it: m.w, src: 'm' }); mNow += m.w; }
+    // 모션 급변(surge) 게이트: 살살 지속 모션은 기준선에 흡수→gate≈0(도망 억제), 갑작스런 급변만 통과
+    motionEnv += (mNow - motionEnv) * (mNow > motionEnv ? (1 - Math.exp(-dtSec / MENV_ATK)) : (1 - Math.exp(-dtSec / MENV_REL)));
+    motionBase += (mNow - motionBase) * (1 - Math.exp(-dtSec / MBASE_TAU));
+    const fleeGate = Math.max(0, Math.min(1, (motionEnv - motionBase - SURGE_MARGIN) / SURGE_SCALE));
     const fleeR = FLEE_RADIUS_FRAC * minDim;
+    // 모임 관심 중심(다중 anchor): 모임성 자극점을 근접 클러스터로 묶어 각 클러스터를 저주파 추종
+    {
+      const cdist = CLUSTER_DIST_FRAC * minDim;
+      const groups = [];
+      if (GATHER_ON) {
+        for (let pi = 0; pi < active.length; pi++) {
+          const a = active[pi];
+          const it = (a.it != null ? a.it : a.w);
+          let ft = (it - GATHER_FLEE_LO) / (GATHER_FLEE_HI - GATHER_FLEE_LO);
+          ft = ft < 0 ? 0 : ft > 1 ? 1 : ft;
+          const attract01 = 1 - ft * ft * (3 - 2 * ft);
+          if (attract01 <= 0.2) continue;
+          const wt = attract01 * a.w;
+          let best = null, bd = cdist;
+          for (let gi = 0; gi < groups.length; gi++) { const g = groups[gi]; const d = Math.hypot(g.cx - a.x, g.cy - a.y); if (d < bd) { bd = d; best = g; } }
+          if (best) { best.sx += a.x * wt; best.sy += a.y * wt; best.sw += wt; best.cx = best.sx / best.sw; best.cy = best.sy / best.sw; }
+          else groups.push({ sx: a.x * wt, sy: a.y * wt, sw: wt, cx: a.x, cy: a.y });
+        }
+      }
+      const mdist = ANCHOR_MATCH_FRAC * minDim;
+      const kk = 1 - Math.exp(-dtSec / ANCHOR_TAU);
+      const usedA = [];
+      for (let gi = 0; gi < groups.length; gi++) {
+        const g = groups[gi]; let ai = -1, bd = mdist;
+        for (let j = 0; j < gatherAnchors.length; j++) { if (usedA[j]) continue; const d = Math.hypot(gatherAnchors[j].x - g.cx, gatherAnchors[j].y - g.cy); if (d < bd) { bd = d; ai = j; } }
+        if (ai >= 0) { const an = gatherAnchors[ai]; an.x += (g.cx - an.x) * kk; an.y += (g.cy - an.y) * kk; an.act = Math.min(1, an.act + dtSec / ANCHOR_RISE * GATHER_RESP); an._hit = true; usedA[ai] = true; }
+        else if (gatherAnchors.length < MAX_ANCHORS) { gatherAnchors.push({ x: g.cx, y: g.cy, act: Math.min(1, dtSec / ANCHOR_RISE * GATHER_RESP), _hit: true }); }
+      }
+      for (let j = gatherAnchors.length - 1; j >= 0; j--) {
+        if (!gatherAnchors[j]._hit) { gatherAnchors[j].act = Math.max(0, gatherAnchors[j].act - dtSec / ANCHOR_FALL); if (gatherAnchors[j].act <= 0.001) gatherAnchors.splice(j, 1); }
+        else gatherAnchors[j]._hit = false;
+      }
+    }
+    // 모임 밀집도: 관심 마릿수 / 활성 앵커 수 → 배회 존을 그만큼 넓혀 부대끼지 않게
+    let nInterested = 0, nActiveAnchors = 0;
+    for (let i = 0; i < fishes.length; i++) if (!fishes[i].aloof) nInterested++;
+    for (let i = 0; i < gatherAnchors.length; i++) if (gatherAnchors[i].act > 0.05) nActiveAnchors++;
+    const perAnchor = nActiveAnchors > 0 ? nInterested / nActiveAnchors : nInterested;
     let vi = 0;
     for (let k = 0; k < fishes.length; k++) {
       const f = fishes[k];
@@ -1026,31 +1124,107 @@
       const headX = fx + Math.cos(oldHeading) * hl;
       const headY = fy + Math.sin(oldHeading) * hl;
 
-      // --- 도망: 가까운 포인터(들)로부터 멀어지는 방향으로 빠르게 선회 ---
+      // --- 하이브리드: 잔잔한 자극엔 다가가고(모임), 강한/갑작스런 자극엔 멀어짐(도망) ---
       let ax = 0, ay = 0, maxS = 0;
       for (let pi = 0; pi < active.length; pi++) {
         const a = active[pi];
         const rad = fleeR * (a.r || 1);
         const dx = fx - a.x, dy = fy - a.y;
         const dist = Math.hypot(dx, dy);
-        if (dist < rad) {
-          const s = (1 - dist / rad) * a.w;          // 0~1, 모션 점은 strength 가중
+        const it = (a.it != null ? a.it : a.w);
+        let ft = (it - GATHER_FLEE_LO) / (GATHER_FLEE_HI - GATHER_FLEE_LO);
+        ft = ft < 0 ? 0 : ft > 1 ? 1 : ft;
+        // 모션은 surge 게이트 곱 → 살살 지속 모션은 도망 억제(틱틱 방지). 포인터(터치)는 즉각 유지.
+        const flee01 = ft * ft * (3 - 2 * ft) * (a.src === 'm' ? fleeGate : 1);
+        if (flee01 > 0.01 && dist < rad) {
+          const s = (1 - dist / rad) * a.w * flee01;
           const inv = s / (dist || 1);
           ax += dx * inv; ay += dy * inv;            // 멀어지는 방향(가중)
           if (s > maxS) maxS = s;
         }
       }
-      if (maxS > 0 && (ax || ay)) {
+      // 물고기끼리 분리: sepx/sepy=조향(소프트) / pushX/pushY=겹침 해소(하드)
+      let sepx = 0, sepy = 0, pushX = 0, pushY = 0;
+      // 분리 반경은 '몸 크기' 기준(화면 기준이면 작은 물고기 다수일 때 과도하게 밀쳐 안절부절)
+      const sepR = Math.max(SEP_FRAC * minDim * 0.38, lenPx * 0.45);
+      const sepHard = Math.max(SEP_HARD_FRAC * minDim * 0.4, lenPx * 0.26);
+      for (let j = 0; j < fishes.length; j++) {
+        if (j === k) continue;
+        const o = fishes[j];
+        const ddx = fx - o.nx * W, ddy = fy - o.ny * H;
+        const dd = Math.hypot(ddx, ddy);
+        if (dd > 0 && dd < sepR) {
+          const push = (1 - dd / sepR) / dd; sepx += ddx * push; sepy += ddy * push;
+          if (dd < sepHard) { const ov = sepHard - dd; pushX += (ddx / dd) * ov; pushY += (ddy / dd) * ov; }
+        }
+      }
+      // 관심/무관심 교대(항상 몇 마리는 사람에 무관심 — 도망은 함)
+      f.aloofT -= dtSec;
+      if (f.aloofT <= 0) { f.aloof = Math.random() < ALOOF_FRAC; f.aloofT = rand(ALOOF_MIN, ALOOF_MAX); }
+      let gather01 = 0, wanderMul = 1, inGather = false;
+      if (maxS > 0 && (ax || ay)) {                  // 도망 우선(놀람)
         const desired = Math.atan2(ay, ax);
         let diff = desired - f.heading;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // [-π,π]
         f.heading += diff * Math.min(1, FLEE_TURN * (0.3 + maxS) * dtSec);
         const tgt = Math.min(1.2, maxS * PANIC_GAIN); // 근접 강도 증폭 → 더 예민
         if (tgt > f.panic) f.panic = tgt;            // 흥분도 상승
+      } else if (gatherAnchors.length > 0 && !f.aloof) {  // 가까운 앵커 주변을 느슨하게 배회
+        let an = null, ad = 1e9;
+        for (let j = 0; j < gatherAnchors.length; j++) { const g = gatherAnchors[j]; if (g.act <= 0.05) continue; const d = Math.hypot(g.x - fx, g.y - fy); if (d < ad) { ad = d; an = g; } }
+        if (an) {
+          const rdx = fx - an.x, rdy = fy - an.y;
+          const rd = Math.hypot(rdx, rdy) || 1;
+          // 존 반경: 기본값과 '√마릿수 × 몸길이' 중 큰 값 → 여러 마리여도 몸이 겹칠 만큼 좁아지지 않음
+          const roam = Math.max(ROAM_RADIUS_FRAC * minDim, Math.sqrt(Math.max(1, perAnchor)) * lenPx * ROAM_PACK_FRAC) * f.orbitRad;
+          const keep = ROAM_KEEP_FRAC * minDim;
+          let vx = sepx * sepR * SEP_GAIN_GATHER, vy = sepy * sepR * SEP_GAIN_GATHER;
+          if (rd > roam) {                            // 존 밖 → 복귀(주둥이 방향)
+            const over = Math.min(1, (rd - roam) / (ATTRACT_BAND_FRAC * minDim));
+            vx += -(rdx / rd) * over * ATTRACT_RADIAL; vy += -(rdy / rd) * over * ATTRACT_RADIAL;
+            gather01 = an.act * over;
+          } else if (rd < keep) {                     // 앵커 바로 위 → 비켜남(관통 방지)
+            const near = (keep - rd) / keep;
+            vx += (rdx / rd) * near * ATTRACT_RADIAL; vy += (rdy / rd) * near * ATTRACT_RADIAL;
+          }
+          const vm = Math.hypot(vx, vy);              // 힘 크기 비례 조향 + deadband(안절부절 방지)
+          if (vm > 0.06) {
+            const desired = Math.atan2(vy, vx);
+            let diff = desired - f.heading;
+            diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+            f.heading += diff * Math.min(1, ATTRACT_TURN * GATHER_RESP * Math.min(1, vm) * dtSec);
+          }
+          wanderMul = WANDER_GATHER;
+          inGather = true;
+        }
+      } else if (sepx || sepy) {                      // 평상시: 약한 분리만(힘 크기 비례)
+        const sm = Math.hypot(sepx, sepy) * sepR;
+        if (sm > 0.06) {
+          const desired = Math.atan2(sepy, sepx);
+          let diff = desired - f.heading;
+          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          f.heading += diff * Math.min(1, ATTRACT_TURN * SEP_GAIN_IDLE * Math.min(1, sm) * dtSec);
+        }
       }
       // 패닉 감쇠
       f.panic *= Math.exp(-dtSec / PANIC_DECAY);
       if (f.panic < 0.003) f.panic = 0;
+
+      // --- 자발적 질주(dash): 고요할 때만(모임 중엔 금지 — 모여선 천천히 유영) ---
+      if (f.panic < 0.05 && !inGather) {
+        if (f.dashT > 0) { f.dashT -= dtSec; f.dash += (1 - f.dash) * Math.min(1, dtSec * 2.5); }
+        else {
+          f.nextDash -= dtSec;
+          if (f.nextDash <= 0) { f.dashT = rand(DASH_DUR_MIN, DASH_DUR_MAX); f.nextDash = rand(DASH_GAP_MIN, DASH_GAP_MAX); f.dashPeak = rand(DASH_PEAK_MIN, DASH_PEAK_MAX); }
+          f.dash += (0 - f.dash) * Math.min(1, dtSec * 1.4);
+        }
+      } else {
+        f.dashT = 0;
+        f.dash += (0 - f.dash) * Math.min(1, dtSec * (inGather ? 1.2 : 2.5));
+        if (inGather) f.nextDash = rand(DASH_GAP_MIN, DASH_GAP_MAX);
+      }
+      if (f.dash < 0.002) f.dash = 0;
+      const dashMul = 1 + f.dash * (f.dashPeak - 1);
 
       // === 행동 상태머신: cruise ↔ circle(서행 회전) ↔ hover(정지·지느러미 노젓기) ===
       // 애니 전환은 '곧은 프레임' 게이트(meta.gates/hgates)에서만 → 팝 최소.
@@ -1065,7 +1239,8 @@
         return -1;
       }
       f.modeT -= dtSec;
-      if (f.panic > 0.25) {
+      // 도망 중이거나 '사람에게 다가가는 중'이면 순항 모드로 복귀(호버 0.06배속이면 다가가지 못함)
+      if (f.panic > 0.25 || (inGather && gather01 > 0.15)) {
         if (f.mode === "hover" && hasHover) f.frame = v.gates ? v.gates[0] : 0; // 도망 우선, 즉시 스윔 복귀
         f.mode = "cruise"; f.modeT = rand(4, 9);
       } else if (f.mode === "cruise" && f.modeT <= 0) {
@@ -1088,9 +1263,21 @@
 
       // 천천히 배회: heading 에 느린 사인 흔들림 (패닉 시엔 약화, 몸통 일렁임은 프레임 애니메이션 담당)
       f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec
-                   * (1 - Math.min(1, f.panic)) * (inHover ? 0.15 : 1);
+                   * (1 - Math.min(1, f.panic)) * (inHover ? 0.15 : 1) * wanderMul;
       if (f.mode === "circle") f.heading += f.circleDir * f.circleRate * dtSec;   // 서행 회전 유영
-      f.frame += f.animFps * (inHover ? 0.9 : 1 + f.panic * 1.8) * dtSec;   // 패닉 시 꼬리짓 빨라짐
+      // 개체별 불규칙 유영(저주파 지터) → 모여도 동기화된 몸짓 안 생김
+      const jit = Math.sin(tSec * f.jf1 + f.jp1) * 0.62 + Math.sin(tSec * f.jf2 + f.jp2) * 0.38;
+      f.heading += jit * WOB_AMP * dtSec * (1 - Math.min(1, f.panic)) * (inHover ? 0.15 : 1) * wanderMul;
+      // 각속도 상한(도망 제외): 홱 트는 동작 차단 → 모여서도 부드럽게
+      if (f.panic < 0.05) {
+        let dh = f.heading - oldHeading;
+        dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+        const maxDh = TURN_RATE_MAX * dtSec;
+        if (dh > maxDh) f.heading = oldHeading + maxDh;
+        else if (dh < -maxDh) f.heading = oldHeading - maxDh;
+      }
+      const beat = 1 + 0.15 * Math.sin(tSec * f.jf1 * 0.5 + f.jp2);   // 꼬리짓 박자 개체별 출렁
+      f.frame += f.animFps * beat * (inHover ? 0.9 : 1 + f.panic * 1.8 + f.dash * 0.9) * dtSec;   // 패닉/질주 시 빨라짐
 
       // 회전축: 평상시엔 몸 중앙, 도망(패닉)할수록 머리로 → 머리 고정하고 몸·꼬리가 휙 돈다
       const pivotW = Math.min(1, f.panic * 1.3);
@@ -1099,10 +1286,15 @@
       let cxC = fx + (headPivotCx - fx) * pivotW;
       let cyC = fy + (headPivotCy - fy) * pivotW;
 
-      // 전진(heading 방향)
-      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * modeSpeedMul;  // 패닉 시 가속, 회전/호버 시 감속
+      // 전진(heading 방향) — 목표속도 → 완만히 추종(도망만 즉각) = 평소엔 튀지 않는 유영
+      const speedTarget = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul * (1 + gather01 * ATTRACT_SPEED_BOOST * GATHER_RESP) * modeSpeedMul;
+      if (!f.spd) f.spd = speedTarget;
+      f.spd += (speedTarget - f.spd) * Math.min(1, dtSec * (f.panic > 0.05 ? 14 : SPEED_SMOOTH_RATE));
+      const speedPx = f.spd;
       cxC += Math.cos(f.heading) * speedPx * dtSec;
       cyC += Math.sin(f.heading) * speedPx * dtSec;
+      // 직접 위치 분리: 겹친 만큼 일부를 이 프레임에 벌림(몸통 겹침 방지)
+      cxC += pushX * SEP_POS_FRAC; cyC += pushY * SEP_POS_FRAC;
       f.nx = cxC / W; f.ny = cyC / H;
       // 화면 밖으로 완전히 나가면 반대편에서 재등장
       const mx = lenPx / W, my = lenPx / H;
@@ -1398,6 +1590,9 @@
     showHud(PROJ_N > 1 ? ("디스플레이 γ  " + DISP_GAMMA.toFixed(1) + " (경계 밝기 보정)") : ("디스플레이 γ " + DISP_GAMMA.toFixed(1) + " (프로젝터 1대라 미적용)"));
   }
   function toggleAlignGrid() { ALIGN_GRID = !ALIGN_GRID; showHud(ALIGN_GRID ? "정렬 그리드 ON (G)" : "정렬 그리드 OFF"); }
+  function toggleGather() { GATHER_ON = !GATHER_ON; showHud(GATHER_ON ? "몰려들기 ON (J) — 흩어지기+모임" : "흩어지기만 (모임 OFF, J)"); }
+  function setGatherResp(dir) { GATHER_RESP = clamp(Math.round((GATHER_RESP + dir * 0.15) * 100) / 100, 0.3, 2.5); showHud("몰려드는 속도  " + Math.round(GATHER_RESP * 100) + "%"); }
+  function resetGatherResp() { GATHER_RESP = 1.0; showHud("몰려드는 속도  100% (기본)"); }
 
   function openBgPicker() { bgInput.click(); }
   function toggleSound() {
@@ -1430,7 +1625,7 @@
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
-    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["KeyH", "도움말 H"],
+    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyJ", "흩어↔몰림 J"], ["KeyQ", "몰림속도+ Q"], ["KeyZ", "몰림속도- Z"], ["KeyR", "몰림리셋 R"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["KeyH", "도움말 H"],
     ["KeyO", "프로젝터 O"], ["KeyG", "정렬격자 G"], ["Semicolon", "겹침- ;"], ["Quote", "겹침+ '"], ["Minus", "커브γ- -"], ["Equal", "커브γ+ ="], ["Comma", "화면γ- ,"], ["Period", "화면γ+ ."],
     ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
@@ -1605,13 +1800,15 @@
         case "glitter": GLITTER_ON = true; GLITTER_AMT = clamp(v, 0, 100) / 100; if (glitterSlider) glitterSlider.value = Math.round(v); applyGlitter(); refreshGlitterUI(); showHud("윤슬 강도  " + Math.round(v)); break;
         case "bright": _rbright = clamp(Math.round(v), 10, 200); gl.useProgram(progBg); gl.uniform1f(locBg.uBgBright, _rbright / 100); showHud("배경 밝기  " + _rbright + "%"); break;
         case "slide": SLIDE_HOLD_MS = clamp(Math.round(v), 0, 60) * 1000; holdAcc = 0; showHud(SLIDE_HOLD_MS > 0 ? ("배경 전환 간격  " + (SLIDE_HOLD_MS / 1000) + "초") : "배경 슬라이드 정지 (0초)"); break;
+        case "gather": GATHER_RESP = clamp(v / 100, 0.3, 2.5); showHud("몰려드는 속도  " + Math.round(GATHER_RESP * 100) + "%"); break;
       }
     } catch (e) {}
   };
   window.__remoteState = function () {
     return { fish: FISH_COUNT, sens: sensSlider ? +sensSlider.value : null,
       glitterOn: GLITTER_ON, glitter: Math.round(GLITTER_AMT * 100), bright: _rbright,
-      slide: SLIDE_HOLD_MS / 1000, group: activeGroup, cam: camOn, xray: xrayOn };
+      slide: SLIDE_HOLD_MS / 1000, gather: Math.round(GATHER_RESP * 100), gatherOn: GATHER_ON,
+      group: activeGroup, cam: camOn, xray: xrayOn };
   };
   (function () {
     try {
@@ -1658,6 +1855,10 @@
       case "KeyE": if (e.repeat) return; e.preventDefault(); toggleEmblem(); break;
       case "KeyO": if (e.repeat) return; e.preventDefault(); cycleProj(); break;      // 프로젝터 수 1→2→3
       case "KeyG": if (e.repeat) return; e.preventDefault(); toggleAlignGrid(); break; // 정렬 그리드
+      case "KeyJ": if (e.repeat) return; e.preventDefault(); toggleGather(); break;    // 흩어지기 ↔ 몰려들기
+      case "KeyQ": e.preventDefault(); setGatherResp(+1); break;   // 몰려드는 속도 +
+      case "KeyZ": e.preventDefault(); setGatherResp(-1); break;   // 몰려드는 속도 -
+      case "KeyR": if (e.repeat) return; e.preventDefault(); resetGatherResp(); break; // 몰려드는 속도 기본값
       case "Semicolon": e.preventDefault(); setOverlap(-0.01); break;                  // 겹침 - (;)
       case "Quote": e.preventDefault(); setOverlap(+0.01); break;                      // 겹침 + (')
       case "Minus": e.preventDefault(); setCurveGamma(-0.1); break;                    // 블렌드 커브 γ - (61 동일)
