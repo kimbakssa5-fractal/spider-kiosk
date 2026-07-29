@@ -46,6 +46,10 @@
         if (Number.isFinite(_fq)) FISH_COUNT = Math.max(0, Math.min(24, _fq)); } catch (e) {}  // ?fish=N 시작수 지정(exe 런처용)
   const FISH_LEN_MIN = 0.22, FISH_LEN_MAX = 0.34;  // 화면 짧은변 대비 몸길이 비율 (크게)
   const FISH_SPEED_MIN = 0.040, FISH_SPEED_MAX = 0.075; // 화면 짧은변/초 (유유히)
+  // 자발적 질주(dash): 평소엔 느리게, 이따금 한두 마리가 몇 초간 빠르게 치고 나감(동시 ~1~2마리)
+  const DASH_PEAK_MIN = 2.2, DASH_PEAK_MAX = 3.6;   // 순간 속도 배수(전진)
+  const DASH_DUR_MIN = 1.0,  DASH_DUR_MAX = 2.4;    // 질주 지속(초)
+  const DASH_GAP_MIN = 14,   DASH_GAP_MAX = 34;     // 질주와 질주 사이 간격(초) — 크게=동시에 덜 겹침(≈한두 마리)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
   const FLEE_RADIUS_FRAC = 0.32;      // 도망 반경(화면 짧은변 대비) — 더 멀리서 반응
@@ -618,6 +622,9 @@
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
       panic: 0,                                       // 도망 흥분도(0~1+), 시간에 따라 감쇠
       bend: 0, prevHeading: 0,                        // 몸 휨(라디안), 직전 heading
+      dash: 0, dashT: 0,                              // 질주 강도(0~1, 램프)·남은 질주 시간(초)
+      dashPeak: rand(DASH_PEAK_MIN, DASH_PEAK_MAX),   // 이 물고기의 질주 속도 배수
+      nextDash: rand(2, DASH_GAP_MAX),                // 첫 질주까지 대기(스태거)
     };
   }
   function spawnFishes() {
@@ -1041,9 +1048,30 @@
       f.panic *= Math.exp(-dtSec / PANIC_DECAY);
       if (f.panic < 0.003) f.panic = 0;
 
+      // --- 자발적 질주(dash): 고요할 때만, 이따금 몇 초간 가속했다가 다시 느려짐 ---
+      if (f.panic < 0.05) {
+        if (f.dashT > 0) {                                     // 질주 중 → 강도 램프업
+          f.dashT -= dtSec;
+          f.dash += (1 - f.dash) * Math.min(1, dtSec * 2.5);
+        } else {
+          f.nextDash -= dtSec;
+          if (f.nextDash <= 0) {                               // 새 질주 시작
+            f.dashT = rand(DASH_DUR_MIN, DASH_DUR_MAX);
+            f.nextDash = rand(DASH_GAP_MIN, DASH_GAP_MAX);
+            f.dashPeak = rand(DASH_PEAK_MIN, DASH_PEAK_MAX);
+          }
+          f.dash += (0 - f.dash) * Math.min(1, dtSec * 1.4);   // 질주 아니면 강도 램프다운
+        }
+      } else {                                                 // 도망 중엔 질주 취소
+        f.dashT = 0;
+        f.dash += (0 - f.dash) * Math.min(1, dtSec * 2.5);
+      }
+      if (f.dash < 0.002) f.dash = 0;
+      const dashMul = 1 + f.dash * (f.dashPeak - 1);           // 1 → dashPeak
+
       // 천천히 배회: heading 에 느린 사인 흔들림 (패닉 시엔 약화, 몸통 일렁임은 프레임 애니메이션 담당)
       f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec * (1 - Math.min(1, f.panic));
-      f.frame += f.animFps * (1 + f.panic * 1.8) * dtSec;   // 패닉 시 꼬리짓 빨라짐
+      f.frame += f.animFps * (1 + f.panic * 1.8 + f.dash * 0.9) * dtSec;   // 패닉/질주 시 꼬리짓 빨라짐
 
       // 회전축: 평상시엔 몸 중앙, 도망(패닉)할수록 머리로 → 머리 고정하고 몸·꼬리가 휙 돈다
       const pivotW = Math.min(1, f.panic * 1.3);
@@ -1053,7 +1081,7 @@
       let cyC = fy + (headPivotCy - fy) * pivotW;
 
       // 전진(heading 방향)
-      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST);  // 패닉 시 가속
+      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul;  // 패닉·질주 시 가속
       cxC += Math.cos(f.heading) * speedPx * dtSec;
       cyC += Math.sin(f.heading) * speedPx * dtSec;
       f.nx = cxC / W; f.ny = cyC / H;
