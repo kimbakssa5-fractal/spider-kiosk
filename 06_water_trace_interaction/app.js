@@ -63,10 +63,13 @@
   const SPEED_SMOOTH_RATE   = 1.5;                  // 평상시 속도 변화율(1/초, 낮을수록 완만) — 도망 때만 즉각
   const ALOOF_FRAC = 0.3;                           // 사람에게 무관심한 개체 비율(모임 무시하고 제 갈 길) — 도망은 함
   const ALOOF_MIN = 15, ALOOF_MAX = 45;             // 관심/무관심이 바뀌는 주기(초) — 고정 아님, 서서히 교대
-  const SEP_FRAC            = 0.13;                  // 물고기끼리 이 반경 안이면 밀어내 몸통 겹침 방지
-  const SEP_POS_FRAC        = 0.5;                   // 겹친 만큼 이 비율을 매 프레임 직접 벌림(0.5=양쪽이 반씩→완전분리)
-  const SEP_GAIN_GATHER     = 1.1;                  // 모임 중 분리 조향 세기
+  const SEP_FRAC            = 0.13;                  // 분리 '소프트' 반경 — 이 안이면 서서히 비켜 조향
+  const SEP_HARD_FRAC       = 0.075;                 // 분리 '하드' 반경 — 진짜 겹칠 때만 위치를 직접 벌림(잦은 밀어냄=안절부절 방지)
+  const SEP_POS_FRAC        = 0.18;                  // 하드 겹침 시 벌리는 비율(작게=부드럽게 해소, 진동 없음)
+  const SEP_GAIN_GATHER     = 0.32;                  // 모임 중 분리 조향 세기(과하면 서로 피하느라 안절부절)
   const SEP_GAIN_IDLE       = 0.35;                 // 평상시 분리 조향(약하게 — 자연 군영 유지)
+  const ROAM_PACK_FRAC      = 0.45;                  // 배회 존 자동 확장 계수: √(마릿수)×몸길이×이 값 이상으로 존 확보(밀집 충돌 방지)
+  const TURN_RATE_MAX       = 1.55;                  // 도망 아닐 때 각속도 상한(rad/s ≈89°/s) — 홱 트는 동작 차단(도망은 제한 없음)
   const GATHER_FLEE_LO = 0.60, GATHER_FLEE_HI = 0.92; // 자극 강도 이 구간에서 attract→flee 전환
   const WOB_AMP = 0.5;                              // 개체별 헤딩 지터 세기(저주파·약하게 → 빠른 떨림 없이 부드러운 배회)
   const ANCHOR_TAU  = 1.8;                          // 관심 중심 저주파 시정수(초) — 클수록 다리 진동 더 걸러냄
@@ -76,7 +79,7 @@
   const ANCHOR_MATCH_FRAC = 0.32;                   // 프레임 간 클러스터↔기존 앵커 매칭 최대 거리
   const ROAM_RADIUS_FRAC = 0.22;                    // 배회 존 반경 — 이 안에선 자유 배회, 벗어나면 복귀
   const ROAM_KEEP_FRAC   = 0.07;                    // 앵커(사람) 바로 위는 이 반경만큼 비워 배회(관통/올라탐 방지)
-  const WANDER_GATHER    = 1.8;                     // 모임 중 배회 흔들림 배수(제자리 정체 방지)
+  const WANDER_GATHER    = 1.05;                    // 모임 중 배회 흔들림 배수 — 존이 넓어 정체가 없으므로 평상시와 비슷하게(과하면 안절부절)
   // 모션 도망 surge 게이트: 살살(지속) 모션엔 도망 억제, 갑작스런 급변에만 도망 허용
   const MENV_ATK = 0.07, MENV_REL = 0.5;           // 포락 상승(빠름 70ms)/하강(느림 500ms)
   const MBASE_TAU = 1.6;                            // 기준선 시정수(초) — 지속 모션은 여기에 흡수됨
@@ -1103,6 +1106,11 @@
         else gatherAnchors[j]._hit = false;
       }
     }
+    // 모임 밀집도: 관심 있는 마릿수를 활성 앵커 수로 나눔 → 배회 존을 그만큼 넓혀 서로 부대끼지 않게
+    let nInterested = 0, nActiveAnchors = 0;
+    for (let i = 0; i < fishes.length; i++) if (!fishes[i].aloof) nInterested++;
+    for (let i = 0; i < gatherAnchors.length; i++) if (gatherAnchors[i].act > 0.05) nActiveAnchors++;
+    const perAnchor = nActiveAnchors > 0 ? nInterested / nActiveAnchors : nInterested;
     let vi = 0;
     for (let k = 0; k < fishes.length; k++) {
       const f = fishes[k];
@@ -1138,7 +1146,7 @@
       // 물고기끼리 분리(몸통 겹침 방지) — 근처 개체로부터 밀려남
       //   sepx/sepy = 헤딩 조향용 방향 / pushX/pushY = 겹친 만큼 직접 벌릴 px(확실한 간격 유지)
       let sepx = 0, sepy = 0, pushX = 0, pushY = 0;
-      const sepR = SEP_FRAC * minDim;
+      const sepR = SEP_FRAC * minDim, sepHard = SEP_HARD_FRAC * minDim;
       for (let j = 0; j < fishes.length; j++) {
         if (j === k) continue;
         const o = fishes[j];
@@ -1147,8 +1155,10 @@
         const dd = Math.hypot(ddx, ddy);
         if (dd > 0 && dd < sepR) {
           const push = (1 - dd / sepR) / dd; sepx += ddx * push; sepy += ddy * push;
-          const overlap = sepR - dd;                 // px 만큼 너무 가까움
-          pushX += (ddx / dd) * overlap; pushY += (ddy / dd) * overlap;
+          if (dd < sepHard) {                        // 진짜 겹칠 때만 위치를 직접 벌림(소프트 구간은 조향으로만)
+            const overlap = sepHard - dd;
+            pushX += (ddx / dd) * overlap; pushY += (ddy / dd) * overlap;
+          }
         }
       }
       let gather01 = 0;                              // 이 프레임 모임 세기(전진 가속용)
@@ -1172,9 +1182,11 @@
         const px = an.x, py = an.y;
         const rdx = fx - px, rdy = fy - py;          // 앵커→물고기
         const rd = Math.hypot(rdx, rdy) || 1;
-        const roam = ROAM_RADIUS_FRAC * minDim * f.orbitRad;
+        // 존 반경: 기본값과 '√마릿수 × 몸길이' 중 큰 값 → 여러 마리여도 몸이 겹칠 만큼 좁아지지 않음
+        const roam = Math.max(ROAM_RADIUS_FRAC * minDim, Math.sqrt(Math.max(1, perAnchor)) * lenPx * ROAM_PACK_FRAC) * f.orbitRad;
         const keep = ROAM_KEEP_FRAC * minDim;
-        let vx = sepx * SEP_GAIN_GATHER, vy = sepy * SEP_GAIN_GATHER;  // 분리는 항상
+        // 분리 힘을 0~1 스케일로 정규화(×sepR) → 아래에서 '힘 크기에 비례'해 조향(미약하면 거의 안 틂)
+        let vx = sepx * sepR * SEP_GAIN_GATHER, vy = sepy * sepR * SEP_GAIN_GATHER;
         if (rd > roam) {                              // 존 밖 → 안쪽으로 복귀(주둥이 방향)
           const over = Math.min(1, (rd - roam) / (ATTRACT_BAND_FRAC * minDim));
           vx += -(rdx / rd) * over * ATTRACT_RADIAL; vy += -(rdy / rd) * over * ATTRACT_RADIAL;
@@ -1184,20 +1196,25 @@
           vx += (rdx / rd) * near * ATTRACT_RADIAL; vy += (rdy / rd) * near * ATTRACT_RADIAL;
         }
         // 존 안에서는 radial 0 → 자유 배회(아래 wander/jitter가 배회를 담당)
-        if (vx || vy) {
+        //   조향은 '힘 크기에 비례'(vm) + 미약하면 무시(deadband) → 이웃이 조금 스칠 때마다 홱홱 트는 안절부절 방지
+        const vm = Math.hypot(vx, vy);
+        if (vm > 0.06) {
           const desired = Math.atan2(vy, vx);
           let diff = desired - f.heading;
           diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-          f.heading += diff * Math.min(1, ATTRACT_TURN * GATHER_RESP * dtSec);
+          f.heading += diff * Math.min(1, ATTRACT_TURN * GATHER_RESP * Math.min(1, vm) * dtSec);
         }
         wanderMul = WANDER_GATHER;                    // 모여서도 계속 배회하도록 흔들림 강화
         inGather = true;                              // 모임 중 → 질주(dash) 억제, 속도 변화도 완만히
         }
-      } else if (sepx || sepy) {                      // 평상시: 약한 분리만(자연 군영 유지)
-        const desired = Math.atan2(sepy, sepx);
-        let diff = desired - f.heading;
-        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-        f.heading += diff * Math.min(1, ATTRACT_TURN * SEP_GAIN_IDLE * dtSec);
+      } else if (sepx || sepy) {                      // 평상시: 약한 분리만(자연 군영 유지, 힘 크기 비례)
+        const sm = Math.hypot(sepx, sepy) * sepR;
+        if (sm > 0.06) {
+          const desired = Math.atan2(sepy, sepx);
+          let diff = desired - f.heading;
+          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          f.heading += diff * Math.min(1, ATTRACT_TURN * SEP_GAIN_IDLE * Math.min(1, sm) * dtSec);
+        }
       }
       // 패닉 감쇠
       f.panic *= Math.exp(-dtSec / PANIC_DECAY);
@@ -1230,6 +1247,14 @@
       // 개체별 불규칙 유영: 서로 다른 두 주파수의 부드러운 지터를 heading 에 더함 → 모여도 동기화된 몸짓 안 생김
       const jit = Math.sin(tSec * f.jf1 + f.jp1) * 0.62 + Math.sin(tSec * f.jf2 + f.jp2) * 0.38;
       f.heading += jit * WOB_AMP * dtSec * (1 - Math.min(1, f.panic)) * wanderMul;
+      // 각속도 상한(도망 제외): 이 프레임 총 회전량을 제한 → 모여서도 홱 트는 동작 없이 부드럽게
+      if (f.panic < 0.05) {
+        let dh = f.heading - oldHeading;
+        dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+        const maxDh = TURN_RATE_MAX * dtSec;
+        if (dh > maxDh) f.heading = oldHeading + maxDh;
+        else if (dh < -maxDh) f.heading = oldHeading - maxDh;
+      }
       // 꼬리짓 박자도 개체별로 미세하게 출렁(±15%) → 몸 흔드는 리듬 제각각
       const beat = 1 + 0.15 * Math.sin(tSec * f.jf1 * 0.5 + f.jp2);
       f.frame += f.animFps * beat * (1 + f.panic * 1.8 + f.dash * 0.9) * dtSec;   // 패닉/질주 시 꼬리짓 빨라짐
