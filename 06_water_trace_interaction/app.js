@@ -53,22 +53,22 @@
   // 사람 쪽으로 모임(gather, 하이브리드): 잔잔한 반응엔 다가가고(호기심), 급격/강한 움직임엔 흩어짐(도망)
   let GATHER_ON = true;                              // J 토글: ON=몰려들기(흩어지기+모임) / OFF=기존 흩어지기만
   let GATHER_RESP = 1.0;                             // 몰려드는 속도/민감도(0.3~2.5) — Q/Z 조절, 선회·접근속도·반응즉시성 동시 배율
-  const ATTRACT_RADIUS_FRAC = 0.60;                 // 모임 감지 반경(도망보다 넓게 — 멀리서부터 다가옴)
+  const ATTRACT_RADIUS_FRAC = 0.85;                 // 모임 감지 반경(도망보다 넓게 — 멀리서부터 다가옴)
   const ATTRACT_GAP_FRAC    = 0.03;                 // 주둥이가 포인트에 남기는 여백(몸 절반+이 여백에서 정지 → 관통 방지)
   const ATTRACT_BAND_FRAC   = 0.14;                 // 링 오차 정규화 폭(radial 힘이 최대가 되는 거리 스케일)
   const ATTRACT_RADIAL      = 1.0;                  // 링(standoff)으로 다가감/밀려남 세기
   const ATTRACT_TANG        = 0.55;                 // 링 근처에서 접선(주위를 도는) 세기
-  const ATTRACT_TURN        = 1.7;                  // 모임 선회 속도(느긋 — 살살엔 천천히 반응, 도망 FLEE_TURN만 빠름)
-  const ATTRACT_SPEED_BOOST = 0.35;                 // 모임 다가갈 때 전진 가속(×(1+boost)) — 작게: 다가가도 튀지 않게
+  const ATTRACT_TURN        = 2.0;                  // 모임 선회 속도(느긋 — 살살엔 천천히 반응, 도망 FLEE_TURN만 빠름). 각속도 상한이 홱틂은 따로 차단
+  const ATTRACT_SPEED_BOOST = 0.55;                 // 모임 다가갈 때 전진 가속(×(1+boost)) — 속도 완만추종이 튐은 따로 막음
   const SPEED_SMOOTH_RATE   = 1.5;                  // 평상시 속도 변화율(1/초, 낮을수록 완만) — 도망 때만 즉각
-  const ALOOF_FRAC = 0.3;                           // 사람에게 무관심한 개체 비율(모임 무시하고 제 갈 길) — 도망은 함
+  const ALOOF_FRAC = 0.13;                          // 사람에게 무관심한 개체 비율(모임 무시하고 제 갈 길) — 도망은 함
   const ALOOF_MIN = 15, ALOOF_MAX = 45;             // 관심/무관심이 바뀌는 주기(초) — 고정 아님, 서서히 교대
   const SEP_FRAC            = 0.13;                  // 분리 '소프트' 반경 — 이 안이면 서서히 비켜 조향
   const SEP_HARD_FRAC       = 0.075;                 // 분리 '하드' 반경 — 진짜 겹칠 때만 위치를 직접 벌림(잦은 밀어냄=안절부절 방지)
   const SEP_POS_FRAC        = 0.18;                  // 하드 겹침 시 벌리는 비율(작게=부드럽게 해소, 진동 없음)
   const SEP_GAIN_GATHER     = 0.32;                  // 모임 중 분리 조향 세기(과하면 서로 피하느라 안절부절)
   const SEP_GAIN_IDLE       = 0.35;                 // 평상시 분리 조향(약하게 — 자연 군영 유지)
-  const ROAM_PACK_FRAC      = 0.45;                  // 배회 존 자동 확장 계수: √(마릿수)×몸길이×이 값 이상으로 존 확보(밀집 충돌 방지)
+  const ROAM_PACK_FRAC      = 0.33;                  // 배회 존 자동 확장 계수: √(마릿수)×몸길이×이 값 이상으로 존 확보(밀집 충돌 방지)
   const TURN_RATE_MAX       = 1.55;                  // 도망 아닐 때 각속도 상한(rad/s ≈89°/s) — 홱 트는 동작 차단(도망은 제한 없음)
   const GATHER_FLEE_LO = 0.60, GATHER_FLEE_HI = 0.92; // 자극 강도 이 구간에서 attract→flee 전환
   const WOB_AMP = 0.5;                              // 개체별 헤딩 지터 세기(저주파·약하게 → 빠른 떨림 없이 부드러운 배회)
@@ -77,7 +77,7 @@
   const MAX_ANCHORS = 3;                            // 동시 모임 지점 최대 수(여러 사람 → 무리 분리)
   const CLUSTER_DIST_FRAC = 0.28;                   // 자극점 이 거리 밖이면 다른 사람(다른 클러스터)으로 분리
   const ANCHOR_MATCH_FRAC = 0.32;                   // 프레임 간 클러스터↔기존 앵커 매칭 최대 거리
-  const ROAM_RADIUS_FRAC = 0.22;                    // 배회 존 반경 — 이 안에선 자유 배회, 벗어나면 복귀
+  const ROAM_RADIUS_FRAC = 0.17;                    // 배회 존 반경 — 이 안에선 자유 배회, 벗어나면 복귀(작을수록 바짝 모임)
   const ROAM_KEEP_FRAC   = 0.07;                    // 앵커(사람) 바로 위는 이 반경만큼 비워 배회(관통/올라탐 방지)
   const WANDER_GATHER    = 1.05;                    // 모임 중 배회 흔들림 배수 — 존이 넓어 정체가 없으므로 평상시와 비슷하게(과하면 안절부절)
   // 모션 도망 surge 게이트: 살살(지속) 모션엔 도망 억제, 갑작스런 급변에만 도망 허용
