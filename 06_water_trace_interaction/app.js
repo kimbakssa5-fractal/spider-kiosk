@@ -65,6 +65,11 @@
   const SEP_GAIN_IDLE       = 0.35;                 // 평상시 분리 조향(약하게 — 자연 군영 유지)
   const GATHER_FLEE_LO = 0.60, GATHER_FLEE_HI = 0.92; // 자극 강도 이 구간에서 attract→flee 전환
   const WOB_AMP = 0.85;                             // 개체별 헤딩 지터 세기(불규칙 유영 — 동기화 방지)
+  const ANCHOR_TAU  = 1.8;                          // 관심 중심 저주파 시정수(초) — 클수록 다리 진동 더 걸러냄
+  const ANCHOR_RISE = 0.6, ANCHOR_FALL = 2.5;       // 앵커 활성 상승/하강(초)
+  const ROAM_RADIUS_FRAC = 0.22;                    // 배회 존 반경 — 이 안에선 자유 배회, 벗어나면 복귀
+  const ROAM_KEEP_FRAC   = 0.07;                    // 앵커(사람) 바로 위는 이 반경만큼 비워 배회(관통/올라탐 방지)
+  const WANDER_GATHER    = 1.8;                     // 모임 중 배회 흔들림 배수(제자리 정체 방지)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
   const FLEE_RADIUS_FRAC = 0.32;      // 도망 반경(화면 짧은변 대비) — 더 멀리서 반응
@@ -761,6 +766,7 @@
   //   POINTER_TTL 동안 움직임이 없으면 비활성 → 물고기 진정.
   const pointers = new Map();   // id -> {x, y, t(sec)}
   let motionPoints = [];        // 카메라 모션 점 [{x,y,w}] (CSS px) — 매 모션틱 갱신
+  let gatherAnchor = { x: 0, y: 0, act: 0 };  // 모임 관심 중심(저주파 필터 — 다리의 좌우 진동을 걸러 물고기가 안 따라 흔들리게)
   // ── 입력 소스 자동 전환: Kinect(=OS 터치주입) 있으면 터치 우선, 없으면 웹캠 유지 ──
   let lastTouchT = -999;                       // 마지막 '터치'(Kinect 주입/터치스크린) 시각(초)
   const TOUCH_SUPPRESS_S = 6;                   // 터치 후 이 시간 동안 웹캠 모션 억제(Kinect 우선)
@@ -1038,6 +1044,29 @@
     // 모션 점: it = strength 가중 w (약한 모션=낮음=모임, 큰 모션=1=도망)
     for (let mi = 0; mi < motionPoints.length; mi++) { const m = motionPoints[mi]; active.push({ x: m.x, y: m.y, w: m.w, r: m.r, it: m.w }); }
     const fleeR = FLEE_RADIUS_FRAC * minDim;
+    // 모임 관심 중심(anchor): 현재 '모임성' 자극들의 가중 무게중심을 저주파로 추종
+    //   → 다리를 좌우로 흔들 때 생기는 자극점의 좌우 진동이 걸러져, 물고기가 그 리듬을 안 따라감.
+    {
+      let acx = 0, acy = 0, acw = 0;
+      if (GATHER_ON) {
+        for (let pi = 0; pi < active.length; pi++) {
+          const a = active[pi];
+          const it = (a.it != null ? a.it : a.w);
+          let ft = (it - GATHER_FLEE_LO) / (GATHER_FLEE_HI - GATHER_FLEE_LO);
+          ft = ft < 0 ? 0 : ft > 1 ? 1 : ft;
+          const attract01 = 1 - ft * ft * (3 - 2 * ft);
+          if (attract01 > 0.2) { const wt = attract01 * a.w; acx += a.x * wt; acy += a.y * wt; acw += wt; }
+        }
+      }
+      if (acw > 0) {
+        const tx = acx / acw, ty = acy / acw;
+        if (gatherAnchor.act <= 0.001) { gatherAnchor.x = tx; gatherAnchor.y = ty; }  // 첫 포착은 스냅
+        else { const kk = 1 - Math.exp(-dtSec / ANCHOR_TAU); gatherAnchor.x += (tx - gatherAnchor.x) * kk; gatherAnchor.y += (ty - gatherAnchor.y) * kk; }
+        gatherAnchor.act = Math.min(1, gatherAnchor.act + dtSec / ANCHOR_RISE);
+      } else {
+        gatherAnchor.act = Math.max(0, gatherAnchor.act - dtSec / ANCHOR_FALL);
+      }
+    }
     let vi = 0;
     for (let k = 0; k < fishes.length; k++) {
       const f = fishes[k];
@@ -1052,9 +1081,7 @@
       // --- 하이브리드: 잔잔한 자극엔 다가가고(모임), 강한 자극엔 멀어짐(도망) ---
       //   자극 강도 it 로 flee01(0~1) 계산 → attract01=1-flee01. 도망은 좁은 반경/패닉, 모임은 넓은 반경/느긋.
       let ax = 0, ay = 0, maxS = 0;                  // 도망 누적(멀어지는 방향)
-      let tpx = 0, tpy = 0, tw = 0, tpDist = 1e9;    // 모임 목표 = 가장 가까운 자극점(주위를 돌 중심)
-      const atRad = ATTRACT_RADIUS_FRAC * minDim;
-      for (let pi = 0; pi < active.length; pi++) {
+      for (let pi = 0; pi < active.length; pi++) {   // 도망만 자극별 즉각 반응(모임은 저주파 anchor 사용)
         const a = active[pi];
         const dx = fx - a.x, dy = fy - a.y;          // 자극→물고기
         const dist = Math.hypot(dx, dy) || 1;
@@ -1063,21 +1090,12 @@
         let ft = (it - GATHER_FLEE_LO) / (GATHER_FLEE_HI - GATHER_FLEE_LO);
         ft = ft < 0 ? 0 : ft > 1 ? 1 : ft;
         const flee01 = ft * ft * (3 - 2 * ft);
-        // 도망(좁은 반경)
         const rad = fleeR * (a.r || 1);
         if (flee01 > 0.01 && dist < rad) {
           const s = (1 - dist / rad) * a.w * flee01;
           const inv = s / dist;
           ax += dx * inv; ay += dy * inv;
           if (s > maxS) maxS = s;
-        }
-        // 모임 목표: 반경 안에서 가장 가까운 자극점을 이 물고기의 '맴돌 중심'으로
-        if (GATHER_ON) {
-          const attract01 = 1 - flee01;
-          const arad = atRad * (a.r || 1);
-          if (attract01 > 0.05 && dist < arad && dist < tpDist) {
-            tpDist = dist; tpx = a.x; tpy = a.y; tw = attract01 * a.w;
-          }
         }
       }
       // 물고기끼리 분리(몸통 겹침 방지) — 근처 개체로부터 밀려남
@@ -1097,6 +1115,7 @@
         }
       }
       let gather01 = 0;                              // 이 프레임 모임 세기(전진 가속용)
+      let wanderMul = 1;                             // 배회 흔들림 배수(모임 중 크게 → 제자리 정체 방지)
       if (maxS > 0 && (ax || ay)) {                  // 도망 우선(놀람)
         const desired = Math.atan2(ay, ax);
         let diff = desired - f.heading;
@@ -1104,24 +1123,30 @@
         f.heading += diff * Math.min(1, FLEE_TURN * (0.3 + maxS) * dtSec);
         const tgt = Math.min(1.2, maxS * PANIC_GAIN); // 근접 강도 증폭 → 더 예민
         if (tgt > f.panic) f.panic = tgt;            // 흥분도 상승
-      } else if (tw > 0) {                            // 도망 없을 때만: 포인트 주위 링으로 모여 맴돌기
-        // 중심거리 기준 standoff = 몸 절반(hl) + 여백, 개인별 배수(orbitRad)로 링 반경 제각각 → 균일 링 방지
-        const stand = (ATTRACT_GAP_FRAC * minDim + hl) * f.orbitRad;
-        const rdx = fx - tpx, rdy = fy - tpy;        // 포인트→물고기
+      } else if (gatherAnchor.act > 0.05) {           // 도망 없을 때: 저주파 anchor 주변을 '느슨하게 배회'
+        // 개인별 배회 존(orbitRad로 크기 제각각). 존 밖=복귀 / 앵커 바로 위=비켜남 / 존 안=자유 배회
+        const px = gatherAnchor.x, py = gatherAnchor.y;
+        const rdx = fx - px, rdy = fy - py;          // 앵커→물고기
         const rd = Math.hypot(rdx, rdy) || 1;
-        let rr = (rd - stand) / (ATTRACT_BAND_FRAC * minDim);  // + 멀다(다가감) / - 가깝다(밀려남)
-        rr = rr < -1 ? -1 : rr > 1 ? 1 : rr;
-        // radial: 멀면 포인트로, 가까우면 밖으로 / tangential: 링 근처서 주위를 돎(개인별 속도) / + 분리
-        const tang = ATTRACT_TANG * f.orbitSpd;
-        let vx = -(rdx / rd) * rr * ATTRACT_RADIAL + (-rdy / rd) * f.orbitDir * tang + sepx * SEP_GAIN_GATHER;
-        let vy = -(rdy / rd) * rr * ATTRACT_RADIAL + (rdx / rd) * f.orbitDir * tang + sepy * SEP_GAIN_GATHER;
+        const roam = ROAM_RADIUS_FRAC * minDim * f.orbitRad;
+        const keep = ROAM_KEEP_FRAC * minDim;
+        let vx = sepx * SEP_GAIN_GATHER, vy = sepy * SEP_GAIN_GATHER;  // 분리는 항상
+        if (rd > roam) {                              // 존 밖 → 안쪽으로 복귀(주둥이 방향)
+          const over = Math.min(1, (rd - roam) / (ATTRACT_BAND_FRAC * minDim));
+          vx += -(rdx / rd) * over * ATTRACT_RADIAL; vy += -(rdy / rd) * over * ATTRACT_RADIAL;
+          gather01 = gatherAnchor.act * over;         // 복귀 시에만 살짝 가속
+        } else if (rd < keep) {                       // 앵커(사람) 바로 위 → 밖으로 비켜 배회(관통/올라탐 방지)
+          const near = (keep - rd) / keep;
+          vx += (rdx / rd) * near * ATTRACT_RADIAL; vy += (rdy / rd) * near * ATTRACT_RADIAL;
+        }
+        // 존 안에서는 radial 0 → 자유 배회(아래 wander/jitter가 배회를 담당)
         if (vx || vy) {
           const desired = Math.atan2(vy, vx);
           let diff = desired - f.heading;
           diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-          f.heading += diff * Math.min(1, ATTRACT_TURN * (0.5 + Math.min(1, tw)) * dtSec);
+          f.heading += diff * Math.min(1, ATTRACT_TURN * dtSec);
         }
-        gather01 = tw * (rr > 0 ? rr : 0);            // 다가갈 때만 가속, 링 도달·안쪽이면 감속
+        wanderMul = WANDER_GATHER;                    // 모여서도 계속 배회하도록 흔들림 강화
       } else if (sepx || sepy) {                      // 평상시: 약한 분리만(자연 군영 유지)
         const desired = Math.atan2(sepy, sepx);
         let diff = desired - f.heading;
@@ -1153,11 +1178,11 @@
       if (f.dash < 0.002) f.dash = 0;
       const dashMul = 1 + f.dash * (f.dashPeak - 1);           // 1 → dashPeak
 
-      // 천천히 배회: heading 에 느린 사인 흔들림 (패닉 시엔 약화, 몸통 일렁임은 프레임 애니메이션 담당)
-      f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec * (1 - Math.min(1, f.panic));
+      // 천천히 배회: heading 에 느린 사인 흔들림 (패닉 시엔 약화, 모임 중엔 wanderMul로 강화 → 제자리 정체 방지)
+      f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec * (1 - Math.min(1, f.panic)) * wanderMul;
       // 개체별 불규칙 유영: 서로 다른 두 주파수의 부드러운 지터를 heading 에 더함 → 모여도 동기화된 몸짓 안 생김
       const jit = Math.sin(tSec * f.jf1 + f.jp1) * 0.62 + Math.sin(tSec * f.jf2 + f.jp2) * 0.38;
-      f.heading += jit * WOB_AMP * dtSec * (1 - Math.min(1, f.panic));
+      f.heading += jit * WOB_AMP * dtSec * (1 - Math.min(1, f.panic)) * wanderMul;
       // 꼬리짓 박자도 개체별로 미세하게 출렁(±15%) → 몸 흔드는 리듬 제각각
       const beat = 1 + 0.15 * Math.sin(tSec * f.jf1 * 0.5 + f.jp2);
       f.frame += f.animFps * beat * (1 + f.panic * 1.8 + f.dash * 0.9) * dtSec;   // 패닉/질주 시 꼬리짓 빨라짐
