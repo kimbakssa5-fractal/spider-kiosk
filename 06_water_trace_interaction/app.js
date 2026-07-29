@@ -51,7 +51,8 @@
   const DASH_DUR_MIN = 1.0,  DASH_DUR_MAX = 2.4;    // 질주 지속(초)
   const DASH_GAP_MIN = 14,   DASH_GAP_MAX = 34;     // 질주와 질주 사이 간격(초) — 크게=동시에 덜 겹침(≈한두 마리)
   // 사람 쪽으로 모임(gather, 하이브리드): 잔잔한 반응엔 다가가고(호기심), 급격/강한 움직임엔 흩어짐(도망)
-  let GATHER_ON = true;                              // J 토글 (기본 ON)
+  let GATHER_ON = true;                              // J 토글: ON=몰려들기(흩어지기+모임) / OFF=기존 흩어지기만
+  let GATHER_RESP = 1.0;                             // 몰려드는 속도/민감도(0.3~2.5) — Q/Z 조절, 선회·접근속도·반응즉시성 동시 배율
   const ATTRACT_RADIUS_FRAC = 0.60;                 // 모임 감지 반경(도망보다 넓게 — 멀리서부터 다가옴)
   const ATTRACT_GAP_FRAC    = 0.03;                 // 주둥이가 포인트에 남기는 여백(몸 절반+이 여백에서 정지 → 관통 방지)
   const ATTRACT_BAND_FRAC   = 0.14;                 // 링 오차 정규화 폭(radial 힘이 최대가 되는 거리 스케일)
@@ -1087,8 +1088,8 @@
       for (let gi = 0; gi < groups.length; gi++) {
         const g = groups[gi]; let ai = -1, bd = mdist;
         for (let j = 0; j < gatherAnchors.length; j++) { if (usedA[j]) continue; const d = Math.hypot(gatherAnchors[j].x - g.cx, gatherAnchors[j].y - g.cy); if (d < bd) { bd = d; ai = j; } }
-        if (ai >= 0) { const an = gatherAnchors[ai]; an.x += (g.cx - an.x) * kk; an.y += (g.cy - an.y) * kk; an.act = Math.min(1, an.act + dtSec / ANCHOR_RISE); an._hit = true; usedA[ai] = true; }
-        else if (gatherAnchors.length < MAX_ANCHORS) { gatherAnchors.push({ x: g.cx, y: g.cy, act: Math.min(1, dtSec / ANCHOR_RISE), _hit: true }); }
+        if (ai >= 0) { const an = gatherAnchors[ai]; an.x += (g.cx - an.x) * kk; an.y += (g.cy - an.y) * kk; an.act = Math.min(1, an.act + dtSec / ANCHOR_RISE * GATHER_RESP); an._hit = true; usedA[ai] = true; }
+        else if (gatherAnchors.length < MAX_ANCHORS) { gatherAnchors.push({ x: g.cx, y: g.cy, act: Math.min(1, dtSec / ANCHOR_RISE * GATHER_RESP), _hit: true }); }
       }
       // 매칭 안 된 앵커는 활성 감소, 소멸하면 제거
       for (let j = gatherAnchors.length - 1; j >= 0; j--) {
@@ -1177,7 +1178,7 @@
           const desired = Math.atan2(vy, vx);
           let diff = desired - f.heading;
           diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-          f.heading += diff * Math.min(1, ATTRACT_TURN * dtSec);
+          f.heading += diff * Math.min(1, ATTRACT_TURN * GATHER_RESP * dtSec);
         }
         wanderMul = WANDER_GATHER;                    // 모여서도 계속 배회하도록 흔들림 강화
         }
@@ -1229,7 +1230,7 @@
       let cyC = fy + (headPivotCy - fy) * pivotW;
 
       // 전진(heading 방향)
-      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul * (1 + gather01 * ATTRACT_SPEED_BOOST);  // 패닉·질주·모임 시 가속
+      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul * (1 + gather01 * ATTRACT_SPEED_BOOST * GATHER_RESP);  // 패닉·질주·모임 시 가속
       cxC += Math.cos(f.heading) * speedPx * dtSec;
       cyC += Math.sin(f.heading) * speedPx * dtSec;
       // 직접 위치 분리: 겹친 만큼의 절반을 이 프레임에 벌림(양쪽이 각자 처리 → 수렴) — 몸통 겹침 확실히 방지
@@ -1522,7 +1523,7 @@
   const kbdBtn = document.getElementById("kbdBtn");
   const VKEYS = [
     ["KeyB", "배경밝게 B"], ["KeyD", "배경어둡게 D"], ["KeyS", "소리 S"], ["KeyC", "카메라 C"], ["KeyW", "모니터 W"], ["KeyX", "엑스레이 X"], ["KeyA", "캠반전 A"], ["KeyP", "민감도+ P"], ["KeyL", "민감도- L"], ["KeyV", "영상 V"], ["KeyT", "물고기 T"],
-    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyJ", "모임 J"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["KeyH", "도움말 H"],
+    ["KeyY", "윤슬 Y"], ["KeyN", "노을 N"], ["KeyU", "밤하늘 U"], ["KeyE", "엠블럼 E"], ["KeyJ", "흩어↔몰림 J"], ["KeyQ", "몰림속도+ Q"], ["KeyZ", "몰림속도- Z"], ["KeyR", "몰림리셋 R"], ["KeyI", "손숨김 I"], ["KeyM", "메뉴 M"], ["KeyF", "전체화면 F"], ["KeyH", "도움말 H"],
     ["KeyO", "프로젝터 O"], ["KeyG", "정렬격자 G"], ["Semicolon", "겹침- ;"], ["Quote", "겹침+ '"], ["Minus", "커브γ- -"], ["Equal", "커브γ+ ="], ["Comma", "화면γ- ,"], ["Period", "화면γ+ ."],
     ["Digit1", "감쇠+ 1"], ["Digit2", "감쇠- 2"], ["Digit3", "굴절+ 3"],
     ["Digit4", "굴절- 4"], ["Digit5", "물결+ 5"], ["Digit6", "물결- 6"], ["Digit7", "FPS+ 7"], ["Digit8", "FPS- 8"], ["Digit0", "물고기+ 0"], ["Digit9", "물고기- 9"],
@@ -1607,7 +1608,9 @@
     showHud(PROJ_N > 1 ? ("디스플레이 γ  " + DISP_GAMMA.toFixed(1) + " (경계 밝기 보정)") : ("디스플레이 γ " + DISP_GAMMA.toFixed(1) + " (프로젝터 1대라 미적용)"));
   }
   function toggleAlignGrid() { ALIGN_GRID = !ALIGN_GRID; showHud(ALIGN_GRID ? "정렬 그리드 ON (G)" : "정렬 그리드 OFF"); }
-  function toggleGather() { GATHER_ON = !GATHER_ON; showHud(GATHER_ON ? "사람 쪽으로 모임 ON (J)" : "모임 OFF (도망만)"); }
+  function toggleGather() { GATHER_ON = !GATHER_ON; showHud(GATHER_ON ? "몰려들기 ON (J) — 흩어지기+모임" : "흩어지기만 (모임 OFF, J)"); }
+  function setGatherResp(dir) { GATHER_RESP = clamp(Math.round((GATHER_RESP + dir * 0.15) * 100) / 100, 0.3, 2.5); showHud("몰려드는 속도  " + Math.round(GATHER_RESP * 100) + "%"); }
+  function resetGatherResp() { GATHER_RESP = 1.0; showHud("몰려드는 속도  100% (기본)"); }
 
   const glitterBtn = document.getElementById("glitterBtn");
   const glitterSlider = document.getElementById("glitterSlider");
@@ -1742,6 +1745,7 @@
         case "glitter": GLITTER_ON = true; GLITTER_AMT = clamp(v, 0, 100) / 100; if (glitterSlider) glitterSlider.value = Math.round(v); applyGlitter(); refreshGlitterUI(); showHud("윤슬 강도  " + Math.round(v)); break;
         case "bright": BG_BRIGHT = clamp(v / 100, 0.1, 2); gl.useProgram(progBg); gl.uniform1f(locBg.uBgBright, BG_BRIGHT); showHud("배경 밝기  " + Math.round(BG_BRIGHT * 100) + "%"); break;
         case "slide": SLIDE_HOLD_MS = clamp(Math.round(v), 0, 60) * 1000; holdAcc = 0; showHud(SLIDE_HOLD_MS > 0 ? ("배경 전환 간격  " + (SLIDE_HOLD_MS / 1000) + "초") : "배경 슬라이드 정지 (0초)"); break;
+        case "gather": GATHER_RESP = clamp(v / 100, 0.3, 2.5); showHud("몰려드는 속도  " + Math.round(GATHER_RESP * 100) + "%"); break;
       }
     } catch (e) {}
   };
@@ -1752,6 +1756,7 @@
       glitterOn: GLITTER_ON, glitter: Math.round(GLITTER_AMT * 100),
       bright: Math.round(BG_BRIGHT * 100),
       slide: SLIDE_HOLD_MS / 1000,
+      gather: Math.round(GATHER_RESP * 100), gatherOn: GATHER_ON,
       group: activeGroup, cam: camOn, xray: xrayOn,
     };
   };
@@ -1807,7 +1812,10 @@
       case "KeyH": if (e.repeat) return; e.preventDefault(); toggleHelp(); break;      // 단축키 모음 보기
       case "KeyO": if (e.repeat) return; e.preventDefault(); cycleProj(); break;      // 프로젝터 수 1→2→3
       case "KeyG": if (e.repeat) return; e.preventDefault(); toggleAlignGrid(); break; // 정렬 그리드
-      case "KeyJ": if (e.repeat) return; e.preventDefault(); toggleGather(); break;    // 사람 쪽으로 모임 토글
+      case "KeyJ": if (e.repeat) return; e.preventDefault(); toggleGather(); break;    // 흩어지기 ↔ 몰려들기 토글
+      case "KeyQ": e.preventDefault(); setGatherResp(+1); break;   // 몰려드는 속도 +
+      case "KeyZ": e.preventDefault(); setGatherResp(-1); break;   // 몰려드는 속도 -
+      case "KeyR": if (e.repeat) return; e.preventDefault(); resetGatherResp(); break; // 몰려드는 속도 기본값
       case "Semicolon": e.preventDefault(); setOverlap(-0.01); break;                  // 겹침 - (;)
       case "Quote": e.preventDefault(); setOverlap(+0.01); break;                      // 겹침 + (')
       case "Minus": e.preventDefault(); setCurveGamma(-0.1); break;                    // 블렌드 커브 γ - (61 동일)

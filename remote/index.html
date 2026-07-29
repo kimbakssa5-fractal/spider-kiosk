@@ -40,6 +40,7 @@
     <div class="row"><span class="lab">캠 민감도</span><input id="s-sens" type="range" min="0" max="100" value="35"><span class="val" id="v-sens">35</span></div>
     <div class="row"><span class="lab">윤슬 강도</span><input id="s-glitter" type="range" min="0" max="100" value="50"><span class="val" id="v-glitter">50</span></div>
     <div class="row"><span class="lab">배경 간격</span><input id="s-slide" type="range" min="0" max="60" value="0"><span class="val" id="v-slide">0</span></div>
+    <div class="row"><span class="lab">몰림 속도</span><input id="s-gather" type="range" min="30" max="250" value="100"><span class="val" id="v-gather">100</span></div>
   </div>
 
   <div class="card">
@@ -54,7 +55,7 @@
       <button data-k="KeyN">🌅 노을 모드</button>
       <button data-k="KeyU">🌌 밤하늘 모드</button>
       <button data-k="KeyE">🏅 엠블럼</button>
-      <button data-k="KeyJ">🐟 사람쪽 모임</button>
+      <button data-k="KeyJ">🐟 흩어↔몰림</button>
       <button data-k="KeyS">소리</button>
       <button data-k="KeyM">메뉴</button>
       <button data-k="KeyI">손아이콘</button>
@@ -98,7 +99,7 @@
       ch.subscribe('state', function(m){
         var d = m.data||{};
         setV('fish', d.fish); setV('bright', d.bright); setV('sens', d.sens);
-        setV('glitter', d.glitter); setV('slide', d.slide);
+        setV('glitter', d.glitter); setV('slide', d.slide); setV('gather', d.gather);
       });
       function setV(name, val){
         if(val==null || dragging===name) return;
@@ -107,7 +108,7 @@
       }
       function pub(data){ try{ ch.publish('cmd', data); }catch(e){} }
       // 슬라이더 → cmd
-      [['fish','fish'],['bright','bright'],['sens','sens'],['glitter','glitter'],['slide','slide']].forEach(function(p){
+      [['fish','fish'],['bright','bright'],['sens','sens'],['glitter','glitter'],['slide','slide'],['gather','gather']].forEach(function(p){
         var id=p[0], setname=p[1];
         var s=document.getElementById('s-'+id), v=document.getElementById('v-'+id);
         s.addEventListener('input', function(){ dragging=id; v.textContent=s.value; pub({set:setname, v:+s.value}); });
