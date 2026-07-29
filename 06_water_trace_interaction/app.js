@@ -64,6 +64,7 @@
   const SEP_GAIN_GATHER     = 1.1;                  // 모임 중 분리 조향 세기
   const SEP_GAIN_IDLE       = 0.35;                 // 평상시 분리 조향(약하게 — 자연 군영 유지)
   const GATHER_FLEE_LO = 0.60, GATHER_FLEE_HI = 0.92; // 자극 강도 이 구간에서 attract→flee 전환
+  const WOB_AMP = 0.85;                             // 개체별 헤딩 지터 세기(불규칙 유영 — 동기화 방지)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
   const FLEE_RADIUS_FRAC = 0.32;      // 도망 반경(화면 짧은변 대비) — 더 멀리서 반응
@@ -640,6 +641,10 @@
       dashPeak: rand(DASH_PEAK_MIN, DASH_PEAK_MAX),   // 이 물고기의 질주 속도 배수
       nextDash: rand(2, DASH_GAP_MAX),                // 첫 질주까지 대기(스태거)
       orbitDir: Math.random() < 0.5 ? -1 : 1,         // 모임 시 포인트 주위를 도는 방향(시계/반시계)
+      orbitRad: rand(0.7, 1.45),                      // 개인별 링 반경 배수(균일 링 방지)
+      orbitSpd: rand(0.55, 1.35),                     // 개인별 접선 속도 배수(맴도는 속도 제각각)
+      jf1: rand(0.5, 1.6), jf2: rand(1.4, 3.3),       // 헤딩 지터 주파수 2종(개체마다 달라 동기화 안 됨)
+      jp1: Math.random() * 6.28, jp2: Math.random() * 6.28,
     };
   }
   function spawnFishes() {
@@ -1100,15 +1105,16 @@
         const tgt = Math.min(1.2, maxS * PANIC_GAIN); // 근접 강도 증폭 → 더 예민
         if (tgt > f.panic) f.panic = tgt;            // 흥분도 상승
       } else if (tw > 0) {                            // 도망 없을 때만: 포인트 주위 링으로 모여 맴돌기
-        // 중심거리 기준 standoff = 몸 절반(hl) + 여백 → 주둥이만 다가가고 몸통은 포인트 밖(관통 방지)
-        const stand = ATTRACT_GAP_FRAC * minDim + hl;
+        // 중심거리 기준 standoff = 몸 절반(hl) + 여백, 개인별 배수(orbitRad)로 링 반경 제각각 → 균일 링 방지
+        const stand = (ATTRACT_GAP_FRAC * minDim + hl) * f.orbitRad;
         const rdx = fx - tpx, rdy = fy - tpy;        // 포인트→물고기
         const rd = Math.hypot(rdx, rdy) || 1;
         let rr = (rd - stand) / (ATTRACT_BAND_FRAC * minDim);  // + 멀다(다가감) / - 가깝다(밀려남)
         rr = rr < -1 ? -1 : rr > 1 ? 1 : rr;
-        // radial: 멀면 포인트로, 가까우면 밖으로 / tangential: 링 근처서 주위를 돎 / + 분리
-        let vx = -(rdx / rd) * rr * ATTRACT_RADIAL + (-rdy / rd) * f.orbitDir * ATTRACT_TANG + sepx * SEP_GAIN_GATHER;
-        let vy = -(rdy / rd) * rr * ATTRACT_RADIAL + (rdx / rd) * f.orbitDir * ATTRACT_TANG + sepy * SEP_GAIN_GATHER;
+        // radial: 멀면 포인트로, 가까우면 밖으로 / tangential: 링 근처서 주위를 돎(개인별 속도) / + 분리
+        const tang = ATTRACT_TANG * f.orbitSpd;
+        let vx = -(rdx / rd) * rr * ATTRACT_RADIAL + (-rdy / rd) * f.orbitDir * tang + sepx * SEP_GAIN_GATHER;
+        let vy = -(rdy / rd) * rr * ATTRACT_RADIAL + (rdx / rd) * f.orbitDir * tang + sepy * SEP_GAIN_GATHER;
         if (vx || vy) {
           const desired = Math.atan2(vy, vx);
           let diff = desired - f.heading;
@@ -1149,7 +1155,12 @@
 
       // 천천히 배회: heading 에 느린 사인 흔들림 (패닉 시엔 약화, 몸통 일렁임은 프레임 애니메이션 담당)
       f.heading += Math.sin(tSec * f.turnFreq * 6.2831 + f.turnPhase) * f.turnAmp * dtSec * (1 - Math.min(1, f.panic));
-      f.frame += f.animFps * (1 + f.panic * 1.8 + f.dash * 0.9) * dtSec;   // 패닉/질주 시 꼬리짓 빨라짐
+      // 개체별 불규칙 유영: 서로 다른 두 주파수의 부드러운 지터를 heading 에 더함 → 모여도 동기화된 몸짓 안 생김
+      const jit = Math.sin(tSec * f.jf1 + f.jp1) * 0.62 + Math.sin(tSec * f.jf2 + f.jp2) * 0.38;
+      f.heading += jit * WOB_AMP * dtSec * (1 - Math.min(1, f.panic));
+      // 꼬리짓 박자도 개체별로 미세하게 출렁(±15%) → 몸 흔드는 리듬 제각각
+      const beat = 1 + 0.15 * Math.sin(tSec * f.jf1 * 0.5 + f.jp2);
+      f.frame += f.animFps * beat * (1 + f.panic * 1.8 + f.dash * 0.9) * dtSec;   // 패닉/질주 시 꼬리짓 빨라짐
 
       // 회전축: 평상시엔 몸 중앙, 도망(패닉)할수록 머리로 → 머리 고정하고 몸·꼬리가 휙 돈다
       const pivotW = Math.min(1, f.panic * 1.3);
