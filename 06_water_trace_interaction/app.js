@@ -70,6 +70,11 @@
   const ROAM_RADIUS_FRAC = 0.22;                    // 배회 존 반경 — 이 안에선 자유 배회, 벗어나면 복귀
   const ROAM_KEEP_FRAC   = 0.07;                    // 앵커(사람) 바로 위는 이 반경만큼 비워 배회(관통/올라탐 방지)
   const WANDER_GATHER    = 1.8;                     // 모임 중 배회 흔들림 배수(제자리 정체 방지)
+  // 모션 도망 surge 게이트: 살살(지속) 모션엔 도망 억제, 갑작스런 급변에만 도망 허용
+  const MENV_ATK = 0.07, MENV_REL = 0.5;           // 포락 상승(빠름 70ms)/하강(느림 500ms)
+  const MBASE_TAU = 1.6;                            // 기준선 시정수(초) — 지속 모션은 여기에 흡수됨
+  const SURGE_MARGIN = 0.10;                        // 이만큼 기준선 초과해야 도망 시작(살살은 못 넘음)
+  const SURGE_SCALE  = 0.55;                        // surge 정규화(이만큼 초과 시 도망 full)
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
   const FLEE_RADIUS_FRAC = 0.32;      // 도망 반경(화면 짧은변 대비) — 더 멀리서 반응
@@ -767,6 +772,7 @@
   const pointers = new Map();   // id -> {x, y, t(sec)}
   let motionPoints = [];        // 카메라 모션 점 [{x,y,w}] (CSS px) — 매 모션틱 갱신
   let gatherAnchor = { x: 0, y: 0, act: 0 };  // 모임 관심 중심(저주파 필터 — 다리의 좌우 진동을 걸러 물고기가 안 따라 흔들리게)
+  let motionEnv = 0, motionBase = 0;          // 모션 에너지 포락(빠른)·기준선(느린) → 둘의 차 = 갑작스러움(surge)
   // ── 입력 소스 자동 전환: Kinect(=OS 터치주입) 있으면 터치 우선, 없으면 웹캠 유지 ──
   let lastTouchT = -999;                       // 마지막 '터치'(Kinect 주입/터치스크린) 시각(초)
   const TOUCH_SUPPRESS_S = 6;                   // 터치 후 이 시간 동안 웹캠 모션 억제(Kinect 우선)
@@ -1039,10 +1045,16 @@
     pointers.forEach(function (p, id) {
       if (tnow - p.t > POINTER_TTL) pointers.delete(id);
       // it = 자극 강도(0~1): 느린 포인터(<150px/s)=0.2 호기심 → 빠른 스와이프(>1400)=1.0 놀람
-      else active.push({ x: p.x, y: p.y, w: 1, r: 1, it: 0.2 + 0.8 * Math.max(0, Math.min(1, ((p.spd || 0) - 150) / 1250)) });
+      else active.push({ x: p.x, y: p.y, w: 1, r: 1, it: 0.2 + 0.8 * Math.max(0, Math.min(1, ((p.spd || 0) - 150) / 1250)), src: 'p' });
     });
     // 모션 점: it = strength 가중 w (약한 모션=낮음=모임, 큰 모션=1=도망)
-    for (let mi = 0; mi < motionPoints.length; mi++) { const m = motionPoints[mi]; active.push({ x: m.x, y: m.y, w: m.w, r: m.r, it: m.w }); }
+    let mNow = 0;
+    for (let mi = 0; mi < motionPoints.length; mi++) { const m = motionPoints[mi]; active.push({ x: m.x, y: m.y, w: m.w, r: m.r, it: m.w, src: 'm' }); mNow += m.w; }
+    // 모션 급변(surge) 게이트: 포락(빠름)−기준선(느림). 살살 지속 모션은 기준선에 흡수→gate≈0(도망 억제),
+    //   갑작스런 급변만 포락이 튀어 gate↑(도망 허용). → 발을 살살 좌우로 저어도 틱틱 안 함, 확 움직이면 도망.
+    motionEnv += (mNow - motionEnv) * (mNow > motionEnv ? (1 - Math.exp(-dtSec / MENV_ATK)) : (1 - Math.exp(-dtSec / MENV_REL)));
+    motionBase += (mNow - motionBase) * (1 - Math.exp(-dtSec / MBASE_TAU));
+    const fleeGate = Math.max(0, Math.min(1, (motionEnv - motionBase - SURGE_MARGIN) / SURGE_SCALE));
     const fleeR = FLEE_RADIUS_FRAC * minDim;
     // 모임 관심 중심(anchor): 현재 '모임성' 자극들의 가중 무게중심을 저주파로 추종
     //   → 다리를 좌우로 흔들 때 생기는 자극점의 좌우 진동이 걸러져, 물고기가 그 리듬을 안 따라감.
@@ -1089,7 +1101,8 @@
         // flee01: it 이 LO 이하=0(순수 모임) → HI 이상=1(순수 도망), 사이는 smoothstep
         let ft = (it - GATHER_FLEE_LO) / (GATHER_FLEE_HI - GATHER_FLEE_LO);
         ft = ft < 0 ? 0 : ft > 1 ? 1 : ft;
-        const flee01 = ft * ft * (3 - 2 * ft);
+        // 모션은 surge 게이트 곱 → 살살 지속 모션은 도망 억제(틱틱 방지), 갑작스런 급변만 통과. 포인터(터치)는 즉각 유지.
+        const flee01 = ft * ft * (3 - 2 * ft) * (a.src === 'm' ? fleeGate : 1);
         const rad = fleeR * (a.r || 1);
         if (flee01 > 0.01 && dist < rad) {
           const s = (1 - dist / rad) * a.w * flee01;
