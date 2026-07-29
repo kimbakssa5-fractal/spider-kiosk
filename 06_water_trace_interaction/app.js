@@ -57,16 +57,19 @@
   const ATTRACT_BAND_FRAC   = 0.14;                 // 링 오차 정규화 폭(radial 힘이 최대가 되는 거리 스케일)
   const ATTRACT_RADIAL      = 1.0;                  // 링(standoff)으로 다가감/밀려남 세기
   const ATTRACT_TANG        = 0.55;                 // 링 근처에서 접선(주위를 도는) 세기
-  const ATTRACT_TURN        = 3.0;                  // 모임 선회 속도(도망 FLEE_TURN보다 느긋)
+  const ATTRACT_TURN        = 1.7;                  // 모임 선회 속도(느긋 — 살살엔 천천히 반응, 도망 FLEE_TURN만 빠름)
   const ATTRACT_SPEED_BOOST = 0.6;                  // 모임 다가갈 때 전진 가속(×(1+boost)), 링 도달 시 감속
   const SEP_FRAC            = 0.13;                  // 물고기끼리 이 반경 안이면 밀어내 몸통 겹침 방지
   const SEP_POS_FRAC        = 0.5;                   // 겹친 만큼 이 비율을 매 프레임 직접 벌림(0.5=양쪽이 반씩→완전분리)
   const SEP_GAIN_GATHER     = 1.1;                  // 모임 중 분리 조향 세기
   const SEP_GAIN_IDLE       = 0.35;                 // 평상시 분리 조향(약하게 — 자연 군영 유지)
   const GATHER_FLEE_LO = 0.60, GATHER_FLEE_HI = 0.92; // 자극 강도 이 구간에서 attract→flee 전환
-  const WOB_AMP = 0.85;                             // 개체별 헤딩 지터 세기(불규칙 유영 — 동기화 방지)
+  const WOB_AMP = 0.5;                              // 개체별 헤딩 지터 세기(저주파·약하게 → 빠른 떨림 없이 부드러운 배회)
   const ANCHOR_TAU  = 1.8;                          // 관심 중심 저주파 시정수(초) — 클수록 다리 진동 더 걸러냄
   const ANCHOR_RISE = 0.6, ANCHOR_FALL = 2.5;       // 앵커 활성 상승/하강(초)
+  const MAX_ANCHORS = 3;                            // 동시 모임 지점 최대 수(여러 사람 → 무리 분리)
+  const CLUSTER_DIST_FRAC = 0.28;                   // 자극점 이 거리 밖이면 다른 사람(다른 클러스터)으로 분리
+  const ANCHOR_MATCH_FRAC = 0.32;                   // 프레임 간 클러스터↔기존 앵커 매칭 최대 거리
   const ROAM_RADIUS_FRAC = 0.22;                    // 배회 존 반경 — 이 안에선 자유 배회, 벗어나면 복귀
   const ROAM_KEEP_FRAC   = 0.07;                    // 앵커(사람) 바로 위는 이 반경만큼 비워 배회(관통/올라탐 방지)
   const WANDER_GATHER    = 1.8;                     // 모임 중 배회 흔들림 배수(제자리 정체 방지)
@@ -653,7 +656,7 @@
       orbitDir: Math.random() < 0.5 ? -1 : 1,         // 모임 시 포인트 주위를 도는 방향(시계/반시계)
       orbitRad: rand(0.7, 1.45),                      // 개인별 링 반경 배수(균일 링 방지)
       orbitSpd: rand(0.55, 1.35),                     // 개인별 접선 속도 배수(맴도는 속도 제각각)
-      jf1: rand(0.5, 1.6), jf2: rand(1.4, 3.3),       // 헤딩 지터 주파수 2종(개체마다 달라 동기화 안 됨)
+      jf1: rand(0.2, 0.6), jf2: rand(0.5, 1.1),       // 헤딩 지터 주파수 2종(저주파 — 느린 meander, 빠른 떨림 없음)
       jp1: Math.random() * 6.28, jp2: Math.random() * 6.28,
     };
   }
@@ -771,7 +774,7 @@
   //   POINTER_TTL 동안 움직임이 없으면 비활성 → 물고기 진정.
   const pointers = new Map();   // id -> {x, y, t(sec)}
   let motionPoints = [];        // 카메라 모션 점 [{x,y,w}] (CSS px) — 매 모션틱 갱신
-  let gatherAnchor = { x: 0, y: 0, act: 0 };  // 모임 관심 중심(저주파 필터 — 다리의 좌우 진동을 걸러 물고기가 안 따라 흔들리게)
+  let gatherAnchors = [];  // 모임 관심 중심 배열(다중 — 여러 사람이면 무리가 나뉨). 각 {x,y,act}, 저주파 필터로 다리 진동 무시
   let motionEnv = 0, motionBase = 0;          // 모션 에너지 포락(빠른)·기준선(느린) → 둘의 차 = 갑작스러움(surge)
   // ── 입력 소스 자동 전환: Kinect(=OS 터치주입) 있으면 터치 우선, 없으면 웹캠 유지 ──
   let lastTouchT = -999;                       // 마지막 '터치'(Kinect 주입/터치스크린) 시각(초)
@@ -1056,10 +1059,12 @@
     motionBase += (mNow - motionBase) * (1 - Math.exp(-dtSec / MBASE_TAU));
     const fleeGate = Math.max(0, Math.min(1, (motionEnv - motionBase - SURGE_MARGIN) / SURGE_SCALE));
     const fleeR = FLEE_RADIUS_FRAC * minDim;
-    // 모임 관심 중심(anchor): 현재 '모임성' 자극들의 가중 무게중심을 저주파로 추종
-    //   → 다리를 좌우로 흔들 때 생기는 자극점의 좌우 진동이 걸러져, 물고기가 그 리듬을 안 따라감.
+    // 모임 관심 중심(다중 anchor): 모임성 자극점들을 근접 클러스터로 묶어, 각 클러스터를 저주파로 추종.
+    //   → 여러 사람이 떨어져 서 있으면 클러스터가 나뉘어 앵커도 여러 개 → 무리가 각자 가까운 앵커로 분산.
+    //   → 각 앵커는 저역통과라 다리 좌우 진동은 걸러짐.
     {
-      let acx = 0, acy = 0, acw = 0;
+      const cdist = CLUSTER_DIST_FRAC * minDim;
+      const groups = [];   // 이번 프레임 클러스터: {sx,sy,sw,cx,cy}
       if (GATHER_ON) {
         for (let pi = 0; pi < active.length; pi++) {
           const a = active[pi];
@@ -1067,16 +1072,28 @@
           let ft = (it - GATHER_FLEE_LO) / (GATHER_FLEE_HI - GATHER_FLEE_LO);
           ft = ft < 0 ? 0 : ft > 1 ? 1 : ft;
           const attract01 = 1 - ft * ft * (3 - 2 * ft);
-          if (attract01 > 0.2) { const wt = attract01 * a.w; acx += a.x * wt; acy += a.y * wt; acw += wt; }
+          if (attract01 <= 0.2) continue;
+          const wt = attract01 * a.w;
+          let best = null, bd = cdist;
+          for (let gi = 0; gi < groups.length; gi++) { const g = groups[gi]; const d = Math.hypot(g.cx - a.x, g.cy - a.y); if (d < bd) { bd = d; best = g; } }
+          if (best) { best.sx += a.x * wt; best.sy += a.y * wt; best.sw += wt; best.cx = best.sx / best.sw; best.cy = best.sy / best.sw; }
+          else groups.push({ sx: a.x * wt, sy: a.y * wt, sw: wt, cx: a.x, cy: a.y });
         }
       }
-      if (acw > 0) {
-        const tx = acx / acw, ty = acy / acw;
-        if (gatherAnchor.act <= 0.001) { gatherAnchor.x = tx; gatherAnchor.y = ty; }  // 첫 포착은 스냅
-        else { const kk = 1 - Math.exp(-dtSec / ANCHOR_TAU); gatherAnchor.x += (tx - gatherAnchor.x) * kk; gatherAnchor.y += (ty - gatherAnchor.y) * kk; }
-        gatherAnchor.act = Math.min(1, gatherAnchor.act + dtSec / ANCHOR_RISE);
-      } else {
-        gatherAnchor.act = Math.max(0, gatherAnchor.act - dtSec / ANCHOR_FALL);
+      // 클러스터 ↔ 기존 앵커 매칭(가까운 것끼리), 매칭된 앵커는 저주파로 이동
+      const mdist = ANCHOR_MATCH_FRAC * minDim;
+      const kk = 1 - Math.exp(-dtSec / ANCHOR_TAU);
+      const usedA = [];
+      for (let gi = 0; gi < groups.length; gi++) {
+        const g = groups[gi]; let ai = -1, bd = mdist;
+        for (let j = 0; j < gatherAnchors.length; j++) { if (usedA[j]) continue; const d = Math.hypot(gatherAnchors[j].x - g.cx, gatherAnchors[j].y - g.cy); if (d < bd) { bd = d; ai = j; } }
+        if (ai >= 0) { const an = gatherAnchors[ai]; an.x += (g.cx - an.x) * kk; an.y += (g.cy - an.y) * kk; an.act = Math.min(1, an.act + dtSec / ANCHOR_RISE); an._hit = true; usedA[ai] = true; }
+        else if (gatherAnchors.length < MAX_ANCHORS) { gatherAnchors.push({ x: g.cx, y: g.cy, act: Math.min(1, dtSec / ANCHOR_RISE), _hit: true }); }
+      }
+      // 매칭 안 된 앵커는 활성 감소, 소멸하면 제거
+      for (let j = gatherAnchors.length - 1; j >= 0; j--) {
+        if (!gatherAnchors[j]._hit) { gatherAnchors[j].act = Math.max(0, gatherAnchors[j].act - dtSec / ANCHOR_FALL); if (gatherAnchors[j].act <= 0.001) gatherAnchors.splice(j, 1); }
+        else gatherAnchors[j]._hit = false;
       }
     }
     let vi = 0;
@@ -1136,9 +1153,12 @@
         f.heading += diff * Math.min(1, FLEE_TURN * (0.3 + maxS) * dtSec);
         const tgt = Math.min(1.2, maxS * PANIC_GAIN); // 근접 강도 증폭 → 더 예민
         if (tgt > f.panic) f.panic = tgt;            // 흥분도 상승
-      } else if (gatherAnchor.act > 0.05) {           // 도망 없을 때: 저주파 anchor 주변을 '느슨하게 배회'
+      } else if (gatherAnchors.length > 0) {          // 도망 없을 때: 가장 가까운 anchor 주변을 '느슨하게 배회'(무리 분산)
+        let an = null, ad = 1e9;
+        for (let j = 0; j < gatherAnchors.length; j++) { const g = gatherAnchors[j]; if (g.act <= 0.05) continue; const d = Math.hypot(g.x - fx, g.y - fy); if (d < ad) { ad = d; an = g; } }
+        if (an) {
         // 개인별 배회 존(orbitRad로 크기 제각각). 존 밖=복귀 / 앵커 바로 위=비켜남 / 존 안=자유 배회
-        const px = gatherAnchor.x, py = gatherAnchor.y;
+        const px = an.x, py = an.y;
         const rdx = fx - px, rdy = fy - py;          // 앵커→물고기
         const rd = Math.hypot(rdx, rdy) || 1;
         const roam = ROAM_RADIUS_FRAC * minDim * f.orbitRad;
@@ -1147,7 +1167,7 @@
         if (rd > roam) {                              // 존 밖 → 안쪽으로 복귀(주둥이 방향)
           const over = Math.min(1, (rd - roam) / (ATTRACT_BAND_FRAC * minDim));
           vx += -(rdx / rd) * over * ATTRACT_RADIAL; vy += -(rdy / rd) * over * ATTRACT_RADIAL;
-          gather01 = gatherAnchor.act * over;         // 복귀 시에만 살짝 가속
+          gather01 = an.act * over;                   // 복귀 시에만 살짝 가속
         } else if (rd < keep) {                       // 앵커(사람) 바로 위 → 밖으로 비켜 배회(관통/올라탐 방지)
           const near = (keep - rd) / keep;
           vx += (rdx / rd) * near * ATTRACT_RADIAL; vy += (rdy / rd) * near * ATTRACT_RADIAL;
@@ -1160,6 +1180,7 @@
           f.heading += diff * Math.min(1, ATTRACT_TURN * dtSec);
         }
         wanderMul = WANDER_GATHER;                    // 모여서도 계속 배회하도록 흔들림 강화
+        }
       } else if (sepx || sepy) {                      // 평상시: 약한 분리만(자연 군영 유지)
         const desired = Math.atan2(sepy, sepx);
         let diff = desired - f.heading;
