@@ -53,9 +53,16 @@
   // 사람 쪽으로 모임(gather, 하이브리드): 잔잔한 반응엔 다가가고(호기심), 급격/강한 움직임엔 흩어짐(도망)
   let GATHER_ON = true;                              // J 토글 (기본 ON)
   const ATTRACT_RADIUS_FRAC = 0.60;                 // 모임 감지 반경(도망보다 넓게 — 멀리서부터 다가옴)
-  const ATTRACT_DEAD_FRAC   = 0.13;                 // 자극점 이 반경 안에선 끌림 소멸(뭉치지 않고 주위를 맴돌게)
+  const ATTRACT_GAP_FRAC    = 0.03;                 // 주둥이가 포인트에 남기는 여백(몸 절반+이 여백에서 정지 → 관통 방지)
+  const ATTRACT_BAND_FRAC   = 0.14;                 // 링 오차 정규화 폭(radial 힘이 최대가 되는 거리 스케일)
+  const ATTRACT_RADIAL      = 1.0;                  // 링(standoff)으로 다가감/밀려남 세기
+  const ATTRACT_TANG        = 0.55;                 // 링 근처에서 접선(주위를 도는) 세기
   const ATTRACT_TURN        = 3.0;                  // 모임 선회 속도(도망 FLEE_TURN보다 느긋)
-  const ATTRACT_SPEED_BOOST = 0.6;                  // 모임 시 전진 가속(×(1+boost))
+  const ATTRACT_SPEED_BOOST = 0.6;                  // 모임 다가갈 때 전진 가속(×(1+boost)), 링 도달 시 감속
+  const SEP_FRAC            = 0.13;                  // 물고기끼리 이 반경 안이면 밀어내 몸통 겹침 방지
+  const SEP_POS_FRAC        = 0.5;                   // 겹친 만큼 이 비율을 매 프레임 직접 벌림(0.5=양쪽이 반씩→완전분리)
+  const SEP_GAIN_GATHER     = 1.1;                  // 모임 중 분리 조향 세기
+  const SEP_GAIN_IDLE       = 0.35;                 // 평상시 분리 조향(약하게 — 자연 군영 유지)
   const GATHER_FLEE_LO = 0.60, GATHER_FLEE_HI = 0.92; // 자극 강도 이 구간에서 attract→flee 전환
   const FISH_WAKE_PEAK = 28;          // 잉어가 남기는 잔물결 진폭(아주 약하게)
   // 도망 상호작용: 마우스/터치/카메라모션이 가까이 오면 반대로 빠르게 헤엄쳐 달아남
@@ -632,6 +639,7 @@
       dash: 0, dashT: 0,                              // 질주 강도(0~1, 램프)·남은 질주 시간(초)
       dashPeak: rand(DASH_PEAK_MIN, DASH_PEAK_MAX),   // 이 물고기의 질주 속도 배수
       nextDash: rand(2, DASH_GAP_MAX),                // 첫 질주까지 대기(스태거)
+      orbitDir: Math.random() < 0.5 ? -1 : 1,         // 모임 시 포인트 주위를 도는 방향(시계/반시계)
     };
   }
   function spawnFishes() {
@@ -1039,9 +1047,8 @@
       // --- 하이브리드: 잔잔한 자극엔 다가가고(모임), 강한 자극엔 멀어짐(도망) ---
       //   자극 강도 it 로 flee01(0~1) 계산 → attract01=1-flee01. 도망은 좁은 반경/패닉, 모임은 넓은 반경/느긋.
       let ax = 0, ay = 0, maxS = 0;                  // 도망 누적(멀어지는 방향)
-      let gx = 0, gy = 0, gSum = 0;                  // 모임 누적(다가가는 방향)
+      let tpx = 0, tpy = 0, tw = 0, tpDist = 1e9;    // 모임 목표 = 가장 가까운 자극점(주위를 돌 중심)
       const atRad = ATTRACT_RADIUS_FRAC * minDim;
-      const atDead = ATTRACT_DEAD_FRAC * minDim;
       for (let pi = 0; pi < active.length; pi++) {
         const a = active[pi];
         const dx = fx - a.x, dy = fy - a.y;          // 자극→물고기
@@ -1059,18 +1066,29 @@
           ax += dx * inv; ay += dy * inv;
           if (s > maxS) maxS = s;
         }
-        // 모임(넓은 반경) — 자극점 주변 deadzone 안에선 끌림 소멸(뭉치지 않고 맴돌게)
+        // 모임 목표: 반경 안에서 가장 가까운 자극점을 이 물고기의 '맴돌 중심'으로
         if (GATHER_ON) {
           const attract01 = 1 - flee01;
           const arad = atRad * (a.r || 1);
-          if (attract01 > 0.01 && dist < arad) {
-            let ring = (dist - atDead * 0.4) / (atDead * 0.6);   // deadzone 안=0, 밖=1
-            ring = ring < 0 ? 0 : ring > 1 ? 1 : ring;
-            const s = attract01 * a.w * ring * (0.35 + 0.65 * (1 - dist / arad));
-            const inv = s / dist;
-            gx += -dx * inv; gy += -dy * inv;        // 자극 쪽으로(도망의 반대)
-            gSum += s;
+          if (attract01 > 0.05 && dist < arad && dist < tpDist) {
+            tpDist = dist; tpx = a.x; tpy = a.y; tw = attract01 * a.w;
           }
+        }
+      }
+      // 물고기끼리 분리(몸통 겹침 방지) — 근처 개체로부터 밀려남
+      //   sepx/sepy = 헤딩 조향용 방향 / pushX/pushY = 겹친 만큼 직접 벌릴 px(확실한 간격 유지)
+      let sepx = 0, sepy = 0, pushX = 0, pushY = 0;
+      const sepR = SEP_FRAC * minDim;
+      for (let j = 0; j < fishes.length; j++) {
+        if (j === k) continue;
+        const o = fishes[j];
+        const ox = o.nx * W, oy = o.ny * H;
+        const ddx = fx - ox, ddy = fy - oy;
+        const dd = Math.hypot(ddx, ddy);
+        if (dd > 0 && dd < sepR) {
+          const push = (1 - dd / sepR) / dd; sepx += ddx * push; sepy += ddy * push;
+          const overlap = sepR - dd;                 // px 만큼 너무 가까움
+          pushX += (ddx / dd) * overlap; pushY += (ddy / dd) * overlap;
         }
       }
       let gather01 = 0;                              // 이 프레임 모임 세기(전진 가속용)
@@ -1081,12 +1099,28 @@
         f.heading += diff * Math.min(1, FLEE_TURN * (0.3 + maxS) * dtSec);
         const tgt = Math.min(1.2, maxS * PANIC_GAIN); // 근접 강도 증폭 → 더 예민
         if (tgt > f.panic) f.panic = tgt;            // 흥분도 상승
-      } else if (gSum > 0 && (gx || gy)) {           // 도망 없을 때만 느긋하게 모임
-        const desired = Math.atan2(gy, gx);
+      } else if (tw > 0) {                            // 도망 없을 때만: 포인트 주위 링으로 모여 맴돌기
+        // 중심거리 기준 standoff = 몸 절반(hl) + 여백 → 주둥이만 다가가고 몸통은 포인트 밖(관통 방지)
+        const stand = ATTRACT_GAP_FRAC * minDim + hl;
+        const rdx = fx - tpx, rdy = fy - tpy;        // 포인트→물고기
+        const rd = Math.hypot(rdx, rdy) || 1;
+        let rr = (rd - stand) / (ATTRACT_BAND_FRAC * minDim);  // + 멀다(다가감) / - 가깝다(밀려남)
+        rr = rr < -1 ? -1 : rr > 1 ? 1 : rr;
+        // radial: 멀면 포인트로, 가까우면 밖으로 / tangential: 링 근처서 주위를 돎 / + 분리
+        let vx = -(rdx / rd) * rr * ATTRACT_RADIAL + (-rdy / rd) * f.orbitDir * ATTRACT_TANG + sepx * SEP_GAIN_GATHER;
+        let vy = -(rdy / rd) * rr * ATTRACT_RADIAL + (rdx / rd) * f.orbitDir * ATTRACT_TANG + sepy * SEP_GAIN_GATHER;
+        if (vx || vy) {
+          const desired = Math.atan2(vy, vx);
+          let diff = desired - f.heading;
+          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          f.heading += diff * Math.min(1, ATTRACT_TURN * (0.5 + Math.min(1, tw)) * dtSec);
+        }
+        gather01 = tw * (rr > 0 ? rr : 0);            // 다가갈 때만 가속, 링 도달·안쪽이면 감속
+      } else if (sepx || sepy) {                      // 평상시: 약한 분리만(자연 군영 유지)
+        const desired = Math.atan2(sepy, sepx);
         let diff = desired - f.heading;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-        f.heading += diff * Math.min(1, ATTRACT_TURN * (0.4 + Math.min(1, gSum)) * dtSec);
-        gather01 = Math.min(1, gSum);
+        f.heading += diff * Math.min(1, ATTRACT_TURN * SEP_GAIN_IDLE * dtSec);
       }
       // 패닉 감쇠
       f.panic *= Math.exp(-dtSec / PANIC_DECAY);
@@ -1128,6 +1162,8 @@
       const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul * (1 + gather01 * ATTRACT_SPEED_BOOST);  // 패닉·질주·모임 시 가속
       cxC += Math.cos(f.heading) * speedPx * dtSec;
       cyC += Math.sin(f.heading) * speedPx * dtSec;
+      // 직접 위치 분리: 겹친 만큼의 절반을 이 프레임에 벌림(양쪽이 각자 처리 → 수렴) — 몸통 겹침 확실히 방지
+      cxC += pushX * SEP_POS_FRAC; cyC += pushY * SEP_POS_FRAC;
       f.nx = cxC / W; f.ny = cyC / H;
       // 화면 밖으로 완전히 나가면 반대편에서 재등장
       const mx = lenPx / W, my = lenPx / H;
