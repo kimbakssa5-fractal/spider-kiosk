@@ -59,7 +59,8 @@
   const ATTRACT_RADIAL      = 1.0;                  // 링(standoff)으로 다가감/밀려남 세기
   const ATTRACT_TANG        = 0.55;                 // 링 근처에서 접선(주위를 도는) 세기
   const ATTRACT_TURN        = 1.7;                  // 모임 선회 속도(느긋 — 살살엔 천천히 반응, 도망 FLEE_TURN만 빠름)
-  const ATTRACT_SPEED_BOOST = 0.6;                  // 모임 다가갈 때 전진 가속(×(1+boost)), 링 도달 시 감속
+  const ATTRACT_SPEED_BOOST = 0.35;                 // 모임 다가갈 때 전진 가속(×(1+boost)) — 작게: 다가가도 튀지 않게
+  const SPEED_SMOOTH_RATE   = 1.5;                  // 평상시 속도 변화율(1/초, 낮을수록 완만) — 도망 때만 즉각
   const SEP_FRAC            = 0.13;                  // 물고기끼리 이 반경 안이면 밀어내 몸통 겹침 방지
   const SEP_POS_FRAC        = 0.5;                   // 겹친 만큼 이 비율을 매 프레임 직접 벌림(0.5=양쪽이 반씩→완전분리)
   const SEP_GAIN_GATHER     = 1.1;                  // 모임 중 분리 조향 세기
@@ -651,6 +652,7 @@
       rip: rand(0, 0.4), ripEvery: rand(0.28, 0.45),
       panic: 0,                                       // 도망 흥분도(0~1+), 시간에 따라 감쇠
       bend: 0, prevHeading: 0,                        // 몸 휨(라디안), 직전 heading
+      spd: 0,                                         // 현재 전진 속도(px/s, 완만 추종 — 0=최초 프레임에 목표로 초기화)
       dash: 0, dashT: 0,                              // 질주 강도(0~1, 램프)·남은 질주 시간(초)
       dashPeak: rand(DASH_PEAK_MIN, DASH_PEAK_MAX),   // 이 물고기의 질주 속도 배수
       nextDash: rand(2, DASH_GAP_MAX),                // 첫 질주까지 대기(스태거)
@@ -1147,6 +1149,7 @@
       }
       let gather01 = 0;                              // 이 프레임 모임 세기(전진 가속용)
       let wanderMul = 1;                             // 배회 흔들림 배수(모임 중 크게 → 제자리 정체 방지)
+      let inGather = false;                          // 이 프레임 모임 상태(질주 억제 → 모여선 천천히 유영)
       if (maxS > 0 && (ax || ay)) {                  // 도망 우선(놀람)
         const desired = Math.atan2(ay, ax);
         let diff = desired - f.heading;
@@ -1181,6 +1184,7 @@
           f.heading += diff * Math.min(1, ATTRACT_TURN * GATHER_RESP * dtSec);
         }
         wanderMul = WANDER_GATHER;                    // 모여서도 계속 배회하도록 흔들림 강화
+        inGather = true;                              // 모임 중 → 질주(dash) 억제, 속도 변화도 완만히
         }
       } else if (sepx || sepy) {                      // 평상시: 약한 분리만(자연 군영 유지)
         const desired = Math.atan2(sepy, sepx);
@@ -1192,8 +1196,8 @@
       f.panic *= Math.exp(-dtSec / PANIC_DECAY);
       if (f.panic < 0.003) f.panic = 0;
 
-      // --- 자발적 질주(dash): 고요할 때만, 이따금 몇 초간 가속했다가 다시 느려짐 ---
-      if (f.panic < 0.05) {
+      // --- 자발적 질주(dash): 고요할 때만(모임 중엔 금지 — 모여선 천천히 유영), 이따금 몇 초간 가속 ---
+      if (f.panic < 0.05 && !inGather) {
         if (f.dashT > 0) {                                     // 질주 중 → 강도 램프업
           f.dashT -= dtSec;
           f.dash += (1 - f.dash) * Math.min(1, dtSec * 2.5);
@@ -1206,9 +1210,10 @@
           }
           f.dash += (0 - f.dash) * Math.min(1, dtSec * 1.4);   // 질주 아니면 강도 램프다운
         }
-      } else {                                                 // 도망 중엔 질주 취소
+      } else {                                                 // 도망/모임 중엔 질주 취소(모임은 부드럽게 감쇠)
         f.dashT = 0;
-        f.dash += (0 - f.dash) * Math.min(1, dtSec * 2.5);
+        f.dash += (0 - f.dash) * Math.min(1, dtSec * (inGather ? 1.2 : 2.5));
+        if (inGather) f.nextDash = rand(DASH_GAP_MIN, DASH_GAP_MAX);  // 모임 해제 후 곧바로 튀지 않게 재장전
       }
       if (f.dash < 0.002) f.dash = 0;
       const dashMul = 1 + f.dash * (f.dashPeak - 1);           // 1 → dashPeak
@@ -1229,8 +1234,11 @@
       let cxC = fx + (headPivotCx - fx) * pivotW;
       let cyC = fy + (headPivotCy - fy) * pivotW;
 
-      // 전진(heading 방향)
-      const speedPx = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul * (1 + gather01 * ATTRACT_SPEED_BOOST * GATHER_RESP);  // 패닉·질주·모임 시 가속
+      // 전진(heading 방향) — 목표속도(패닉·질주·모임 가속) → 완만히 추종(도망만 즉각) = 평소엔 튀지 않는 유영
+      const speedTarget = f.speedFrac * minDim * (1 + f.panic * FLEE_BOOST) * dashMul * (1 + gather01 * ATTRACT_SPEED_BOOST * GATHER_RESP);
+      if (!f.spd) f.spd = speedTarget;
+      f.spd += (speedTarget - f.spd) * Math.min(1, dtSec * (f.panic > 0.05 ? 14 : SPEED_SMOOTH_RATE));
+      const speedPx = f.spd;
       cxC += Math.cos(f.heading) * speedPx * dtSec;
       cyC += Math.sin(f.heading) * speedPx * dtSec;
       // 직접 위치 분리: 겹친 만큼의 절반을 이 프레임에 벌림(양쪽이 각자 처리 → 수렴) — 몸통 겹침 확실히 방지
