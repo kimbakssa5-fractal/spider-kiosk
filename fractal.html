@@ -145,6 +145,7 @@
     <button id="btn4k" title="4K 고해상도로 저장"><span class="ic">🖼</span><span class="lbl">4K 저장</span></button>
   </div>
   <div class="opt-row">
+    <button id="btnFractal" title="프랙탈 종류 변경 (만델브로트·줄리아·버닝쉽·트라이콘)"><span class="ic">🌀</span><span class="lbl">만델브로트</span></button>
     <button id="btnMorph" title="색상이 서서히 변하는 모핑 효과"><span class="ic">🎨</span><span class="lbl">색상 모핑</span></button>
     <button id="btnPalette" title="색상 팔레트 변경"><span class="ic">🌈</span><span class="lbl">팔레트</span></button>
   </div>
@@ -188,18 +189,45 @@
   'use strict';
   const $ = id => document.getElementById(id);
 
-  // ── 만델브로트 렌더 코어(검증 완료) ────────────────────────
+  // ── 프랙탈 종류 정의: 만델브로트 + 줄리아 5종 + 버닝쉽 + 트라이콘 ──
+  const FRACTALS = [
+    { name: '만델브로트',   kind: 'mandel',                              cx: -0.6,  cy: 0,    span: 3.4 },
+    { name: '줄리아 나선',  kind: 'julia', cr: -0.7269, ci: 0.1889,      cx: 0,     cy: 0,    span: 3.2 },
+    { name: '줄리아 번개',  kind: 'julia', cr: -0.8,    ci: 0.156,       cx: 0,     cy: 0,    span: 3.2 },
+    { name: '줄리아 팽이',  kind: 'julia', cr: 0.285,   ci: 0.01,        cx: 0,     cy: 0,    span: 3.2 },
+    { name: '줄리아 산호',  kind: 'julia', cr: -0.4,    ci: 0.6,         cx: 0,     cy: 0,    span: 3.2 },
+    { name: '줄리아 해마',  kind: 'julia', cr: -0.835,  ci: -0.2321,     cx: 0,     cy: 0,    span: 3.2 },
+    { name: '버닝 쉽',      kind: 'ship',                                cx: -0.45, cy: -0.4, span: 3.6 },
+    { name: '트라이콘',     kind: 'tricorn',                             cx: -0.3,  cy: 0,    span: 4.0 },
+  ];
+  let frIdx = 0, FR = FRACTALS[0];
+
+  // ── 렌더 코어: 종류별 반복식(핫루프 분리로 속도 유지) ─────────
   function mandelSmooth(cx, cy, scale, W, H, maxIter, out, y0, y1) {
     if (y0 === undefined) y0 = 0; if (y1 === undefined) y1 = H;
     const halfW = W / 2, halfH = H / 2, ER2 = 65536, inv = 1 / Math.LN2;
+    const kind = FR.kind, KR = FR.cr || 0, KI = FR.ci || 0, isJ = kind === 'julia';
     let p = y0 * W;
     for (let py = y0; py < y1; py++) {
-      const ci = cy - (py - halfH) * scale;
+      const ci0 = cy - (py - halfH) * scale;
       for (let px = 0; px < W; px++) {
-        const cr = cx + (px - halfW) * scale;
-        let zr = 0, zi = 0, zr2 = 0, zi2 = 0, it = 0;
-        while (zr2 + zi2 <= ER2 && it < maxIter) {
-          zi = 2 * zr * zi + ci; zr = zr2 - zi2 + cr; zr2 = zr * zr; zi2 = zi * zi; it++;
+        const cr0 = cx + (px - halfW) * scale;
+        let zr, zi, cr, ci;
+        if (isJ) { zr = cr0; zi = ci0; cr = KR; ci = KI; }
+        else { zr = 0; zi = 0; cr = cr0; ci = ci0; }
+        let zr2 = zr * zr, zi2 = zi * zi, it = 0;
+        if (kind === 'ship') {
+          while (zr2 + zi2 <= ER2 && it < maxIter) {
+            zi = Math.abs(2 * zr * zi) - ci; zr = zr2 - zi2 + cr; zr2 = zr * zr; zi2 = zi * zi; it++;
+          }
+        } else if (kind === 'tricorn') {
+          while (zr2 + zi2 <= ER2 && it < maxIter) {
+            zi = -2 * zr * zi + ci; zr = zr2 - zi2 + cr; zr2 = zr * zr; zi2 = zi * zi; it++;
+          }
+        } else { // mandel · julia (같은 반복식, 시작만 다름)
+          while (zr2 + zi2 <= ER2 && it < maxIter) {
+            zi = 2 * zr * zi + ci; zr = zr2 - zi2 + cr; zr2 = zr * zr; zi2 = zi * zi; it++;
+          }
         }
         if (it >= maxIter) out[p++] = -1;
         else { const m = Math.sqrt(zr2 + zi2); out[p++] = it + 1 - Math.log(Math.log(m)) * inv; }
@@ -223,6 +251,10 @@
     [[0.5, 0.25, 0.05], [0.5, 0.35, 0.2], [1.0, 1.0, 1.0], [0.0, 0.08, 0.18]],   // 파이어
     [[0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [1.0, 1.0, 1.0], [0.5, 0.55, 0.65]],      // 일렉트릭
     [[0.45, 0.45, 0.4], [0.4, 0.4, 0.45], [1.0, 1.0, 0.9], [0.1, 0.25, 0.55]],   // 골드-틸
+    [[0.42, 0.12, 0.38], [0.5, 0.2, 0.5], [1.0, 1.0, 1.0], [0.0, 0.3, 0.62]],    // 루비-블루(레드 소용돌이+블루 라인)
+    [[0.22, 0.16, 0.32], [0.55, 0.3, 0.45], [1.0, 1.0, 1.0], [0.05, 0.4, 0.66]], // 네이비-오렌지(짙은 남색+주황 불꽃)
+    [[0.45, 0.2, 0.45], [0.5, 0.35, 0.5], [1.0, 1.0, 1.0], [0.85, 0.45, 0.7]],   // 퍼플-핑크
+    [[0.15, 0.4, 0.35], [0.35, 0.5, 0.45], [1.0, 1.0, 1.0], [0.4, 0.55, 0.6]],   // 에메랄드-시안
   ];
   function colorize(out, data, lut, offset, band, from, to) {
     const N = lut.length / 3;
@@ -419,12 +451,27 @@
     const MAXP = 2600 * 1600, f = Math.sqrt(MAXP / (bw * bh)); if (f < 1) { bw = Math.round(bw * f); bh = Math.round(bh * f); }
     W = bw; H = bh; canvas.width = W; canvas.height = H;
     canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
-    if (!inited) { cx = -0.6; cy = 0; scale = 3.4 / W; scale0 = scale; inited = true; }
+    if (!inited) { applyFractalView(); inited = true; }
+    else scale0 = FR.span / W;   // 리사이즈 시 최대 축소 한계 재계산
     requestFull(); updateDepth();
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', () => setTimeout(resize, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+
+  // ── 프랙탈 종류 전환 ───────────────────────────────────────
+  function applyFractalView() {
+    cx = FR.cx; cy = FR.cy;
+    scale = FR.span / W; scale0 = scale;
+  }
+  $('btnFractal').addEventListener('click', () => {
+    frIdx = (frIdx + 1) % FRACTALS.length;
+    FR = FRACTALS[frIdx];
+    $('btnFractal').querySelector('.lbl').textContent = FR.name;
+    zooming = false;
+    applyFractalView();
+    requestFull(); updateDepth();
+  });
 
   // ── 팔레트 / 모핑 / 색 농도 ────────────────────────────────
   function recolorNow() { if (idleReady && !zooming && !fullState && !hq) recolorIdle(); }
@@ -439,7 +486,7 @@
   $('bandS').addEventListener('input', e => { band = +e.target.value / 100; recolorNow(); });
   $('zoomSpd').addEventListener('input', () => { if (zooming) zoomRate = zoomInRate(); });
 
-  $('btnReset').addEventListener('click', () => { cx = -0.6; cy = 0; scale = scale0; requestFull(); updateDepth(); });
+  $('btnReset').addEventListener('click', () => { applyFractalView(); requestFull(); updateDepth(); });
 
   // ── 저장 ──────────────────────────────────────────────────
   function timeStamp() {
