@@ -618,20 +618,21 @@
 
   // ---------------------------------------------------------------
   // 금붕어 헤엄 아틀라스 로딩 + 개체 생성. 그룹 2종(t 키 전환):
-  //   g1=색변주6 / g2=원본3 / g3=긴꼬리6 / g4=해파리6 / g5=금색코이6(4-.png)
+  //   표시순: 1=금색코이6(4-.png, 기본) / 2=색변주6 / 3=원본3 / 4=긴꼬리6 / 5=해파리6
   //   빌드 = fish/goldfish_build.py (data_src 시퀀스 → 루프 탐색+크로스페이드 → 아틀라스)
   //   meta: {cellW,cellH,cols,rows,count,fps,atlasW,atlasH,variants}
   // ---------------------------------------------------------------
   let koiAtlas = null, koiReady = false;
   let fishes = [];
+  // 표시 순서 = 이 배열 순서(파일명 g1~g5 와 무관). 1번 = 기본값(2026-08-06 사용자 지정: 금색 코이).
   const KOI_GROUPS = [
-    { base: "goldfish-swim-g1", label: "1 (색변주 6종)", meta: null, img: null },
-    { base: "goldfish-swim-g2", label: "2 (금붕어 원본)", meta: null, img: null },
-    { base: "goldfish-swim-g3", label: "3 (긴꼬리 색변주)", meta: null, img: null },
-    { base: "goldfish-swim-g4", label: "4 (해파리 파스텔)", meta: null, img: null },
-    { base: "goldfish-swim-g5", label: "5 (금색 코이 색변주)", meta: null, img: null },
+    { base: "goldfish-swim-g5", label: "1 (금색 코이 색변주)", meta: null, img: null },
+    { base: "goldfish-swim-g1", label: "2 (색변주 6종)", meta: null, img: null },
+    { base: "goldfish-swim-g2", label: "3 (금붕어 원본)", meta: null, img: null },
+    { base: "goldfish-swim-g3", label: "4 (긴꼬리 색변주)", meta: null, img: null },
+    { base: "goldfish-swim-g4", label: "5 (해파리 파스텔)", meta: null, img: null },
   ];
-  let activeGroup = 0;                    // 기본 = 색변주 6종(g1). T키로 원본 3종(g2) 전환. (2026-07-08 사용자 지정)
+  let activeGroup = 0;                    // 기본 = 1번 금색 코이(goldfish-swim-g5). T키로 순환. (2026-08-06 사용자 지정)
   function uploadGroup(i) {
     const G = KOI_GROUPS[i];
     if (!G.meta || !G.img) return;
