@@ -27,7 +27,7 @@
   // 배경 데이터 절대 경로 = fractal_capture 폴더 (bg_build.py 가 assets/bg/ 로 최적화 복사 +
   //   assets/bg-manifest.json 생성). 앱은 매니페스트의 모든 이미지를 이름순 크로스페이드 재생.
   //   동영상(manifest.videos)은 V 키로 영상 배경 토글.  bg 갱신 시 BG_VER 올려 캐시 무효화.
-  const ASSET_VER = "54";   // 멀티프로젝터 엣지블렌딩(2/3대, O/G/, . 키)
+  const ASSET_VER = "55";   // 그룹5 추가(4-.png 금색 코이 색변주 6종)
   const BG_VER = "4";
   let SLIDE_HOLD_MS = 0;               // 각 장면 추가 표시 시간(▲/▼ 방향키 ±1초, 기본 0초)
   const SLIDE_FADE_MS = 1600;          // 크로스페이드 시간
@@ -618,7 +618,7 @@
 
   // ---------------------------------------------------------------
   // 금붕어 헤엄 아틀라스 로딩 + 개체 생성. 그룹 2종(t 키 전환):
-  //   그룹1 = goldfish-swim-g1 (색변주 6종), 그룹2 = goldfish-swim-g2 (원본 3종)
+  //   g1=색변주6 / g2=원본3 / g3=긴꼬리6 / g4=해파리6 / g5=금색코이6(4-.png)
   //   빌드 = fish/goldfish_build.py (data_src 시퀀스 → 루프 탐색+크로스페이드 → 아틀라스)
   //   meta: {cellW,cellH,cols,rows,count,fps,atlasW,atlasH,variants}
   // ---------------------------------------------------------------
@@ -629,6 +629,7 @@
     { base: "goldfish-swim-g2", label: "2 (금붕어 원본)", meta: null, img: null },
     { base: "goldfish-swim-g3", label: "3 (긴꼬리 색변주)", meta: null, img: null },
     { base: "goldfish-swim-g4", label: "4 (해파리 파스텔)", meta: null, img: null },
+    { base: "goldfish-swim-g5", label: "5 (금색 코이 색변주)", meta: null, img: null },
   ];
   let activeGroup = 0;                    // 기본 = 색변주 6종(g1). T키로 원본 3종(g2) 전환. (2026-07-08 사용자 지정)
   function uploadGroup(i) {
@@ -651,7 +652,7 @@
     });
   }
   function toggleKoiGroup() {
-    const n = KOI_GROUPS.length;                 // 3그룹 순환(1→2→3→1), 로딩 안 된 그룹은 건너뜀
+    const n = KOI_GROUPS.length;                 // 그룹 순환(1→2→3→4→5→1), 로딩 안 된 그룹은 건너뜀
     let other = (activeGroup + 1) % n;
     for (let i = 0; i < n && !KOI_GROUPS[other].img; i++) other = (other + 1) % n;
     if (!KOI_GROUPS[other].img || other === activeGroup) { showHud("그룹 로딩 중…"); return; }
