@@ -668,6 +668,9 @@
     const variant = vs[(Math.random() * vs.length) | 0];
     return {
       variant: variant,
+      // 스프라이트 좌우 미러(개체별 50%) — 원본 사진의 꼬리 휨이 한쪽으로만 고정돼
+      //   전 개체가 같은 방향으로 굽어 보이던 것 해소(2026-08-06). 아틀라스 증가 없음.
+      mirror: Math.random() < 0.5,
       nx: Math.random(), ny: Math.random(),        // 위치(정규화 top-down 0..1)
       heading: Math.random() * Math.PI * 2,
       lenFrac: rand(FISH_LEN_MIN, FISH_LEN_MAX),
@@ -1316,6 +1319,9 @@
       const col = fi % koiAtlas.cols, row = (fi / koiAtlas.cols) | 0;
       const u0 = (col * cellW) / koiAtlas.atlasW, u1 = (col * cellW + cellW) / koiAtlas.atlasW;
       const v0 = (row * cellH) / koiAtlas.atlasH, v1 = (row * cellH + cellH) / koiAtlas.atlasH;
+      // 개체별 좌우 미러: 스트립 좌변에 u1, 우변에 u0 을 물려 스프라이트를 뒤집는다
+      //   → 원본이 우로 휜 꼬리도 절반은 좌로 휘어 섞임(형상 왜곡·용량 증가 없음).
+      const uL = f.mirror ? u1 : u0, uR = f.mirror ? u0 : u1;
 
       // === 몸 휨: 선회 각속도 × (1+패닉) 에 비례해 도망 방향으로 C자 ===
       let dH = f.heading - f.prevHeading;
@@ -1341,16 +1347,16 @@
         const backAng = baseBack - f.bend * t;
         const fwdAng = backAng + Math.PI;
         const perpx = -Math.sin(fwdAng), perpy = Math.cos(fwdAng);
-        const lx = spx + perpx * hw, ly = spy + perpy * hw;   // 좌 → u0
-        const rx = spx - perpx * hw, ry = spy - perpy * hw;   // 우 → u1
+        const lx = spx + perpx * hw, ly = spy + perpy * hw;   // 좌 → uL
+        const rx = spx - perpx * hw, ry = spy - perpy * hw;   // 우 → uR
         const vv = v0 + (v1 - v0) * t;
         if (sgi > 0) {
-          px2clip(fishVerts, vi, pLx, pLy, u0, pV); vi += 4;
-          px2clip(fishVerts, vi, pRx, pRy, u1, pV); vi += 4;
-          px2clip(fishVerts, vi, lx, ly, u0, vv); vi += 4;
-          px2clip(fishVerts, vi, lx, ly, u0, vv); vi += 4;
-          px2clip(fishVerts, vi, pRx, pRy, u1, pV); vi += 4;
-          px2clip(fishVerts, vi, rx, ry, u1, vv); vi += 4;
+          px2clip(fishVerts, vi, pLx, pLy, uL, pV); vi += 4;
+          px2clip(fishVerts, vi, pRx, pRy, uR, pV); vi += 4;
+          px2clip(fishVerts, vi, lx, ly, uL, vv); vi += 4;
+          px2clip(fishVerts, vi, lx, ly, uL, vv); vi += 4;
+          px2clip(fishVerts, vi, pRx, pRy, uR, pV); vi += 4;
+          px2clip(fishVerts, vi, rx, ry, uR, vv); vi += 4;
         }
         pLx = lx; pLy = ly; pRx = rx; pRy = ry; pV = vv;
         if (sgi < FISH_SEG) { spx += Math.cos(backAng) * stepLen; spy += Math.sin(backAng) * stepLen; }
