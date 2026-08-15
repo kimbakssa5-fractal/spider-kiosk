@@ -42,6 +42,7 @@ PROFILE = {
     "07_water_trace_goldfish/index.html": A,
     "08_water_wave/index.html": A, "10_dot_mosaic/index.html": A,
     "31_memory_game/index.html": A, "32_game_hall/index.html": A, "33_game_pinball/index.html": A,
+    "39_game_billiards/index.html": A,
     "21_database_cell/index.html": A,
     "fractal.html": B, "triangle.html": B,
     "guestbook.html": C, "admin.html": C,
