@@ -31,10 +31,13 @@ body{
 #app{display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:10px 14px;gap:8px}
 
 /* ---------- 헤더 ---------- */
-header{display:flex;align-items:center;gap:14px}
+header{display:flex;align-items:center;gap:14px;position:relative;min-height:54px}
+#targetPill{margin-left:auto}
+/* 점수판은 좌우 요소 폭과 무관하게 화면 정중앙 고정 */
+#scoreArea{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max-content;max-width:72%}
 .logo{background:linear-gradient(135deg,#ef7a5f,var(--coral));color:#fff;font-weight:900;
   font-size:22px;padding:10px 22px;border-radius:999px;letter-spacing:1px;box-shadow:var(--shadow)}
-#scoreArea{display:flex;gap:10px;flex:1;justify-content:center}
+#scoreArea{display:flex;gap:10px;justify-content:center}
 .pcard{background:var(--card);border-radius:999px;box-shadow:var(--shadow);padding:9px 22px;
   display:flex;align-items:center;gap:10px;border:3px solid transparent;transition:border-color .25s, transform .25s;
   white-space:nowrap}
@@ -187,6 +190,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 /* ---------- 작은 화면(폰 가로) ---------- */
 @media (max-width:1100px), (max-height:560px){
   #app{padding:2px 4px;gap:2px}
+  header{min-height:30px}
+  #scoreArea{max-width:82%}
+  #gearBtn{margin-left:auto}
   .logo{display:none}
   #targetPill{display:none}
   .pcard{padding:3px 10px;gap:5px;border-width:2px}
