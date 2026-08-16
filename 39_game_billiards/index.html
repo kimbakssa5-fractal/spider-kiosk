@@ -123,6 +123,36 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   font-size:12.5px;padding:6px 8px;cursor:pointer;white-space:nowrap;color:var(--ink)}
 .spill.on{background:var(--coral);border-color:var(--coral);color:#fff}
 .spill.help{border-style:dashed;color:#9a8f88;background:#fff}
+/* ---------- 확대 미세조정(당점·두께) ---------- */
+#fineOvl{position:fixed;inset:0;background:rgba(58,51,48,.4);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:75}
+#fineOvl .fCard{background:var(--card);border-radius:28px;box-shadow:0 26px 70px rgba(90,50,40,.35);
+  padding:20px 24px;max-width:min(920px,96vw);max-height:92vh;overflow:auto}
+#fineOvl h3{font-size:21px;font-weight:900;text-align:center;margin-bottom:4px}
+#fineOvl h3 em{color:var(--coral);font-style:normal}
+#fineOvl .fsub{text-align:center;font-size:13px;font-weight:700;color:#9a8f88;margin-bottom:14px}
+.fRow{display:flex;gap:22px;justify-content:center;align-items:flex-start}
+.fBox{display:flex;flex-direction:column;align-items:center;gap:6px}
+.fBox canvas{touch-action:none;cursor:crosshair;border-radius:50%}
+.fBox .ft{font-size:15px;font-weight:900}
+.fBox .fv{font-size:13px;font-weight:700;color:#8a7f78;min-height:18px}
+.fBox .fbtns{display:flex;gap:6px;margin-top:2px}
+.fBox .fbtns button{border:2px solid #f1e6df;background:#fffdfb;border-radius:10px;font-family:inherit;
+  font-weight:900;font-size:13px;padding:5px 12px;cursor:pointer;color:var(--ink)}
+.fBox .fbtns button:active{background:var(--coral);border-color:var(--coral);color:#fff}
+#fineClose{display:block;margin:14px auto 0;border:none;border-radius:999px;background:var(--coral);color:#fff;
+  font-family:inherit;font-weight:900;font-size:16px;padding:10px 44px;cursor:pointer}
+@media (max-width:1100px), (max-height:560px){
+  #fineOvl .fCard{padding:10px 12px;border-radius:16px}
+  #fineOvl h3{font-size:15px}
+  #fineOvl .fsub{font-size:10px;margin-bottom:6px}
+  .fRow{gap:10px}
+  .fBox canvas{width:158px;height:158px}
+  .fBox .ft{font-size:12px}
+  .fBox .fv{font-size:10.5px;min-height:14px}
+  .fBox .fbtns button{font-size:10.5px;padding:3px 8px}
+  #fineClose{font-size:13px;padding:7px 28px;margin-top:8px}
+}
 #strokeHelp{position:fixed;inset:0;background:rgba(58,51,48,.35);backdrop-filter:blur(3px);
   display:none;align-items:center;justify-content:center;z-index:70}
 #strokeHelp .shCard{background:var(--card);border-radius:26px;box-shadow:0 26px 70px rgba(90,50,40,.35);
@@ -275,7 +305,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   </div>
 
   <div id="dock">
-    <div class="dcard"><canvas id="spinPad" width="112" height="112"></canvas><div class="lb" id="spinLb">당점 0 · 0 (두 번 눌러 초기화)</div></div>
+    <div class="dcard"><canvas id="spinPad" width="112" height="112"></canvas>
+      <button class="spill help" id="fineBtn" style="margin-top:2px">⤢ 확대 조정</button>
+      <div class="lb" id="spinLb">당점 0 · 0 (두 번 눌러 초기화)</div></div>
     <div class="dcard" id="strokeCard">
       <div class="lb" style="font-weight:900;color:#b09a8c">스트록의 7가지 종류</div>
       <div id="strokeGrid">
@@ -337,6 +369,37 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
       <button class="opill" data-tg="20">20점</button>
     </div>
     <button class="bigBtn" id="startBtn">시작하기</button>
+  </div>
+</div>
+
+<!-- 확대 미세조정: 당점 / 두께 -->
+<div id="fineOvl">
+  <div class="fCard">
+    <h3>확대 <em>미세 조정</em></h3>
+    <div class="fsub">공을 끌어서 조정 — 왼쪽은 큐볼 당점, 오른쪽은 1적구를 맞히는 두께</div>
+    <div class="fRow">
+      <div class="fBox">
+        <div class="ft">내 공 — 당점</div>
+        <canvas id="bigCue" width="300" height="300"></canvas>
+        <div class="fv" id="bigCueVal">가로 0 · 세로 0</div>
+        <div class="fbtns">
+          <button data-tip="cx-">◀</button><button data-tip="cy+">▲</button>
+          <button data-tip="cy-">▼</button><button data-tip="cx+">▶</button>
+          <button data-tip="c0">가운데</button>
+        </div>
+      </div>
+      <div class="fBox">
+        <div class="ft">1적구 — 두께</div>
+        <canvas id="bigObj" width="300" height="300"></canvas>
+        <div class="fv" id="bigObjVal">두께 —</div>
+        <div class="fbtns">
+          <button data-thk="-">◀ 얇게</button>
+          <button data-thk="0">정면</button>
+          <button data-thk="+">두껍게 ▶</button>
+        </div>
+      </div>
+    </div>
+    <button id="fineClose">닫기</button>
   </div>
 </div>
 
@@ -641,6 +704,7 @@ function setPhase(ph) {
   S.phase = ph;
   var canAim = (ph === 'aim');
   $('shootBtn').disabled = !canAim;
+  if (!canAim && fineOn) closeFine();          // 샷 중엔 확대 패널을 닫는다
   if (canAim && S.mode !== 'practice' && S.players[S.turn].ai) {
     setPhase('ai');
     setTimeout(aiPlay, 350);
@@ -1052,6 +1116,171 @@ function aiPlay() {
     setTimeout(function () { S.phase = 'aim'; beginStroke(); }, 900);
   }
 }
+
+/* ================= 확대 미세조정 (당점 · 두께) =================
+ * 왼쪽: 큐볼을 크게 그려 당점을 끌어서 지정.
+ * 오른쪽: 1적구를 크게 그리고 큐볼 고스트를 겹쳐 '두께'를 끌어서 지정 →
+ *         그 두께가 되도록 조준각을 역산한다(직선 진로 기준: sin(α−φ)=b/L).
+ */
+var fineOn = false;
+var bigCueCv = $('bigCue'), bigCueCtx = bigCueCv.getContext('2d');
+var bigObjCv = $('bigObj'), bigObjCtx = bigObjCv.getContext('2d');
+
+function fineTargetBall() {
+  if (S.guide && S.guide.ghost) return st.balls[S.guide.ghost.id];
+  var c = st.balls[cueId()], best = null, bestDev = 1e9;
+  for (var i = 0; i < st.balls.length; i++) {
+    var b = st.balls[i];
+    if (b.id === c.id) continue;
+    var dev = Math.abs(angDiff(Math.atan2(b.y - c.y, b.x - c.x), S.aim.angle));
+    if (dev < bestDev) { bestDev = dev; best = b; }
+  }
+  return best || st.balls[2];
+}
+function angDiff(a, b) {
+  var d = a - b;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+/* 현재 조준의 충돌 파라미터: b/(2R) — 0=정면, ±1=스침 */
+function currentOffset(tb) {
+  var c = st.balls[cueId()];
+  var L = Math.hypot(tb.x - c.x, tb.y - c.y);
+  if (L < 1e-6) return 0;
+  var phi = Math.atan2(tb.y - c.y, tb.x - c.x);
+  var o = L * Math.sin(angDiff(S.aim.angle, phi)) / (2 * P.R);
+  return Math.max(-1.6, Math.min(1.6, o));
+}
+function setOffset(tb, o) {
+  var c = st.balls[cueId()];
+  var L = Math.hypot(tb.x - c.x, tb.y - c.y);
+  if (L < 1e-6) return;
+  var phi = Math.atan2(tb.y - c.y, tb.x - c.x);
+  var s = Math.max(-1, Math.min(1, o * 2 * P.R / L));
+  setAngle(phi + Math.asin(s));
+}
+function drawBigCue() {
+  var c = bigCueCtx, S0 = 300, cx = S0 / 2, cy = S0 / 2, r = 128;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, S0, S0);
+  var gr = c.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.12, cx, cy, r * 1.05);
+  gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.7, '#f4efe7'); gr.addColorStop(1, '#d8ccc0');
+  c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fillStyle = gr; c.fill();
+  c.lineWidth = 3; c.strokeStyle = '#d8ccc2'; c.stroke();
+  // 당점 격자: 십자 + 1/2·최대 회전 원
+  c.strokeStyle = 'rgba(180,165,152,.55)'; c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(cx - r, cy); c.lineTo(cx + r, cy);
+  c.moveTo(cx, cy - r); c.lineTo(cx, cy + r); c.stroke();
+  [0.5, 1].forEach(function (k) {
+    c.beginPath(); c.arc(cx, cy, r * 0.5 * k, 0, Math.PI * 2);
+    c.setLineDash([5, 6]); c.strokeStyle = 'rgba(180,165,152,.6)'; c.stroke(); c.setLineDash([]);
+  });
+  c.font = '900 12px "Noto Sans KR"'; c.fillStyle = '#b3a598';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText('밀어치기', cx, cy - r * 0.78);
+  c.fillText('끌어치기', cx, cy + r * 0.78);
+  c.fillText('왼', cx - r * 0.8, cy); c.fillText('오', cx + r * 0.8, cy);
+  // 현재 당점 (tip 은 ±0.5 = 공 반지름의 절반)
+  var px = cx + S.aim.tipX / 0.5 * r, py = cy - S.aim.tipY / 0.5 * r;
+  c.beginPath(); c.arc(px, py, 15, 0, Math.PI * 2);
+  c.fillStyle = 'rgba(232,96,76,.9)'; c.fill();
+  c.lineWidth = 4; c.strokeStyle = '#fff'; c.stroke();
+  $('bigCueVal').textContent = '가로 ' + Math.round(S.aim.tipX * 200) + ' · 세로 ' + Math.round(S.aim.tipY * 200) +
+    ' (최대 100)';
+}
+function drawBigObj() {
+  var c = bigObjCtx, S0 = 300, cx = S0 / 2, cy = S0 / 2, r = 96;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, S0, S0);
+  var tb = fineTargetBall();
+  var o = currentOffset(tb);
+  // 1적구
+  var col = COLORS[tb.id];
+  var gr = c.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.12, cx, cy, r * 1.05);
+  gr.addColorStop(0, lighten(col, 0.5)); gr.addColorStop(0.7, col); gr.addColorStop(1, darken(col, 0.3));
+  c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fillStyle = gr; c.fill();
+  c.lineWidth = 2.5; c.strokeStyle = 'rgba(0,0,0,.15)'; c.stroke();
+  // 큐볼 고스트 (겹친 만큼이 두께)
+  var gx = cx + o * 2 * r;
+  c.beginPath(); c.arc(gx, cy, r, 0, Math.PI * 2);
+  c.fillStyle = 'rgba(255,255,255,.42)'; c.fill();
+  c.setLineDash([6, 6]); c.lineWidth = 2.5; c.strokeStyle = 'rgba(255,255,255,.95)'; c.stroke();
+  c.setLineDash([]);
+  // 접촉점
+  if (Math.abs(o) < 1) {
+    c.beginPath(); c.arc(cx + o * r, cy, 7, 0, Math.PI * 2);
+    c.fillStyle = '#e8604c'; c.fill();
+    c.lineWidth = 3; c.strokeStyle = '#fff'; c.stroke();
+  }
+  var thick = Math.max(0, 1 - Math.abs(o)) * 100;
+  // 이 그림은 '큐볼 뒤에서 조준선을 따라 본' 시점 — 맞는 쪽 반대편으로 1적구가 간다
+  var side = Math.abs(o) < 0.02 ? '정면으로 밀기'
+    : (o > 0 ? '오른쪽에 맞음 → 1적구는 왼쪽으로' : '왼쪽에 맞음 → 1적구는 오른쪽으로');
+  var cut = Math.abs(o) <= 1 ? (Math.asin(Math.min(1, Math.abs(o))) * 180 / Math.PI).toFixed(0) : null;
+  $('bigObjVal').textContent = thick > 0
+    ? '두께 ' + thick.toFixed(0) + '% · 분리각 ' + cut + '° · ' + side
+    : '빗나감 (두께 0%)';
+}
+function drawFine() { drawBigCue(); drawBigObj(); }
+function openFine() {
+  if (S.phase !== 'aim') return;
+  fineOn = true; $('fineOvl').style.display = 'flex'; drawFine();
+}
+function closeFine() { fineOn = false; $('fineOvl').style.display = 'none'; }
+$('fineBtn').addEventListener('click', function () { fineOn ? closeFine() : openFine(); });
+$('fineClose').addEventListener('click', closeFine);
+$('fineOvl').addEventListener('click', function (e) { if (e.target === this) closeFine(); });
+/* 큐볼 확대: 끌어서 당점 */
+function bigCueFromEvent(e) {
+  var rct = bigCueCv.getBoundingClientRect();
+  var sc = Math.max(rct.width, rct.height) / 300;
+  var lp = localXY(e, bigCueCv);
+  var x = (lp.x - 150 * sc) / (128 * sc) * 0.5;
+  var y = -(lp.y - 150 * sc) / (128 * sc) * 0.5;
+  var m = Math.hypot(x, y);
+  if (m > 0.5) { x *= 0.5 / m; y *= 0.5 / m; }
+  S.aim.tipX = x; S.aim.tipY = y;
+  S.guideDirty = true; drawSpin(); drawFine();
+}
+bigCueCv.addEventListener('pointerdown', function (e) { bigCueCv.setPointerCapture(e.pointerId); bigCueFromEvent(e); });
+bigCueCv.addEventListener('pointermove', function (e) { if (e.buttons) bigCueFromEvent(e); });
+/* 1적구 확대: 끌어서 두께 */
+function bigObjFromEvent(e) {
+  var rct = bigObjCv.getBoundingClientRect();
+  var sc = Math.max(rct.width, rct.height) / 300;
+  var lp = localXY(e, bigObjCv);
+  var o = (lp.x - 150 * sc) / (2 * 96 * sc);
+  o = Math.max(-1.05, Math.min(1.05, o));
+  setOffset(fineTargetBall(), o);
+  drawFine();
+}
+bigObjCv.addEventListener('pointerdown', function (e) { bigObjCv.setPointerCapture(e.pointerId); bigObjFromEvent(e); });
+bigObjCv.addEventListener('pointermove', function (e) { if (e.buttons) bigObjFromEvent(e); });
+/* 미세 버튼 */
+$('fineOvl').addEventListener('click', function (e) {
+  var t = e.target.closest('[data-tip]');
+  if (t) {
+    var k = t.getAttribute('data-tip'), st2 = 0.01;
+    if (k === 'cx-') S.aim.tipX = Math.max(-0.5, S.aim.tipX - st2);
+    else if (k === 'cx+') S.aim.tipX = Math.min(0.5, S.aim.tipX + st2);
+    else if (k === 'cy+') S.aim.tipY = Math.min(0.5, S.aim.tipY + st2);
+    else if (k === 'cy-') S.aim.tipY = Math.max(-0.5, S.aim.tipY - st2);
+    else if (k === 'c0') { S.aim.tipX = 0; S.aim.tipY = 0; }
+    var m = Math.hypot(S.aim.tipX, S.aim.tipY);
+    if (m > 0.5) { S.aim.tipX *= 0.5 / m; S.aim.tipY *= 0.5 / m; }
+    S.guideDirty = true; drawSpin(); drawFine();
+    return;
+  }
+  var h = e.target.closest('[data-thk]');
+  if (h) {
+    var kk = h.getAttribute('data-thk'), tb = fineTargetBall(), o = currentOffset(tb);
+    if (kk === '+') o = o >= 0 ? Math.max(0, o - 0.02) : Math.min(0, o + 0.02);
+    else if (kk === '-') o = o >= 0 ? Math.min(1.05, o + 0.02) : Math.max(-1.05, o - 0.02);
+    else o = 0;
+    setOffset(tb, o); drawFine();
+  }
+});
 
 /* ================= 경로 명칭 판별 ================= */
 function isLongRail(r) { return r === 'top' || r === 'bottom'; }
@@ -1609,7 +1838,10 @@ function frame(now) {
       if (!moving || S.shotTimer > 40) { S.phase = 'resolve'; setTimeout(resolveShot, 380); }
     }
 
-    if (S.guideDirty && (S.phase === 'aim' || S.phase === 'ai')) { computeGuide(); updatePathBadge(); }
+    if (S.guideDirty && (S.phase === 'aim' || S.phase === 'ai')) {
+      computeGuide(); updatePathBadge();
+      if (fineOn) drawFine();                 // 조준·당점이 바뀌면 확대 뷰도 갱신
+    }
 
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, view.w, view.h);
@@ -1703,6 +1935,8 @@ document.addEventListener('keydown', function (e) {
     objTrackOn = !objTrackOn; $('swObj').classList.toggle('on', objTrackOn); S.guideDirty = true;
   } else if (e.key === 'u' || e.key === 'U' || e.key === 'ㅕ') {
     undoShot();
+  } else if (e.key === 'z' || e.key === 'Z' || e.key === 'ㅋ') {
+    fineOn ? closeFine() : openFine();
   } else if (e.key === 'ArrowLeft') {
     setAngle(S.aim.angle - (e.shiftKey ? 0.04 : 0.35) * Math.PI / 180);
   } else if (e.key === 'ArrowRight') {
@@ -1755,6 +1989,19 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
     if (qs.has('tx')) S.aim.tipX = (+qs.get('tx')) / 100;
     if (qs.has('ty')) S.aim.tipY = (+qs.get('ty')) / 100;
     if (qs.has('obj')) { objTrackOn = true; $('swObj').classList.add('on'); }
+    if (qs.has('fine')) setTimeout(openFine, 120);
+    if (qs.has('finetest')) {      // 두께 지정 → 조준각 역산 → 실제 충돌 두께가 일치하는지
+      var tb0 = fineTargetBall(), okAll = true, log = [];
+      [0, 0.3, -0.5, 0.8].forEach(function (want) {
+        setOffset(tb0, want);
+        var got = currentOffset(tb0);
+        var ok = Math.abs(got - want) < 0.02;
+        if (!ok) okAll = false;
+        log.push(want + '→' + got.toFixed(3));
+      });
+      document.title = (okAll ? 'FINE-OK ' : 'FINE-FAIL ') + log.join(' ');
+      return;
+    }
     if (qs.has('undotest')) {                 // 무르기 검증: 샷 실행 → undo → 자리 비교
       window.__simMode = 1;
       var before = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
