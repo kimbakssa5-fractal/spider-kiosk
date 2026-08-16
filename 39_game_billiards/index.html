@@ -424,6 +424,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <h3>설정</h3>
   <div class="srow"><div class="tog">조준 가이드<div class="sw on" id="swGuide"></div></div></div>
   <div class="srow"><div class="tog">1적구 향방 고스트 <small style="font-weight:700;color:#b9aca3">(G)</small><div class="sw" id="swObj"></div></div></div>
+  <div class="srow"><div class="tog">궤적 남기기 <small style="font-weight:700;color:#b9aca3">(T)</small><div class="sw" id="swTrail"></div></div></div>
   <div class="srow"><div class="tog">눈높이 뷰<div class="sw on" id="swEye"></div></div></div>
   <div class="srow"><div class="tog">소리<div class="sw on" id="swSound"></div></div></div>
   <div class="srow"><div class="sl"><span>쿠션 반발</span><span id="vCushE">100%</span></div><input type="range" id="rCushE" min="70" max="115" value="100"></div>
@@ -896,8 +897,18 @@ function snapshotBeforeShot() {
   };
 }
 function undoShot() {
+  if (S.phase === 'stroke') {              // 큐 뒤로 빼는 중이면 샷 자체를 취소
+    S.phase = 'aim'; S.strokeT = null; $('shootBtn').disabled = false;
+    return;
+  }
   var u = S.undo;
-  if (!u || S.phase === 'rolling' || S.phase === 'stroke') return;
+  if (!u) return;
+  // 굴러가는 중에도 즉시 중단하고 되돌린다 (예약된 판정도 취소)
+  clearTimeout(S.resolveTimer); S.resolveTimer = 0;
+  clearTimeout(toastTimer);
+  $('toast').classList.remove('show');
+  $('liveBadge').style.display = 'none';
+  $('pathBadge').style.display = 'none';
   for (var i = 0; i < u.balls.length; i++) {
     var src = u.balls[i], b = st.balls[src.id];
     b.x = src.x; b.y = src.y;
@@ -1373,6 +1384,7 @@ function updatePathBadge() {
 /* ================= 조준 가이드 ================= */
 var guideOn = true;
 var objTrackOn = false;        // 1적구 향방 고스트(쫑각 공부) — G 키 토글
+var trailKeep = false;         // 공이 지나간 궤적 남기기 — T 키 토글
 function computeGuide() {
   S.guideDirty = false;
   if (!guideOn || S.phase === 'over') { S.guide = null; return; }
@@ -1503,6 +1515,20 @@ function mix(a, b, k) {
   return 'rgb(' + r + ',' + g + ',' + bl + ')';
 }
 function drawTrails() {
+  if (trailKeep) {                       // 남기기 모드: 전 구간을 같은 진하기로
+    for (var i2 = 0; i2 < 3; i2++) {
+      var t2 = S.trails[i2];
+      if (t2.length < 2) continue;
+      ctx.beginPath();
+      for (var k2 = 0; k2 < t2.length; k2++) {
+        if (k2 === 0) ctx.moveTo(W2SX(t2[k2].x), W2SY(t2[k2].y));
+        else ctx.lineTo(W2SX(t2[k2].x), W2SY(t2[k2].y));
+      }
+      ctx.strokeStyle = COLORS[i2]; ctx.globalAlpha = 0.5; ctx.lineWidth = 2.5; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    return;
+  }
   for (var i = 0; i < 3; i++) {
     var tr = S.trails[i];
     if (tr.length < 2) continue;
@@ -1835,7 +1861,8 @@ function frame(now) {
         if (b.moving) {
           var tr = S.trails[i];
           tr.push({ x: b.x, y: b.y });
-          if (tr.length > 46) tr.shift();
+          if (!trailKeep && tr.length > 46) tr.shift();        // 남기기 모드면 전체 궤적 보존
+          else if (tr.length > 6000) tr.shift();
         }
       }
       // 진행 배지
@@ -1843,7 +1870,10 @@ function frame(now) {
       $('liveBadge').textContent = '쿠션 ' + q.cush + '회' +
         (q.first !== null ? ' · 1적구 ✓' : '') + (q.second !== null ? ' · 2적구 ✓' : '');
       S.shotTimer += dt;
-      if (!moving || S.shotTimer > 40) { S.phase = 'resolve'; setTimeout(resolveShot, 380); }
+      if (!moving || S.shotTimer > 40) {
+        S.phase = 'resolve';
+        S.resolveTimer = setTimeout(resolveShot, 380);        // Ctrl+Z 로 취소할 수 있게 보관
+      }
     }
 
     if (S.guideDirty && (S.phase === 'aim' || S.phase === 'ai')) {
@@ -1912,6 +1942,10 @@ function bindSwitch(id, get, set) {
 }
 bindSwitch('swGuide', function () { return guideOn; }, function (v) { guideOn = v; S.guideDirty = true; });
 bindSwitch('swObj', function () { return objTrackOn; }, function (v) { objTrackOn = v; S.guideDirty = true; });
+bindSwitch('swTrail', function () { return trailKeep; }, function (v) {
+  trailKeep = v;
+  if (!v) S.trails = [[], [], []];     // 끄면 쌓인 궤적을 지운다
+});
 bindSwitch('swEye', function () { return eyeOn; }, function (v) {
   eyeOn = v;
   $('eyeCol').style.display = v ? '' : 'none';
@@ -1948,6 +1982,10 @@ document.addEventListener('keydown', function (e) {
     undoShot();
   } else if (e.key === 'z' || e.key === 'Z' || e.key === 'ㅋ') {
     fineOn ? closeFine() : openFine();
+  } else if (e.key === 't' || e.key === 'T' || e.key === 'ㅅ') {
+    trailKeep = !trailKeep;
+    $('swTrail').classList.toggle('on', trailKeep);
+    if (!trailKeep) S.trails = [[], [], []];
   } else if (e.key === 'ArrowLeft') {
     setAngle(S.aim.angle - (e.shiftKey ? 0.04 : 0.35) * Math.PI / 180);
   } else if (e.key === 'ArrowRight') {
@@ -2000,6 +2038,7 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
     if (qs.has('tx')) S.aim.tipX = (+qs.get('tx')) / 100;
     if (qs.has('ty')) S.aim.tipY = (+qs.get('ty')) / 100;
     if (qs.has('obj')) { objTrackOn = true; $('swObj').classList.add('on'); }
+    if (qs.has('trail')) { trailKeep = true; $('swTrail').classList.add('on'); }
     if (qs.has('fine')) setTimeout(openFine, 120);
     if (qs.has('finetest')) {      // 두께 지정 → 조준각 역산 → 실제 충돌 두께가 일치하는지
       var tb0 = fineTargetBall(), okAll = true, log = [];
@@ -2011,6 +2050,21 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
         log.push(want + '→' + got.toFixed(3));
       });
       document.title = (okAll ? 'FINE-OK ' : 'FINE-FAIL ') + log.join(' ');
+      return;
+    }
+    if (qs.has('rollundotest')) {             // 굴러가는 중 Ctrl+Z 로 즉시 되돌리는지
+      window.__simMode = 1;
+      var rb = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      snapshotBeforeShot();
+      applyStrikeTo(st.balls[cueId()]);
+      S.events = [];
+      for (var rs = 0; rs < 60; rs++) P.advance(st, 1 / 240, S.events);   // 0.25초만 굴린 상태
+      S.phase = 'rolling';
+      var rm = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      var ra = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      var stopped = st.balls.every(function (b) { return !b.moving && b.vx === 0 && b.vy === 0; });
+      document.title = (rm !== rb && ra === rb && stopped && S.phase === 'aim') ? 'ROLLUNDO-OK' : 'ROLLUNDO-FAIL';
       return;
     }
     if (qs.has('ctrlztest')) {                // Ctrl+Z 단축키로 직전 배치 복원되는지
