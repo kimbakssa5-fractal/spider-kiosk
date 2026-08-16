@@ -87,9 +87,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .abtn{width:52px;height:52px;border-radius:16px;border:none;background:var(--coral-soft);color:var(--coral);
   font-size:22px;font-weight:900;cursor:pointer;touch-action:none}
 .abtn:active{background:var(--coral);color:#fff}
-#strokeGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.spill{border:2px solid #f1e6df;background:#fffdfb;border-radius:12px;font-family:inherit;font-weight:900;
-  font-size:14px;padding:8px 12px;cursor:pointer;white-space:nowrap;color:var(--ink)}
+#strokeGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.spill{border:2px solid #f1e6df;background:#fffdfb;border-radius:10px;font-family:inherit;font-weight:900;
+  font-size:12.5px;padding:6px 8px;cursor:pointer;white-space:nowrap;color:var(--ink)}
 .spill.on{background:var(--coral);border-color:var(--coral);color:#fff}
 #angleRead{font-size:22px;font-weight:900;min-width:88px;text-align:center}
 #powerCard{flex:1;max-width:760px}
@@ -165,20 +165,23 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   .pcard .sc2{font-size:18px}
   .pcard .meta{font-size:10px}
   .pill{padding:6px 10px;font-size:12px}
-  #dock{gap:5px}
-  .dcard{padding:4px 8px;border-radius:13px;gap:2px}
-  #spinPad{width:76px;height:76px}
-  .dcard .lb{font-size:9px}
-  .abtn{width:34px;height:34px;font-size:15px;border-radius:10px}
-  .pbtn{width:28px;height:28px;font-size:14px;border-radius:9px}
-  #angleRead{font-size:15px;min-width:58px}
-  #powerVal{font-size:15px;min-width:52px}
-  #power{height:12px}
+  #dock{gap:4px}
+  .dcard{padding:4px 6px;border-radius:12px;gap:2px}
+  #spinPad{width:64px;height:64px}
+  .dcard .lb{display:none}
+  .abtn{width:32px;height:32px;font-size:14px;border-radius:9px}
+  .pbtn{width:26px;height:26px;font-size:13px;border-radius:8px}
+  #angleRead{font-size:14px;min-width:54px}
+  #powerVal{font-size:14px;min-width:48px}
+  #power{height:12px;min-width:70px}
+  #powerRow{gap:6px}
   #power::-webkit-slider-thumb{width:24px;height:24px;border-width:4px}
-  .spill{font-size:11px;padding:4px 8px;border-radius:9px}
+  .spill{font-size:10.5px;padding:3px 6px;border-radius:8px}
+  #strokeGrid{gap:3px}
   #strokeDesc{display:none}
   #aimCard{min-width:0}
-  #shootBtn{font-size:18px;padding:0 20px;border-radius:14px;letter-spacing:2px}
+  #powerCard{min-width:170px}
+  #shootBtn{font-size:16px;padding:0 16px;border-radius:12px;letter-spacing:1px}
   #liveBadge{font-size:13px;padding:5px 12px}
   #pathBadge{font-size:11px;padding:4px 10px}
   #settings{width:min(420px,94vw);top:60px;max-height:80vh;overflow:auto}
@@ -215,11 +218,15 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div id="dock">
     <div class="dcard"><canvas id="spinPad" width="112" height="112"></canvas><div class="lb" id="spinLb">당점 0 · 0 (두 번 눌러 초기화)</div></div>
     <div class="dcard" id="strokeCard">
+      <div class="lb" style="font-weight:900;color:#b09a8c">스트록의 7가지 종류</div>
       <div id="strokeGrid">
+        <button class="spill" data-st="roll">굴려치기</button>
         <button class="spill on" data-st="push">밀어치기</button>
+        <button class="spill" data-st="force">포싱샷</button>
         <button class="spill" data-st="stun">끊어치기</button>
-        <button class="spill" data-st="draw">빨아치기</button>
-        <button class="spill" data-st="up">업샷</button>
+        <button class="spill" data-st="jab">잽샷</button>
+        <button class="spill" data-st="draw">끌어치기</button>
+        <button class="spill" data-st="up">마세(업샷)</button>
       </div>
       <div class="lb" id="strokeDesc">길게 밀어 세로 회전을 크게 싣는다</div>
     </div>
@@ -399,25 +406,28 @@ document.addEventListener('pointerdown', function () { audio(); }, { capture: tr
 var FRAME = 0.115;             // 나무 프레임 폭 (m)
 var view = { ppm: 300, ox: 0, oy: 0, w: 0, h: 0 };
 function eyeActive() { return eyeOn; }
+/* 판정 기준은 요소 폭이 아니라 실제 뷰포트 — 독이 넘쳐 요소가 부풀어도 흔들리지 않게 */
+function viewportW() { return rotated ? window.innerHeight : window.innerWidth; }
 function resize() {
   var wrap = $('tableWrap');
   var reserve = 0;
-  var pip = wrap.clientWidth < 900;            // 폰: 옆자리 대신 당구대 위 PIP
+  var vw = viewportW();
+  var pip = vw < 900;                          // 폰: 옆자리 대신 당구대 위 PIP
   $('eyeCol').style.display = eyeOn ? '' : 'none';
   $('eyeCol').classList.toggle('pip', pip);
   if (eyeOn) {
     if (pip) {
-      eyeW = Math.max(160, Math.min(280, Math.round(wrap.clientWidth * 0.30)));
+      eyeW = Math.max(150, Math.min(260, Math.round(vw * 0.28)));
       eyeH = Math.round(eyeW * 0.62);
     } else {
-      eyeW = Math.max(260, Math.min(430, Math.round(wrap.clientWidth * 0.26)));
+      eyeW = Math.max(260, Math.min(430, Math.round(vw * 0.26)));
       eyeH = Math.round(eyeW * 0.68);
       reserve = eyeW + 20 + 14;
     }
     eyeCv.style.width = eyeW + 'px'; eyeCv.style.height = eyeH + 'px';
     eyeCv.width = Math.round(eyeW * DPR); eyeCv.height = Math.round(eyeH * DPR);
   }
-  var cw = wrap.clientWidth - 8 - reserve, ch = wrap.clientHeight - 8;
+  var cw = Math.min(wrap.clientWidth, vw - 16) - 8 - reserve, ch = wrap.clientHeight - 8;
   var aw = st.W + FRAME * 2, ah = st.H + FRAME * 2;
   var ppm = Math.min(cw / aw, ch / ah);
   view.ppm = ppm;
@@ -652,10 +662,13 @@ drawSpin();
 
 /* ================= 스트로크 종류 ================= */
 var STROKES = {
-  push: { name: '밀어치기', desc: '길게 밀어 세로 회전을 크게 싣는다', vMul: 1.0, tipYmul: 1.35, tipXmul: 1.0, axial: 0, bias: 0.04 },
-  stun: { name: '끊어치기', desc: '짧고 강하게 끊는다 — 회전을 죽인 스톱성 구질', vMul: 1.06, tipYmul: 0.40, tipXmul: 0.85, axial: 0, bias: 0 },
-  draw: { name: '빨아치기', desc: '아래 당점을 살려 강하게 끌어온다', vMul: 0.96, tipYmul: 1.45, tipXmul: 1.0, axial: 0, bias: -0.07 },
-  up:   { name: '업샷', desc: '큐를 세워 친다 — 옆 당점과 만나면 휘어진다(마세)', vMul: 0.88, tipYmul: 0.9, tipXmul: 1.0, axial: 0.55, bias: 0 }
+  roll:  { name: '굴려치기', desc: '부드럽게 굴린다 — 예측이 쉬운 기본 구질', vMul: 0.92, tipYmul: 0.7, tipXmul: 0.9, axial: 0, bias: 0.16 },
+  push:  { name: '밀어치기', desc: '길게 밀어 세로 회전을 크게 싣는다', vMul: 1.0, tipYmul: 1.35, tipXmul: 1.0, axial: 0, bias: 0.04 },
+  force: { name: '포싱샷', desc: '강하게 눌러 민다 — 충돌 후에도 힘차게 전진', vMul: 1.14, tipYmul: 1.5, tipXmul: 0.9, axial: 0, bias: 0.1 },
+  stun:  { name: '끊어치기', desc: '짧고 강하게 끊는다 — 회전을 죽인 스톱성 구질', vMul: 1.06, tipYmul: 0.40, tipXmul: 0.85, axial: 0, bias: 0 },
+  jab:   { name: '잽샷', desc: '순간 타격 후 바로 멈춘다 — 회전 최소의 짧은 잽', vMul: 0.90, tipYmul: 0.22, tipXmul: 0.7, axial: 0, bias: -0.02 },
+  draw:  { name: '끌어치기', desc: '아래 당점을 살려 강하게 끌어온다(드로우)', vMul: 0.96, tipYmul: 1.45, tipXmul: 1.0, axial: 0, bias: -0.07 },
+  up:    { name: '마세(업샷)', desc: '큐를 세워 친다 — 옆 당점과 만나면 휘어진다', vMul: 0.88, tipYmul: 0.9, tipXmul: 1.0, axial: 0.55, bias: 0 }
 };
 S.strokeType = 'push';
 $('strokeGrid').addEventListener('click', function (e) {
