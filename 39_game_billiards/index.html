@@ -636,9 +636,10 @@ function S2WY(py) { return (py - view.oy) / view.ppm; }
 function rack() {
   S.undo = null;
   st.balls.length = 0;
-  var b0 = P.makeBall(0, st.W * 0.25, st.H / 2 - 0.1825);   // 흰
-  var b1 = P.makeBall(1, st.W * 0.25, st.H / 2);            // 노랑
-  var b2 = P.makeBall(2, st.W * 0.75, st.H / 2);            // 빨강
+  // 흰 공(내 공)이 두 적구의 오른쪽에 놓이는 배치
+  var b0 = P.makeBall(0, st.W * 0.78, st.H / 2);            // 흰  — 맨 오른쪽
+  var b1 = P.makeBall(1, st.W * 0.72, st.H / 2 - 0.1825);   // 노랑 — 흰 공 왼쪽 위
+  var b2 = P.makeBall(2, st.W * 0.25, st.H / 2);            // 빨강 — 반대편
   st.balls.push(b0, b1, b2);
   S.trails = [[], [], []];
   S.breakShot = true;
@@ -647,7 +648,7 @@ function rack() {
 }
 function aimAtRed() {
   var c = st.balls[cueId()], r = st.balls[2];
-  S.aim.angle = Math.atan2(r.y - c.y, r.x - c.x);
+  setAngle(Math.atan2(r.y - c.y, r.x - c.x));   // 각도 표시까지 함께 갱신
 }
 function newGame() {
   S.players = [];
