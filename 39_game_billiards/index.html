@@ -743,6 +743,7 @@ cv.addEventListener('pointerdown', aimPointer);
 cv.addEventListener('pointermove', function (e) { if (e.buttons) aimPointer(e); });
 function aimPointer(e) {
   if (S.phase !== 'aim') return;
+  touchForNextShot();
   var lp = localXY(e, cv);
   var wx = S2WX(lp.x), wy = S2WY(lp.y);
   var c = st.balls[cueId()];
@@ -754,6 +755,7 @@ function aimPointer(e) {
 function bindFine(btn, dir) {
   var iv = 0, t0 = 0;
   function stepFn() {
+    touchForNextShot();
     var held = performance.now() - t0;
     var step = held > 2200 ? 0.9 : held > 1000 ? 0.3 : 0.12;
     setAngle(S.aim.angle + dir * step * Math.PI / 180);
@@ -770,6 +772,7 @@ function bindFine(btn, dir) {
 bindFine($('aimL'), -1); bindFine($('aimR'), 1);
 
 function setPower(v) {
+  touchForNextShot();
   v = Math.max(1, Math.min(100, Math.round(v * 2) / 2));
   S.aim.power = v / 100;
   $('power').value = v;
@@ -815,6 +818,7 @@ function drawSpin() {
   if (lb) lb.textContent = '당점 가로 ' + Math.round(S.aim.tipX * 100) + ' · 세로 ' + Math.round(S.aim.tipY * 100) + ' (두 번 눌러 초기화)';
 }
 function spinFromEvent(e) {
+  touchForNextShot();
   var r = spinCv.getBoundingClientRect();
   var sc = Math.max(r.width, r.height) / 112;          // CSS 축소(작은 화면) 보정 — 정사각이라 회전 무관
   var lp = localXY(e, spinCv);
@@ -843,6 +847,7 @@ S.strokeType = 'push';
 $('strokeGrid').addEventListener('click', function (e) {
   var b = e.target.closest('[data-st]');
   if (!b) return;
+  touchForNextShot();
   setStroke(b.getAttribute('data-st'));
 });
 $('strokeHelpBtn').addEventListener('click', function () { $('strokeHelp').style.display = 'flex'; });
@@ -930,6 +935,7 @@ function undoShot() {
   setPhase('aim');
 }
 function fireShot() {
+  touchForNextShot();          // 곧장 다시 친 경우에도 직전 궤적은 정리
   snapshotBeforeShot();
   var b = st.balls[cueId()];
   /* tipX 부호 반전은 applyStrikeTo 안에서 — 화면(y-아래) ↔ 물리(z-위) 거울상 보정 */
@@ -947,6 +953,7 @@ function fireShot() {
 /* ================= 판정 ================= */
 function resolveShot() {
   $('liveBadge').style.display = 'none';
+  if (trailKeep) trailStale = true;   // 이번 궤적은 남겨 두되, 다음 샷을 만지면 지운다
   var cid = cueId();
   var j = P.judge(S.events, cid, 3);
   var cls = classifyFromEvents(S.events, cid, S.shotDefl === undefined ? null : S.shotDefl);
@@ -1252,6 +1259,7 @@ $('fineClose').addEventListener('click', closeFine);
 $('fineOvl').addEventListener('click', function (e) { if (e.target === this) closeFine(); });
 /* 큐볼 확대: 끌어서 당점 */
 function bigCueFromEvent(e) {
+  touchForNextShot();
   var rct = bigCueCv.getBoundingClientRect();
   var sc = Math.max(rct.width, rct.height) / 300;
   var lp = localXY(e, bigCueCv);
@@ -1266,6 +1274,7 @@ bigCueCv.addEventListener('pointerdown', function (e) { bigCueCv.setPointerCaptu
 bigCueCv.addEventListener('pointermove', function (e) { if (e.buttons) bigCueFromEvent(e); });
 /* 1적구 확대: 끌어서 두께 */
 function bigObjFromEvent(e) {
+  touchForNextShot();
   var rct = bigObjCv.getBoundingClientRect();
   var sc = Math.max(rct.width, rct.height) / 300;
   var lp = localXY(e, bigObjCv);
@@ -1385,6 +1394,13 @@ function updatePathBadge() {
 var guideOn = true;
 var objTrackOn = false;        // 1적구 향방 고스트(쫑각 공부) — G 키 토글
 var trailKeep = false;         // 공이 지나간 궤적 남기기 — T 키 토글
+var trailStale = false;        // 샷이 끝난 상태 — 다음 샷을 만지는 순간 직전 궤적을 지운다
+/* 다음 샷을 위해 무언가를 조작하기 시작하면 직전 궤적을 치운다 */
+function touchForNextShot() {
+  if (!trailStale) return;
+  trailStale = false;
+  S.trails = [[], [], []];
+}
 function computeGuide() {
   S.guideDirty = false;
   if (!guideOn || S.phase === 'over') { S.guide = null; return; }
@@ -1944,6 +1960,7 @@ bindSwitch('swGuide', function () { return guideOn; }, function (v) { guideOn = 
 bindSwitch('swObj', function () { return objTrackOn; }, function (v) { objTrackOn = v; S.guideDirty = true; });
 bindSwitch('swTrail', function () { return trailKeep; }, function (v) {
   trailKeep = v;
+  trailStale = false;
   if (!v) S.trails = [[], [], []];     // 끄면 쌓인 궤적을 지운다
 });
 bindSwitch('swEye', function () { return eyeOn; }, function (v) {
@@ -1984,11 +2001,14 @@ document.addEventListener('keydown', function (e) {
     fineOn ? closeFine() : openFine();
   } else if (e.key === 't' || e.key === 'T' || e.key === 'ㅅ') {
     trailKeep = !trailKeep;
+    trailStale = false;
     $('swTrail').classList.toggle('on', trailKeep);
     if (!trailKeep) S.trails = [[], [], []];
   } else if (e.key === 'ArrowLeft') {
+    touchForNextShot();
     setAngle(S.aim.angle - (e.shiftKey ? 0.04 : 0.35) * Math.PI / 180);
   } else if (e.key === 'ArrowRight') {
+    touchForNextShot();
     setAngle(S.aim.angle + (e.shiftKey ? 0.04 : 0.35) * Math.PI / 180);
   } else if (e.key === ' ') {
     e.preventDefault(); beginStroke();
@@ -2050,6 +2070,23 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
         log.push(want + '→' + got.toFixed(3));
       });
       document.title = (okAll ? 'FINE-OK ' : 'FINE-FAIL ') + log.join(' ');
+      return;
+    }
+    if (qs.has('trailstaletest')) {           // 샷 뒤엔 궤적 유지, 다음 샷을 만지면 사라지는지
+      window.__simMode = 1; trailKeep = true;
+      applyStrikeTo(st.balls[cueId()]);
+      S.events = []; S.trails = [[], [], []];
+      var tg = 240 * 40;
+      while (P.advance(st, 1 / 240, S.events) && tg-- > 0) {
+        for (var ti = 0; ti < 3; ti++) if (st.balls[ti].moving) S.trails[ti].push({ x: st.balls[ti].x, y: st.balls[ti].y });
+      }
+      var drew = S.trails.some(function (t) { return t.length > 10; });
+      S.phase = 'resolve'; resolveShot();
+      var kept = S.trails.some(function (t) { return t.length > 10; });
+      setPower(50);                            // ← "공을 집는" 조작
+      var cleared = S.trails.every(function (t) { return t.length === 0; });
+      document.title = (drew && kept && cleared) ? 'TRAILSTALE-OK'
+        : ('TRAILSTALE-FAIL drew=' + drew + ' kept=' + kept + ' cleared=' + cleared);
       return;
     }
     if (qs.has('rollundotest')) {             // 굴러가는 중 Ctrl+Z 로 즉시 되돌리는지
