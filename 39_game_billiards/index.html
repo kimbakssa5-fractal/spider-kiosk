@@ -95,6 +95,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   background:rgba(255,255,255,.9);border-radius:999px;padding:7px 20px;font-weight:900;font-size:16px;
   color:#7a6e66;box-shadow:var(--shadow);display:none;pointer-events:none;white-space:nowrap}
 #pathBadge b{color:var(--coral)}
+#liveBadge,#pathBadge{z-index:8}   /* PIP(z-index 6) 뒤로 숨지 않게 */
 #toast{position:absolute;top:44%;left:50%;transform:translate(-50%,-50%) scale(.9);
   background:rgba(255,255,255,.97);border-radius:26px;padding:26px 52px;text-align:center;
   box-shadow:0 22px 60px rgba(120,60,40,.25);opacity:0;pointer-events:none;transition:opacity .22s, transform .22s}
@@ -285,17 +286,26 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 
 /* ---------- 작은 화면(폰 가로) ---------- */
 @media (max-width:1100px), (max-height:560px){
-  #app{padding:2px 4px;gap:2px}
-  header{min-height:30px}
+  #app{padding:2px 4px;gap:1px}
+  header{min-height:24px}
+  /* 배지·토스트 배치는 resize() 의 ovSide/ovTop 체계가 맡는다(여기서 건드리지 않음) */
+  #powerSub{display:none}
+  #spinPad{width:38px;height:38px}
+  #spinCard{flex-direction:row;align-items:center;gap:4px}   /* 당점+확대버튼을 가로로 → 독 높이 감소 */
+  .abtn{width:28px;height:28px;font-size:12px}
+  #strokeGrid{gap:2px}
+  .spill{font-size:9.5px;padding:2px 4px}
+  #gearBtn{font-size:14px;padding:3px 8px}
+  .spill.help{font-size:8.5px;padding:2px 5px}
   #scoreArea{max-width:82%}
   #undoBtn{margin-left:auto;font-size:12px;padding:4px 10px}
   .logo{display:none}
   #targetPill{display:none}
-  .pcard{padding:3px 10px;gap:5px;border-width:2px}
-  .pcard .dot{width:14px;height:14px}
-  .pcard .nm2{font-size:14px}
-  .pcard .sc2{font-size:16px}
-  .pcard .meta{font-size:9px}
+  .pcard{padding:2px 8px;gap:4px;border-width:2px}
+  .pcard .dot{width:12px;height:12px}
+  .pcard .nm2{font-size:12.5px}
+  .pcard .sc2{font-size:14px}
+  .pcard .meta{font-size:8.5px}
   .pill{padding:4px 9px;font-size:12px}
   #dock{gap:3px}
   .dcard{padding:2px 4px;border-radius:10px;gap:1px}
@@ -349,7 +359,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   </div>
 
   <div id="dock">
-    <div class="dcard"><canvas id="spinPad" width="112" height="112"></canvas>
+    <div class="dcard" id="spinCard"><canvas id="spinPad" width="112" height="112"></canvas>
       <button class="spill help" id="fineBtn" style="margin-top:2px">⤢ 확대 조정</button>
       <div class="lb" id="spinLb">당점 0 · 0 (두 번 눌러 초기화)</div></div>
     <div class="dcard" id="strokeCard">
@@ -2181,6 +2191,19 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       document.title = (drew && kept && cleared) ? 'TRAILSTALE-OK'
         : ('TRAILSTALE-FAIL drew=' + drew + ' kept=' + kept + ' cleared=' + cleared);
       return;
+    }
+    if (qs.has('measure')) {                  // 레이아웃 실측: 테이블이 차지하는 크기
+      setTimeout(function () {
+        var wrap = $('tableWrap').getBoundingClientRect();
+        var hd = document.querySelector('header').getBoundingClientRect();
+        var dk = $('dock').getBoundingClientRect();
+        var kids = [].map.call($('dock').children, function (c) {
+          return (c.id || c.className).slice(0, 10) + ':' + Math.round(c.getBoundingClientRect().height);
+        });
+        document.title = JSON.stringify({ vw: viewportW(), ih: window.innerHeight,
+          table: [view.w, view.h], wrap: [Math.round(wrap.width), Math.round(wrap.height)],
+          header: Math.round(hd.height), dock: Math.round(dk.height), kids: kids });
+      }, 700);
     }
     if (qs.has('undobtntest')) {              // 폰용 [무르기] 버튼이 실제로 되돌리는지
       window.__simMode = 1;
