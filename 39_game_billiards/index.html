@@ -102,6 +102,41 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 #toast .big{font-size:44px;font-weight:900}
 #toast .sub{font-size:18px;font-weight:700;color:#8a7f78;margin-top:6px}
 #toast.good .big{color:var(--coral)}
+
+/* ── 폰: 글자가 당구대를 가리지 않게 옆 빈 자리로 뺀다 ─────────────────
+   폰은 앱 전체를 90도 돌려 쓰는데, 배지·토스트는 당구대 한가운데에 절대배치라
+   천 위에 글자가 얹혔다("옆돌·뒤돌 글자가 당구대를 가린다", 2026-08-17 지적).
+   실측: 토스트가 당구대 넓이의 27%를 덮었고, 조준 배지는 천 위를 가로지르는 띠가 됐다.
+   → resize() 가 당구대 오른쪽 빈 폭을 재어 --ovL/--ovW 로 넘기고, 여기서 그 자리에 앉힌다.
+   자리가 안 나오면 아예 켜지 않는다(ovSide 미부여) — 억지로 밀어 넣지 않는다. */
+#tableWrap.ovSide #liveBadge,
+#tableWrap.ovSide #pathBadge{
+  left:var(--ovL); transform:none; width:var(--ovW); max-width:var(--ovW);
+  white-space:normal; text-align:center; line-height:1.3;
+  padding:7px 8px; border-radius:14px;
+  word-break:keep-all;                 /* 좁은 칸이라 '쿠션'이 '쿠/션'으로 쪼개지던 것 */
+}
+#tableWrap.ovSide #toast{
+  left:var(--ovL); top:50%; transform:translateY(-50%) scale(.92);
+  width:var(--ovW); max-width:var(--ovW); padding:14px 10px; border-radius:18px;
+  word-break:keep-all;
+}
+#tableWrap.ovSide #toast.show{transform:translateY(-50%) scale(1)}
+#tableWrap.ovSide #toast .big{font-size:24px}
+#tableWrap.ovSide #toast .sub{font-size:12px;margin-top:5px}
+
+/* 옆에 뺄 자리가 없는 화면(당구대가 폭을 꽉 채우는 비율)에서도 한가운데는 안 덮는다.
+   납작한 띠로 만들어 위쪽 레일에 붙인다 — 덮는 넓이가 25% → 3%대로 떨어진다. */
+#tableWrap.ovTop #toast{
+  top:6px; left:50%; transform:translateX(-50%) scale(.94);
+  padding:8px 18px; border-radius:16px;
+  display:flex; align-items:baseline; gap:10px; white-space:nowrap;
+}
+#tableWrap.ovTop #toast.show{transform:translateX(-50%) scale(1)}
+#tableWrap.ovTop #toast .big{font-size:21px}
+#tableWrap.ovTop #toast .sub{font-size:12px;margin-top:0}
+#tableWrap.ovTop #liveBadge,
+#tableWrap.ovTop #pathBadge{top:4px;font-size:11px;padding:3px 10px}
 #quitCorner{position:fixed;left:0;top:0;width:92px;height:92px;z-index:99}
 
 /* ---------- 하단 조작부 ---------- */
@@ -601,7 +636,32 @@ function resize() {
     eyeCv.style.width = eyeW + 'px'; eyeCv.style.height = eyeH + 'px';
     eyeCv.width = Math.round(eyeW * DPR); eyeCv.height = Math.round(eyeH * DPR);
   }
+  placeOverlays(pip);
   S.guideDirty = true;
+}
+
+/* 배지·토스트를 당구대 밖으로 — 폰에서 글자가 천을 가리던 문제(2026-08-17 지적).
+   당구대 오른쪽에 남는 폭을 재서 거기에 앉힌다. PIP(눈높이 뷰)까지 침범하지는 않는다.
+   ⚠ 폰은 앱이 90도 돌아가 있으므로 미디어쿼리로는 못 잡는다 — 실제 잰 값으로 정해야 한다. */
+function placeOverlays(pip) {
+  var wrap = $('tableWrap');
+  var wrapW = wrap.clientWidth;
+  // pipLeft 일 때만 당구대가 왼쪽 끝에 붙는다. 아니면 가운데 정렬이라 왼쪽 여백이 생긴다.
+  var tableLeft = (pip && eyeOn) ? 0 : Math.max(0, (wrapW - view.w) / 2);
+  var ovL = tableLeft + view.w + 8;
+  var pipEdge = (pip && eyeOn) ? (wrapW - 10 - (eyeW + 10)) : wrapW;   // PIP 카드 왼쪽 끝
+  /* 당구대와 PIP 사이 빈 자리가 1순위. 그게 좁으면 PIP 위로 겹치더라도 옆으로 뺀다 —
+     눈높이 뷰를 조금 가리는 건 참을 수 있지만 천을 가리는 건 안 된다. */
+  var gapW = pipEdge - 8 - ovL, fullW = wrapW - 8 - ovL;
+  var ovW = gapW >= 74 ? gapW : fullW;
+  var use = pip && ovW >= 60;
+  wrap.classList.toggle('ovSide', use);
+  // 옆에 뺄 자리가 없는 비율이면(당구대가 폭을 꽉 채움) 납작하게 눌러 위쪽 레일에 붙인다
+  wrap.classList.toggle('ovTop', pip && !use);
+  if (use) {
+    wrap.style.setProperty('--ovL', Math.round(ovL) + 'px');
+    wrap.style.setProperty('--ovW', Math.round(ovW) + 'px');
+  }
 }
 /* ---- 세로 폰: 화면 전체를 90도 돌려 가로로 꽉 채운다 ---- */
 var rotated = false;
@@ -2064,6 +2124,35 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
     if (qs.has('obj')) { objTrackOn = true; $('swObj').classList.add('on'); }
     if (qs.has('trail')) { trailKeep = true; $('swTrail').classList.add('on'); }
     if (qs.has('fine')) setTimeout(openFine, 120);
+    if (qs.has('ovtest')) {        // 배지·토스트가 당구대를 덮지 않는지 (폰 레이아웃 회귀 점검)
+      setTimeout(function () {
+        var pb = $('pathBadge'), tt = $('toast');
+        pb.innerHTML = '<b>뒤돌리기</b> · Reverse Around · 쿠션 3 · 득점 경로';
+        pb.style.display = 'block';
+        tt.style.transition = 'none';          // 숨은 탭에서는 트랜지션이 안 돌아 시작값에 멈춘다
+        tt.querySelector('.big').textContent = '득점!';
+        tt.querySelector('.sub').textContent = '옆돌리기 (Short First) · 쿠션 3회';
+        tt.classList.add('show', 'good');
+        var R = function (id) { var b = $(id).getBoundingClientRect();
+          return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+        var ov = function (a, b) {
+          var w = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+          var h = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+          return w * h / (b.w * b.h) * 100; };
+        var t = R('table'), pOv = ov(R('pathBadge'), t), tOv = ov(R('toast'), t);
+        var side = $('tableWrap').classList.contains('ovSide');
+        /* 폰(=PIP 레이아웃)에서만 옮긴다. 큰 화면은 예전 자리가 정상.
+           옆 자리로 뺐으면 0%여야 하고, 옆이 없어 위 레일에 붙였으면 6% 아래면 통과. */
+        var isPhone = viewportW() < 900;
+        var ok = !isPhone || (side ? (pOv < 0.5 && tOv < 0.5) : (pOv < 4 && tOv < 6));
+        document.title = (ok ? 'OV-OK ' : 'OV-FAIL ') + 'badge=' + pOv.toFixed(1) +
+          '% toast=' + tOv.toFixed(1) + '% side=' + side + ' phone=' + isPhone +
+          ' vw=' + window.innerWidth + 'x' + window.innerHeight + ' rot=' + rotated +
+          ' tbl=' + Math.round(view.w) + 'x' + Math.round(view.h) +
+          ' wrap=' + $('tableWrap').clientWidth + ' ovW=' + ($('tableWrap').style.getPropertyValue('--ovW') || '-');
+      }, 260);
+      return;
+    }
     if (qs.has('finetest')) {      // 두께 지정 → 조준각 역산 → 실제 충돌 두께가 일치하는지
       var tb0 = fineTargetBall(), okAll = true, log = [];
       [0, 0.3, -0.5, 0.8].forEach(function (want) {
