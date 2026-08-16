@@ -651,7 +651,7 @@ document.addEventListener('pointerdown', ()=>{
   function _todayStr(){var d=new Date();return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');} function _dayCode(){var d=new Date();var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return m.split('').map(function(c){return(+c+1)%10;}).join('');} function _instantOK(){try{return new URLSearchParams(location.search).get('g')==='ins';}catch(e){return false;}}               // 다른 프로젝트와 동일. 바꾸면 기존 통과 기록 무효화.
   var KEY = "kiosk_daily";
   var gate = document.getElementById("gate");
-  if(localStorage.getItem(KEY) === _todayStr() || _instantOK()){ gate.remove(); startDemo(); return; }   // 부팅 즉시 데모 시연
+  if(localStorage.getItem(KEY) || _instantOK()){ gate.remove(); startDemo(); return; }   // 부팅 즉시 데모 시연
   var entry = "";
   var dots = gate.querySelectorAll(".gate-dots span");
   var msg = gate.querySelector(".gate-msg");

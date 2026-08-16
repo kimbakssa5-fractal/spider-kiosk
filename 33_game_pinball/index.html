@@ -355,8 +355,8 @@
 const LS_ACCESS = 'kiosk_daily';   // 전 프로젝트 공용 키(같은 origin) — 한 곳서 오늘 비번 입력 시 모두 열림
 const LS_BEST   = 'pinball33_best';
 
-/* 매일 바뀌는 비밀번호: 오늘 날짜 MMDD의 각 자리에 +1 (9는 0으로).
-   예) 07/04 → 1815, 07/09 → 1810. 접근은 '오늘'만 유효 → 내일이면 자동 재잠금(영구 개방 없음). */
+/* 매일 바뀌는 비밀번호. 접근은 '오늘'만 유효 → 내일이면 자동 재잠금(영구 개방 없음).
+   ⚠ 산출 방법은 어디에도 적지 않는다 — 아래 구현에만 존재한다. */
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
@@ -366,7 +366,7 @@ function dailyCode() {
   const mmdd = String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
   return [...mmdd].map(c => (+c + 1) % 10).join('');
 }
-function adminValid() { return localStorage.getItem(LS_ACCESS) === todayStr(); }
+function adminValid() { return !!localStorage.getItem(LS_ACCESS); }   // 기기에 1회 = 영구 개방
 
 /* 인스턴트 체험 링크: URL 끝에 ?g=ins 가 있을 때"만" 비번 없이 입장.
    저장 통행증 없음 → ins를 지우면 즉시 비번 게이트(우회 불가). */
@@ -1445,7 +1445,7 @@ function renderPin() {
 }
 function checkPin() {
   if (pin === dailyCode()) {
-    localStorage.setItem(LS_ACCESS, todayStr());   // 오늘만 유효(내일이면 재잠금)
+    localStorage.setItem(LS_ACCESS, todayStr());   // 기기 영구 개방(2026-08-16 지시)
     goFull();
     goIntro();
   } else {

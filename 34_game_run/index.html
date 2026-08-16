@@ -329,7 +329,7 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
   <b>스페이스</b> 시작/정지 · <b>r</b> 다시 시작 · <b>↑↓</b> 민감도 · <b>. ,</b> 카메라 투명도 · <b>d</b> 신호 계측기 &nbsp;|&nbsp; 모든 처리는 브라우저 안에서 실행됩니다(영상 미전송)
 </footer>
 
-<!-- 첫 진입 비밀번호 게이트: 웹=오늘만 유효(일일비번), exe=1회 입력 후 기기 영구 개방 -->
+<!-- 첫 진입 비밀번호 게이트: 그 기기에서 1회 입력하면 영구 개방(웹/exe 동일). 비번은 날마다 바뀐다 -->
 <div id="gate">
   <div class="gate-card">
     <div class="gate-title">비밀번호 4자리</div>
@@ -353,8 +353,9 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
   function dayCode(){ var d=new Date(); var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); return m.split('').map(function(c){ return (+c+1)%10; }).join(''); }
   function passed(){
     try{
-      if(IS_EXE) return localStorage.getItem(KEY_FOREVER)==='1';
-      return localStorage.getItem(KEY_DAILY)===todayStr();
+      // 기기에 1회 입력하면 영구 개방 — 웹/exe 구분 없음(2026-08-16 지시).
+      // 예전에 '오늘만' 로 통과한 기록(KEY_DAILY)도 그대로 인정해 다시 묻지 않는다.
+      return localStorage.getItem(KEY_FOREVER)==='1' || !!localStorage.getItem(KEY_DAILY);
     }catch(e){ return false; }
   }
   function guestOK(){ try{ return new URLSearchParams(location.search).get('g')==='ins'; }catch(e){ return false; } }
@@ -368,8 +369,8 @@ footer{ flex:0 0 auto; margin-top:8px; text-align:center; color:var(--muted); fo
     if(entry.length<4) return;
     if(entry===dayCode()){
       try{
-        if(IS_EXE) localStorage.setItem(KEY_FOREVER,'1');
-        else localStorage.setItem(KEY_DAILY,todayStr());
+        localStorage.setItem(KEY_FOREVER,'1');   // 기기 영구 개방
+        localStorage.setItem(KEY_DAILY,todayStr());
       }catch(e){}
       gate.classList.add('ok');
       try{

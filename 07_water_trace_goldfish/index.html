@@ -71,7 +71,7 @@
     function _todayStr(){var d=new Date();return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');} function _dayCode(){var d=new Date();var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return m.split('').map(function(c){return(+c+1)%10;}).join('');} function _instantOK(){try{return new URLSearchParams(location.search).get('g')==='ins';}catch(e){return false;}}               // ← 임시 비밀번호(4자리). 바꾸면 기존 체험자 무효화됨.
     var KEY = "kiosk_daily";        // 통과 기록(입력 비번 저장 → CODE 와 일치해야 통과)
     var gate = document.getElementById("gate");
-    if (localStorage.getItem(KEY) === _todayStr() || _instantOK()) { gate.remove(); return; }
+    if (localStorage.getItem(KEY) || _instantOK()) { gate.remove(); return; }
     var entry = "";
     var dots = gate.querySelectorAll(".gate-dots span");
     var msg = gate.querySelector(".gate-msg");
