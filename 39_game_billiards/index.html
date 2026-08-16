@@ -87,10 +87,39 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .abtn{width:52px;height:52px;border-radius:16px;border:none;background:var(--coral-soft);color:var(--coral);
   font-size:22px;font-weight:900;cursor:pointer;touch-action:none}
 .abtn:active{background:var(--coral);color:#fff}
+.stTable{width:100%;border-collapse:collapse;margin-top:14px}
+.stTable th{font-size:14px;color:#9a8f88;font-weight:900;text-align:left;padding:7px 10px;border-bottom:2px solid #f1e6df}
+.stTable td{font-size:15px;font-weight:700;padding:9px 10px;border-bottom:1.5px solid #f7efe9;text-align:left}
+.stTable td:first-child{color:var(--coral);font-weight:900;font-size:17px;white-space:nowrap}
+.stMap{margin-top:14px;font-size:13.5px;font-weight:700;color:#9a8f88;line-height:1.6;text-align:left}
 #strokeGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
 .spill{border:2px solid #f1e6df;background:#fffdfb;border-radius:10px;font-family:inherit;font-weight:900;
   font-size:12.5px;padding:6px 8px;cursor:pointer;white-space:nowrap;color:var(--ink)}
 .spill.on{background:var(--coral);border-color:var(--coral);color:#fff}
+.spill.help{border-style:dashed;color:#9a8f88;background:#fff}
+#strokeHelp{position:fixed;inset:0;background:rgba(58,51,48,.35);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:70}
+#strokeHelp .shCard{background:var(--card);border-radius:26px;box-shadow:0 26px 70px rgba(90,50,40,.35);
+  padding:26px 30px;max-width:min(680px,92vw);max-height:88vh;overflow:auto}
+#strokeHelp h3{font-size:22px;font-weight:900;margin-bottom:12px}
+#strokeHelp h3 em{color:var(--coral);font-style:normal}
+.shRow{display:flex;gap:12px;padding:9px 4px;border-bottom:1.5px solid #f6ede7;align-items:baseline}
+.shRow:last-of-type{border-bottom:none}
+.shRow b{flex:none;width:96px;color:var(--coral);font-size:16px}
+.shRow span{font-size:14.5px;font-weight:500;color:#6b5f58;line-height:1.5}
+.shClose{display:block;margin:14px auto 0;border:none;border-radius:999px;background:var(--coral);color:#fff;
+  font-family:inherit;font-weight:900;font-size:16px;padding:10px 44px;cursor:pointer}
+@media (max-width:1100px), (max-height:560px){
+  #strokeHelp .shCard{padding:14px 16px;border-radius:18px}
+  #strokeHelp h3{font-size:16px;margin-bottom:6px}
+  .stTable th{font-size:10px;padding:4px 6px}
+  .stTable td{font-size:11px;padding:4px 6px}
+  .stTable td:first-child{font-size:12px}
+  .shRow{padding:5px 2px;gap:8px}
+  .shRow b{width:74px;font-size:13px}
+  .shRow span{font-size:11.5px;line-height:1.35}
+  .shClose{font-size:13px;padding:7px 30px;margin-top:8px}
+}
 #angleRead{font-size:22px;font-weight:900;min-width:88px;text-align:center}
 #powerCard{flex:1;max-width:760px}
 #powerRow{display:flex;align-items:center;gap:12px;width:100%}
@@ -157,31 +186,32 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 
 /* ---------- 작은 화면(폰 가로) ---------- */
 @media (max-width:1100px), (max-height:560px){
-  #app{padding:5px 8px;gap:4px}
-  .logo{font-size:14px;padding:6px 12px;letter-spacing:0}
-  .pcard{padding:5px 12px;gap:6px;border-width:2px}
-  .pcard .dot{width:18px;height:18px}
-  .pcard .nm2{font-size:16px}
-  .pcard .sc2{font-size:18px}
-  .pcard .meta{font-size:10px}
-  .pill{padding:6px 10px;font-size:12px}
-  #dock{gap:4px}
-  .dcard{padding:4px 6px;border-radius:12px;gap:2px}
-  #spinPad{width:64px;height:64px}
+  #app{padding:2px 4px;gap:2px}
+  .logo{display:none}
+  #targetPill{display:none}
+  .pcard{padding:3px 10px;gap:5px;border-width:2px}
+  .pcard .dot{width:14px;height:14px}
+  .pcard .nm2{font-size:14px}
+  .pcard .sc2{font-size:16px}
+  .pcard .meta{font-size:9px}
+  .pill{padding:4px 9px;font-size:12px}
+  #dock{gap:3px}
+  .dcard{padding:2px 4px;border-radius:10px;gap:1px}
+  #spinPad{width:56px;height:56px}
   .dcard .lb{display:none}
-  .abtn{width:32px;height:32px;font-size:14px;border-radius:9px}
-  .pbtn{width:26px;height:26px;font-size:13px;border-radius:8px}
-  #angleRead{font-size:14px;min-width:54px}
-  #powerVal{font-size:14px;min-width:48px}
-  #power{height:12px;min-width:70px}
-  #powerRow{gap:6px}
-  #power::-webkit-slider-thumb{width:24px;height:24px;border-width:4px}
-  .spill{font-size:10.5px;padding:3px 6px;border-radius:8px}
-  #strokeGrid{gap:3px}
+  .abtn{width:28px;height:28px;font-size:13px;border-radius:8px}
+  .pbtn{width:24px;height:24px;font-size:12px;border-radius:7px}
+  #angleRead{font-size:13px;min-width:48px}
+  #powerVal{font-size:13px;min-width:44px}
+  #power{height:10px;min-width:64px}
+  #powerRow{gap:5px}
+  #power::-webkit-slider-thumb{width:22px;height:22px;border-width:4px}
+  .spill{font-size:9.5px;padding:2px 5px;border-radius:7px}
+  #strokeGrid{gap:2px}
   #strokeDesc{display:none}
   #aimCard{min-width:0}
-  #powerCard{min-width:170px}
-  #shootBtn{font-size:16px;padding:0 16px;border-radius:12px;letter-spacing:1px}
+  #powerCard{min-width:150px}
+  #shootBtn{font-size:14px;padding:0 12px;border-radius:10px;letter-spacing:1px}
   #liveBadge{font-size:13px;padding:5px 12px}
   #pathBadge{font-size:11px;padding:4px 10px}
   #settings{width:min(420px,94vw);top:60px;max-height:80vh;overflow:auto}
@@ -227,6 +257,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
         <button class="spill" data-st="jab">잽샷</button>
         <button class="spill" data-st="draw">끌어치기</button>
         <button class="spill" data-st="up">마세(업샷)</button>
+        <button class="spill help" id="strokeHelpBtn">설명 보기</button>
       </div>
       <div class="lb" id="strokeDesc">길게 밀어 세로 회전을 크게 싣는다</div>
     </div>
@@ -304,6 +335,32 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
     <button id="btnRack">공 처음 자리로</button>
     <button id="btnRestart">게임 다시 시작</button>
     <button id="btnHome">처음 화면</button>
+    <button id="btnStrokeHelp">스트로크 설명</button>
+  </div>
+</div>
+
+<!-- 스트로크 7종 설명 -->
+<div id="strokeHelp">
+  <div class="shCard">
+    <h3>스트록의 <em>7가지 종류</em></h3>
+    <table class="stTable" style="margin:0 0 12px">
+      <tr><th>종류</th><th>핵심 느낌</th><th>주요 활용 예</th></tr>
+      <tr><td>툭</td><td>가볍고 기본 타격</td><td>기본구, 자연스러운 분리</td></tr>
+      <tr><td>쓱</td><td>빠르게 관통</td><td>1적구를 이겨야 할 때, 짧아짐 방지</td></tr>
+      <tr><td>쓰윽</td><td>힘 빼고 길게 밀기</td><td>먼 거리, 정확한 두께, 접촉감 유지</td></tr>
+      <tr><td>쇽</td><td>넣었다가 빠르게 빼기</td><td>팔로우 줄이고 곡구 방지</td></tr>
+      <tr><td>톡</td><td>가볍게 목적구만</td><td>1적구가 쿠션에 붙은 배치</td></tr>
+      <tr><td>땅</td><td>강한 임팩트</td><td>때려치기, 강한 분리</td></tr>
+      <tr><td>탕</td><td>부드러운 탄력</td><td>속도와 회전을 함께 살리기</td></tr>
+    </table>
+    <div class="shRow"><b>굴려치기</b><span>큐를 부드럽게 밀어 공을 자연 회전으로 굴린다. 힘 조절이 쉬워 얇게 맞추는 배치와 섬세한 위치 플레이에 쓴다. (≈툭)</span></div>
+    <div class="shRow"><b>밀어치기</b><span>상단 당점을 길게 밀어 전진 회전을 싣는다. 1적구를 맞힌 뒤에도 앞으로 나아가 두꺼운 배치 돌파에 유리하다. (≈쓱·쓰윽)</span></div>
+    <div class="shRow"><b>포싱샷</b><span>강한 힘으로 눌러 치는 밀어치기. 충돌 후에도 힘이 살아 있어 대회전처럼 동선이 긴 공략에 쓴다. (≈땅)</span></div>
+    <div class="shRow"><b>끊어치기</b><span>임팩트 순간 큐를 세워 회전을 끊는다. 1적구에 힘을 몰아주고 내 공은 그 자리 부근에 서는 스톱성 구질. (≈톡)</span></div>
+    <div class="shRow"><b>잽샷</b><span>잽처럼 짧고 빠르게 끊어 치는 타법. 회전이 거의 실리지 않아 미세한 두께 조절과 짧은 리버스에 쓴다. (≈쇽)</span></div>
+    <div class="shRow"><b>끌어치기</b><span>하단 당점을 정확히 찍고 부드럽게 뻗어 후진 회전을 싣는다. 1적구 접촉 후 내 공이 뒤로 끌려온다(드로우). (≈탕)</span></div>
+    <div class="shRow"><b>마세(업샷)</b><span>큐를 세워 위에서 찍어 치는 타법. 옆 당점과 결합하면 공이 곡선을 그리며 휘어 나간다(커브·마세).</span></div>
+    <button class="shClose" id="strokeHelpClose">닫기</button>
   </div>
 </div>
 </div>
@@ -403,7 +460,7 @@ function chime(good) {
 document.addEventListener('pointerdown', function () { audio(); }, { capture: true });
 
 /* ================= 레이아웃 ================= */
-var FRAME = 0.115;             // 나무 프레임 폭 (m)
+var FRAME = 0.115;             // 나무 프레임 폭 (m) — 폰에서는 resize()가 얇게 줄인다
 var view = { ppm: 300, ox: 0, oy: 0, w: 0, h: 0 };
 function eyeActive() { return eyeOn; }
 /* 판정 기준은 요소 폭이 아니라 실제 뷰포트 — 독이 넘쳐 요소가 부풀어도 흔들리지 않게 */
@@ -413,6 +470,7 @@ function resize() {
   var reserve = 0;
   var vw = viewportW();
   var pip = vw < 900;                          // 폰: 옆자리 대신 당구대 위 PIP
+  FRAME = pip ? 0.06 : 0.115;                  // 폰에선 나무 프레임을 얇게 — 천이 최대한 크게
   $('eyeCol').style.display = eyeOn ? '' : 'none';
   $('eyeCol').classList.toggle('pip', pip);
   if (eyeOn) {
@@ -501,6 +559,7 @@ function newGame() {
     S.players.push({ name: S.mode === 'ai' ? '컴퓨터' : '2번 선수', ball: 1, score: 0, ai: S.mode === 'ai', inn: 0 });
   }
   S.turn = 0; S.innings = 1;
+  setStroke('push');                 // 기본 스트로크 = 밀어치기
   rack();
   buildScore();
   setPhase('aim');
@@ -674,12 +733,19 @@ S.strokeType = 'push';
 $('strokeGrid').addEventListener('click', function (e) {
   var b = e.target.closest('[data-st]');
   if (!b) return;
-  $('strokeGrid').querySelectorAll('.spill').forEach(function (x) { x.classList.remove('on'); });
-  b.classList.add('on');
-  S.strokeType = b.getAttribute('data-st');
-  $('strokeDesc').textContent = STROKES[S.strokeType].desc;
-  S.guideDirty = true;
+  setStroke(b.getAttribute('data-st'));
 });
+$('strokeHelpBtn').addEventListener('click', function () { $('strokeHelp').style.display = 'flex'; });
+$('strokeHelpClose').addEventListener('click', function () { $('strokeHelp').style.display = 'none'; });
+$('strokeHelp').addEventListener('click', function (e) { if (e.target === this) this.style.display = 'none'; });
+function setStroke(type) {
+  S.strokeType = type;
+  $('strokeGrid').querySelectorAll('.spill[data-st]').forEach(function (x) {
+    x.classList.toggle('on', x.getAttribute('data-st') === type);
+  });
+  $('strokeDesc').textContent = STROKES[type].desc;
+  S.guideDirty = true;
+}
 function isAiTurn() { return S.mode !== 'practice' && S.players.length && S.players[S.turn].ai; }
 /* 스트로크 특성을 반영한 타격 (힌트·가이드·실샷이 전부 이 함수를 공유해야 결과가 일치한다) */
 function strikeWith(ball, angle, power, tX, tY, type) {
@@ -732,15 +798,7 @@ function resolveShot() {
   var j = P.judge(S.events, cid, 3);
   var cls = classifyFromEvents(S.events, cid, S.shotDefl === undefined ? null : S.shotDefl);
   var scored = j.score;
-  var reason = '';
-  if (S.breakShot && j.first !== null && j.first !== 2) {
-    scored = false;
-    reason = '초구는 빨간 공을 먼저 맞혀야 합니다';
-  } else if (!scored) {
-    if (j.first === null) reason = '아무 공도 맞히지 못함';
-    else if (j.second === null) reason = '두 번째 공을 맞히지 못함 (쿠션 ' + j.cushions + '회)';
-    else reason = '쿠션 ' + j.cushionsBeforeSecond + '회 — 3회가 필요';
-  }
+  if (S.breakShot && j.first !== null && j.first !== 2) scored = false;   // 초구는 빨간 공 먼저
   S.breakShot = false;
 
   if (S.mode === 'practice') {
@@ -751,8 +809,7 @@ function resolveShot() {
       toast('득점!', cls.ko + ' (' + cls.en + ') · 쿠션 ' + j.cushionsBeforeSecond + '회', true);
       chime(true);
     } else {
-      S.practice.streak = 0;
-      toast('아쉽다', reason, false);
+      S.practice.streak = 0;         // 실패 문구는 띄우지 않는다 (2026-08-16 지시)
     }
     updateScoreUI();
     S.guideDirty = true;
@@ -770,8 +827,7 @@ function resolveShot() {
     S.guideDirty = true;
     setPhase('aim');                       // 득점 시 계속 친다
   } else {
-    toast('실패', reason, false, 2000);
-    chime(false);
+    chime(false);                    // 실패 문구는 띄우지 않는다 — 차임과 점수판 하이라이트로만 알림
     S.turn = 1 - S.turn;
     S.players[S.turn].inn++;
     if (S.turn === 0) S.innings++;
@@ -1534,6 +1590,7 @@ $('btnHome').addEventListener('click', function () {
   toggleSettings(); $('winOverlay').style.display = 'none';
   $('startOverlay').style.display = 'flex'; S.phase = 'start';
 });
+$('btnStrokeHelp').addEventListener('click', function () { toggleSettings(); $('strokeHelp').style.display = 'flex'; });
 
 /* ================= 단축키 ================= */
 document.addEventListener('keydown', function (e) {
@@ -1580,6 +1637,7 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
 (function () {
   var qs = new URLSearchParams(location.search);
   if (qs.has('panel')) $('settings').style.display = 'block';
+  if (qs.has('shelp')) $('strokeHelp').style.display = 'flex';
   var auto = qs.get('auto');
   if (!auto) return;
   setTimeout(function () {
