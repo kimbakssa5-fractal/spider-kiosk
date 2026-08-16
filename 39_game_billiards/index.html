@@ -33,6 +33,7 @@ body{
 /* ---------- 헤더 ---------- */
 header{display:flex;align-items:center;gap:14px;position:relative;min-height:54px}
 #targetPill{margin-left:auto}
+header.noTarget #gearBtn{margin-left:auto}   /* 연습 모드: 목표 pill 이 없어도 톱니는 오른쪽 끝 */
 /* 점수판은 좌우 요소 폭과 무관하게 화면 정중앙 고정 */
 #scoreArea{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max-content;max-width:72%}
 .logo{background:linear-gradient(135deg,#ef7a5f,var(--coral));color:#fff;font-weight:900;
@@ -353,6 +354,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 <div id="settings">
   <h3>설정</h3>
   <div class="srow"><div class="tog">조준 가이드<div class="sw on" id="swGuide"></div></div></div>
+  <div class="srow"><div class="tog">1적구 향방 고스트 <small style="font-weight:700;color:#b9aca3">(G)</small><div class="sw" id="swObj"></div></div></div>
   <div class="srow"><div class="tog">눈높이 뷰<div class="sw on" id="swEye"></div></div></div>
   <div class="srow"><div class="tog">소리<div class="sw on" id="swSound"></div></div></div>
   <div class="srow"><div class="sl"><span>쿠션 반발</span><span id="vCushE">100%</span></div><input type="range" id="rCushE" min="70" max="115" value="100"></div>
@@ -361,6 +363,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="srow"><div class="sl"><span>쿠션 마찰(회전 반응)</span><span id="vCushMu">0.16</span></div><input type="range" id="rCushMu" min="5" max="32" value="16"></div>
   <div class="setBtns">
     <button id="btnRack">공 처음 자리로</button>
+    <button id="btnUndo">공 직전 자리로</button>
     <button id="btnRestart">게임 다시 시작</button>
     <button id="btnHome">처음 화면</button>
     <button id="btnStrokeHelp">스트로크 설명</button>
@@ -409,7 +412,7 @@ var S = {
   players: [], turn: 0, breakShot: true, innings: 0,
   practice: { tries: 0, pts: 0, streak: 0, best: 0 },
   aim: { angle: 0, power: 0.45, tipX: 0, tipY: 0 },
-  events: [], trails: [[], [], []], fx: [],
+  events: [], trails: [[], [], []], fx: [], undo: null,
   guide: null, guideDirty: true,
   strokeT: 0, aiPick: null, shotTimer: 0
 };
@@ -568,6 +571,7 @@ function S2WY(py) { return (py - view.oy) / view.ppm; }
 
 /* ================= 배치·게임 시작 ================= */
 function rack() {
+  S.undo = null;
   st.balls.length = 0;
   var b0 = P.makeBall(0, st.W * 0.25, st.H / 2 - 0.1825);   // 흰
   var b1 = P.makeBall(1, st.W * 0.25, st.H / 2);            // 노랑
@@ -604,6 +608,7 @@ function buildScore() {
       '<span class="nm2">연습</span><span class="meta">성공 <b id="prPts">0</b> / 시도 <b id="prTry">0</b> · ' +
       '에버리지 <b id="prAvg">0.00</b> · 연속 <b id="prStk">0</b> · 최고 <b id="prBest">0</b></span></div>';
     $('targetPill').style.display = 'none';
+    document.querySelector('header').classList.add('noTarget');
   } else {
     for (var i = 0; i < 2; i++) {
       var p = S.players[i];
@@ -613,6 +618,7 @@ function buildScore() {
         '<span class="meta" id="inn' + i + '"></span></div>';
     }
     $('targetPill').style.display = '';
+    document.querySelector('header').classList.remove('noTarget');
     $('targetVal').textContent = S.target;
   }
   updateScoreUI();
@@ -809,7 +815,40 @@ function beginStroke() {
   S.phase = 'stroke'; S.strokeT = null;      // 첫 rAF 프레임에서 시각을 잡는다 (시계 혼용 금지)
   $('shootBtn').disabled = true;
 }
+/* 한 수 무르기 — 샷 직전 공 자리·점수·차례를 통째로 보관 */
+function snapshotBeforeShot() {
+  S.undo = {
+    balls: st.balls.map(function (b) { return { id: b.id, x: b.x, y: b.y }; }),
+    turn: S.turn, breakShot: S.breakShot, innings: S.innings,
+    scores: S.players.map(function (p) { return { score: p.score, inn: p.inn }; }),
+    practice: { tries: S.practice.tries, pts: S.practice.pts, streak: S.practice.streak, best: S.practice.best }
+  };
+}
+function undoShot() {
+  var u = S.undo;
+  if (!u || S.phase === 'rolling' || S.phase === 'stroke') return;
+  for (var i = 0; i < u.balls.length; i++) {
+    var src = u.balls[i], b = st.balls[src.id];
+    b.x = src.x; b.y = src.y;
+    b.vx = 0; b.vy = 0; b.wx = 0; b.wy = 0; b.wz = 0; b.moving = false;
+  }
+  S.turn = u.turn; S.breakShot = u.breakShot; S.innings = u.innings;
+  for (var k = 0; k < u.scores.length && k < S.players.length; k++) {
+    S.players[k].score = u.scores[k].score;
+    S.players[k].inn = u.scores[k].inn;
+  }
+  S.practice.tries = u.practice.tries; S.practice.pts = u.practice.pts;
+  S.practice.streak = u.practice.streak; S.practice.best = u.practice.best;
+  S.undo = null;
+  S.trails = [[], [], []]; S.events = []; S.fx = [];
+  $('winOverlay').style.display = 'none';
+  updateScoreUI();
+  aimAtRed();
+  S.guideDirty = true;
+  setPhase('aim');
+}
 function fireShot() {
+  snapshotBeforeShot();
   var b = st.balls[cueId()];
   /* tipX 부호 반전은 applyStrikeTo 안에서 — 화면(y-아래) ↔ 물리(z-위) 거울상 보정 */
   applyStrikeTo(b);
@@ -1096,6 +1135,7 @@ function updatePathBadge() {
 
 /* ================= 조준 가이드 ================= */
 var guideOn = true;
+var objTrackOn = false;        // 1적구 향방 고스트(쫑각 공부) — G 키 토글
 function computeGuide() {
   S.guideDirty = false;
   if (!guideOn || S.phase === 'over') { S.guide = null; return; }
@@ -1104,7 +1144,7 @@ function computeGuide() {
   var cue = sim.balls[cid];
   applyStrikeTo(cue);
   var pts = [{ x: cue.x, y: cue.y }];
-  var cush = [], ghost = null, after = [];
+  var cush = [], ghost = null, after = [], objPath = [], objRest = null;
   var ev = [], t = 0, dt = 1 / 240, hitAt = -1;
   var len = 0, lx = cue.x, ly = cue.y;
   while (t < 6) {
@@ -1133,10 +1173,17 @@ function computeGuide() {
       after.push({ x: cue.x, y: cue.y, id: cid });
       var ob = sim.balls[ghost.id];
       after.push({ x: ob.x, y: ob.y, id: ghost.id });
-      if (t - hitAt > 0.3) break;
+      // 쫑각 학습용: 1적구는 길게(멈출 때까지) 추적하고 최종 자리를 남긴다
+      if (objTrackOn) {
+        objPath.push({ x: ob.x, y: ob.y });
+        objRest = { x: ob.x, y: ob.y, id: ghost.id };
+        if (!ob.moving && t - hitAt > 0.25) break;
+        if (t - hitAt > 5) break;
+      } else if (t - hitAt > 0.3) break;
     }
   }
-  S.guide = { pts: pts, cush: cush, ghost: ghost, after: after };
+  S.guide = { pts: pts, cush: cush, ghost: ghost, after: after,
+              objPath: objTrackOn ? objPath : null, objRest: objTrackOn ? objRest : null };
 }
 
 /* ================= 렌더 ================= */
@@ -1264,6 +1311,24 @@ function drawGuide() {
   if (g.ghost) {
     ctx.beginPath(); ctx.arc(W2SX(g.ghost.x), W2SY(g.ghost.y), P.R * view.ppm, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+  // 쫑각 학습: 1적구가 굴러가는 길 + 최종 정지 자리 고스트
+  if (g.objPath && g.objPath.length > 1 && g.objRest) {
+    var oc = COLORS[g.objRest.id];
+    ctx.save();
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    for (var oi = 0; oi < g.objPath.length; oi++) {
+      var op = g.objPath[oi];
+      if (oi === 0) ctx.moveTo(W2SX(op.x), W2SY(op.y)); else ctx.lineTo(W2SX(op.x), W2SY(op.y));
+    }
+    ctx.strokeStyle = oc; ctx.globalAlpha = 0.85; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.setLineDash([]);
+    var rx = W2SX(g.objRest.x), ry = W2SY(g.objRest.y), rr = P.R * view.ppm;
+    ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2);
+    ctx.globalAlpha = 0.32; ctx.fillStyle = oc; ctx.fill();
+    ctx.globalAlpha = 0.95; ctx.strokeStyle = oc; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.restore();
   }
   // 쿠션 순번
   for (var c = 0; c < Math.min(g.cush.length, 6); c++) {
@@ -1606,6 +1671,7 @@ function bindSwitch(id, get, set) {
   });
 }
 bindSwitch('swGuide', function () { return guideOn; }, function (v) { guideOn = v; S.guideDirty = true; });
+bindSwitch('swObj', function () { return objTrackOn; }, function (v) { objTrackOn = v; S.guideDirty = true; });
 bindSwitch('swEye', function () { return eyeOn; }, function (v) {
   eyeOn = v;
   $('eyeCol').style.display = v ? '' : 'none';
@@ -1617,6 +1683,7 @@ $('rSlide').addEventListener('input', function () { P.MU_SLIDE = this.value / 10
 $('rRoll').addEventListener('input', function () { P.MU_ROLL = this.value / 1000; $('vRoll').textContent = (this.value / 1000).toFixed(3); S.guideDirty = true; });
 $('rCushMu').addEventListener('input', function () { P.MU_CUSH = this.value / 100; $('vCushMu').textContent = (this.value / 100).toFixed(2); S.guideDirty = true; });
 $('btnRack').addEventListener('click', function () { rack(); toggleSettings(); });
+$('btnUndo').addEventListener('click', function () { undoShot(); toggleSettings(); });
 $('btnRestart').addEventListener('click', function () { newGame(); toggleSettings(); });
 $('btnHome').addEventListener('click', function () {
   toggleSettings(); $('winOverlay').style.display = 'none';
@@ -1632,6 +1699,10 @@ document.addEventListener('keydown', function (e) {
     setPower((+e.key) * 10);
   } else if (e.key === '0') {
     guideOn = !guideOn; $('swGuide').classList.toggle('on', guideOn); S.guideDirty = true;
+  } else if (e.key === 'g' || e.key === 'G' || e.key === 'ㅎ') {
+    objTrackOn = !objTrackOn; $('swObj').classList.toggle('on', objTrackOn); S.guideDirty = true;
+  } else if (e.key === 'u' || e.key === 'U' || e.key === 'ㅕ') {
+    undoShot();
   } else if (e.key === 'ArrowLeft') {
     setAngle(S.aim.angle - (e.shiftKey ? 0.04 : 0.35) * Math.PI / 180);
   } else if (e.key === 'ArrowRight') {
@@ -1683,6 +1754,20 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
     if (qs.has('p')) setPower(+qs.get('p'));
     if (qs.has('tx')) S.aim.tipX = (+qs.get('tx')) / 100;
     if (qs.has('ty')) S.aim.tipY = (+qs.get('ty')) / 100;
+    if (qs.has('obj')) { objTrackOn = true; $('swObj').classList.add('on'); }
+    if (qs.has('undotest')) {                 // 무르기 검증: 샷 실행 → undo → 자리 비교
+      window.__simMode = 1;
+      var before = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      applyStrikeTo(st.balls[cueId()]);       // fireShot 대신 직접 — 스냅샷 경로도 함께 확인
+      snapshotBeforeShot();                   // (실제 fireShot 은 치기 직전 자리를 담는다)
+      var g2 = 240 * 40; S.events = [];
+      while (P.advance(st, 1 / 240, S.events) && g2-- > 0) {}
+      var moved = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      S.phase = 'aim'; undoShot();
+      var after = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      document.title = (moved !== before && after === before) ? 'UNDO-OK' : 'UNDO-FAIL';
+      return;
+    }
     if (qs.has('st') && STROKES[qs.get('st')]) {
       S.strokeType = qs.get('st');
       $('strokeGrid').querySelectorAll('.spill').forEach(function (x) {
