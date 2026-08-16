@@ -55,6 +55,10 @@ header{display:flex;align-items:center;gap:14px}
 #eyeCard{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:10px 10px 6px}
 #eyeCard .lb{font-size:13px;font-weight:700;color:#9a8f88;text-align:center;padding:4px 0 2px}
 canvas#eyeView{border-radius:14px;display:block}
+/* 작은 화면: 눈높이 뷰를 당구대 위 PIP 로 겹친다 */
+#eyeCol.pip{position:absolute;right:10px;top:10px;z-index:6}
+#eyeCol.pip #eyeCard{padding:4px;border-radius:12px;box-shadow:0 6px 20px rgba(60,40,30,.35)}
+#eyeCol.pip .lb{display:none}
 canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-action:none}
 #liveBadge{position:absolute;top:10px;left:50%;transform:translateX(-50%);
   background:rgba(255,255,255,.94);border-radius:999px;padding:8px 22px;font-weight:900;font-size:19px;
@@ -239,8 +243,6 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
     </div>
     <button id="shootBtn">샷</button>
   </div>
-</div>
-
 <div id="quitCorner"></div>
 
 <!-- 시작 화면 -->
@@ -296,6 +298,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
     <button id="btnRestart">게임 다시 시작</button>
     <button id="btnHome">처음 화면</button>
   </div>
+</div>
 </div>
 
 <script src="js/physics.js"></script>
@@ -395,17 +398,24 @@ document.addEventListener('pointerdown', function () { audio(); }, { capture: tr
 /* ================= 레이아웃 ================= */
 var FRAME = 0.115;             // 나무 프레임 폭 (m)
 var view = { ppm: 300, ox: 0, oy: 0, w: 0, h: 0 };
-function eyeActive() { return eyeOn && $('tableWrap').clientWidth >= 900; }   // 폰에선 자동 숨김
+function eyeActive() { return eyeOn; }
 function resize() {
   var wrap = $('tableWrap');
   var reserve = 0;
-  $('eyeCol').style.display = eyeActive() ? '' : 'none';
-  if (eyeActive()) {
-    eyeW = Math.max(260, Math.min(430, Math.round(wrap.clientWidth * 0.26)));
-    eyeH = Math.round(eyeW * 0.68);
+  var pip = wrap.clientWidth < 900;            // 폰: 옆자리 대신 당구대 위 PIP
+  $('eyeCol').style.display = eyeOn ? '' : 'none';
+  $('eyeCol').classList.toggle('pip', pip);
+  if (eyeOn) {
+    if (pip) {
+      eyeW = Math.max(160, Math.min(280, Math.round(wrap.clientWidth * 0.30)));
+      eyeH = Math.round(eyeW * 0.62);
+    } else {
+      eyeW = Math.max(260, Math.min(430, Math.round(wrap.clientWidth * 0.26)));
+      eyeH = Math.round(eyeW * 0.68);
+      reserve = eyeW + 20 + 14;
+    }
     eyeCv.style.width = eyeW + 'px'; eyeCv.style.height = eyeH + 'px';
     eyeCv.width = Math.round(eyeW * DPR); eyeCv.height = Math.round(eyeH * DPR);
-    reserve = eyeW + 20 + 14;
   }
   var cw = wrap.clientWidth - 8 - reserve, ch = wrap.clientHeight - 8;
   var aw = st.W + FRAME * 2, ah = st.H + FRAME * 2;
@@ -417,7 +427,40 @@ function resize() {
   view.ox = FRAME * ppm; view.oy = FRAME * ppm;
   S.guideDirty = true;
 }
-window.addEventListener('resize', resize);
+/* ---- 세로 폰: 화면 전체를 90도 돌려 가로로 꽉 채운다 ---- */
+var rotated = false;
+function fitOrientation() {
+  var pw = window.innerWidth, ph = window.innerHeight;
+  var force = /[?&]rot=1/.test(location.search);
+  var needRot = ph > pw * 1.15 && (('ontouchstart' in window) || force);
+  rotated = needRot;
+  document.body.classList.toggle('rotated', needRot);
+  var app = $('app');
+  if (needRot) {
+    app.style.position = 'fixed'; app.style.left = '0'; app.style.top = '0';
+    app.style.width = ph + 'px'; app.style.height = pw + 'px';
+    app.style.transformOrigin = 'top left';
+    app.style.transform = 'rotate(90deg) translate(0px,-' + pw + 'px)';
+  } else {
+    app.style.position = ''; app.style.left = ''; app.style.top = '';
+    app.style.width = ''; app.style.height = '';
+    app.style.transform = ''; app.style.transformOrigin = '';
+  }
+  resize();
+}
+window.addEventListener('resize', fitOrientation);
+/* 전체화면 진입 순간 가로 고정 시도 (폰) */
+document.addEventListener('fullscreenchange', function () {
+  if (document.fullscreenElement && screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(function () {});
+  }
+});
+/* 회전 상태에서도 맞는 요소-로컬 좌표 (90도 CW: x축=화면아래, y축=화면왼쪽) */
+function localXY(e, el) {
+  var r = el.getBoundingClientRect();
+  if (rotated) return { x: e.clientY - r.top, y: r.right - e.clientX };
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
 function W2SX(x) { return view.ox + x * view.ppm; }
 function W2SY(y) { return view.oy + y * view.ppm; }
 function S2WX(px) { return (px - view.ox) / view.ppm; }
@@ -521,8 +564,8 @@ cv.addEventListener('pointerdown', aimPointer);
 cv.addEventListener('pointermove', function (e) { if (e.buttons) aimPointer(e); });
 function aimPointer(e) {
   if (S.phase !== 'aim') return;
-  var r = cv.getBoundingClientRect();
-  var wx = S2WX(e.clientX - r.left), wy = S2WY(e.clientY - r.top);
+  var lp = localXY(e, cv);
+  var wx = S2WX(lp.x), wy = S2WY(lp.y);
   var c = st.balls[cueId()];
   var dx = wx - c.x, dy = wy - c.y;
   if (dx * dx + dy * dy < 1e-6) return;
@@ -594,9 +637,10 @@ function drawSpin() {
 }
 function spinFromEvent(e) {
   var r = spinCv.getBoundingClientRect();
-  var sc = r.width / 112;                              // CSS 축소(작은 화면) 보정
-  var x = (e.clientX - r.left - 56 * sc) / (44 * sc / 0.5);
-  var y = -(e.clientY - r.top - 56 * sc) / (44 * sc / 0.5);
+  var sc = Math.max(r.width, r.height) / 112;          // CSS 축소(작은 화면) 보정 — 정사각이라 회전 무관
+  var lp = localXY(e, spinCv);
+  var x = (lp.x - 56 * sc) / (44 * sc / 0.5);
+  var y = -(lp.y - 56 * sc) / (44 * sc / 0.5);
   var m = Math.hypot(x, y);
   if (m > 0.5) { x *= 0.5 / m; y *= 0.5 / m; }
   S.aim.tipX = x; S.aim.tipY = y; S.guideDirty = true; drawSpin();
@@ -1512,7 +1556,7 @@ document.addEventListener('keydown', function (e) {
 
 /* ================= 부팅 ================= */
 rack();
-resize();
+fitOrientation();
 requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); });
 
 /* ================= 자동 시연 하네스 (헤드리스 검증용) =================
