@@ -424,7 +424,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <h3>설정</h3>
   <div class="srow"><div class="tog">조준 가이드<div class="sw on" id="swGuide"></div></div></div>
   <div class="srow"><div class="tog">1적구 향방 고스트 <small style="font-weight:700;color:#b9aca3">(G)</small><div class="sw" id="swObj"></div></div></div>
-  <div class="srow"><div class="tog">궤적 남기기 <small style="font-weight:700;color:#b9aca3">(T)</small><div class="sw" id="swTrail"></div></div></div>
+  <div class="srow"><div class="tog">궤적 남기기 <small style="font-weight:700;color:#b9aca3">(T)</small><div class="sw on" id="swTrail"></div></div></div>
   <div class="srow"><div class="tog">눈높이 뷰<div class="sw on" id="swEye"></div></div></div>
   <div class="srow"><div class="tog">소리<div class="sw on" id="swSound"></div></div></div>
   <div class="srow"><div class="sl"><span>쿠션 반발</span><span id="vCushE">100%</span></div><input type="range" id="rCushE" min="70" max="115" value="100"></div>
@@ -1393,7 +1393,7 @@ function updatePathBadge() {
 /* ================= 조준 가이드 ================= */
 var guideOn = true;
 var objTrackOn = false;        // 1적구 향방 고스트(쫑각 공부) — G 키 토글
-var trailKeep = false;         // 공이 지나간 궤적 남기기 — T 키 토글
+var trailKeep = true;          // 공이 지나간 궤적 남기기 — 기본 켜짐, T 키 토글
 var trailStale = false;        // 샷이 끝난 상태 — 다음 샷을 만지는 순간 직전 궤적을 지운다
 /* 다음 샷을 위해 무언가를 조작하기 시작하면 직전 궤적을 치운다 */
 function touchForNextShot() {
