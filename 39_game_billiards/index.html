@@ -33,7 +33,9 @@ body{
 /* ---------- 헤더 ---------- */
 header{display:flex;align-items:center;gap:14px;position:relative;min-height:54px}
 #targetPill{margin-left:auto}
-header.noTarget #gearBtn{margin-left:auto}   /* 연습 모드: 목표 pill 이 없어도 톱니는 오른쪽 끝 */
+header.noTarget #undoBtn{margin-left:auto}   /* 연습 모드: 목표 pill 이 없어도 오른쪽 끝으로 */
+#undoBtn{cursor:pointer;font-size:15px;color:var(--coral)}
+#undoBtn:active{background:var(--coral-soft)}
 /* 점수판은 좌우 요소 폭과 무관하게 화면 정중앙 고정 */
 #scoreArea{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max-content;max-width:72%}
 .logo{background:linear-gradient(135deg,#ef7a5f,var(--coral));color:#fff;font-weight:900;
@@ -251,7 +253,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   #app{padding:2px 4px;gap:2px}
   header{min-height:30px}
   #scoreArea{max-width:82%}
-  #gearBtn{margin-left:auto}
+  #undoBtn{margin-left:auto;font-size:12px;padding:4px 10px}
   .logo{display:none}
   #targetPill{display:none}
   .pcard{padding:3px 10px;gap:5px;border-width:2px}
@@ -297,7 +299,8 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
     <div class="logo">쓰리쿠션 3구</div>
     <div id="scoreArea"></div>
     <div class="pill" id="targetPill"><small>목표</small><span id="targetVal">10</span>점</div>
-    <div class="pill" id="gearBtn">⚙</div>
+    <div class="pill" id="undoBtn" title="직전 배치로 (Ctrl+Z)">↶ 무르기</div>
+  <div class="pill" id="gearBtn">⚙</div>
   </header>
 
   <div id="tableWrap">
@@ -1944,6 +1947,7 @@ $('homeBtn').addEventListener('click', function () {
 });
 
 /* ================= 설정 ================= */
+$('undoBtn').addEventListener('click', undoShot);     // 폰에는 키보드가 없으니 화면 버튼으로
 $('gearBtn').addEventListener('click', toggleSettings);
 function toggleSettings() {
   var s = $('settings');
@@ -2087,6 +2091,20 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       var cleared = S.trails.every(function (t) { return t.length === 0; });
       document.title = (drew && kept && cleared) ? 'TRAILSTALE-OK'
         : ('TRAILSTALE-FAIL drew=' + drew + ' kept=' + kept + ' cleared=' + cleared);
+      return;
+    }
+    if (qs.has('undobtntest')) {              // 폰용 [무르기] 버튼이 실제로 되돌리는지
+      window.__simMode = 1;
+      var ub = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      snapshotBeforeShot();
+      applyStrikeTo(st.balls[cueId()]);
+      S.events = []; var ug = 240 * 40;
+      while (P.advance(st, 1 / 240, S.events) && ug-- > 0) {}
+      var um = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      S.phase = 'aim';
+      $('undoBtn').click();
+      var ua = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      document.title = (um !== ub && ua === ub) ? 'UNDOBTN-OK' : 'UNDOBTN-FAIL';
       return;
     }
     if (qs.has('rollundotest')) {             // 굴러가는 중 Ctrl+Z 로 즉시 되돌리는지
