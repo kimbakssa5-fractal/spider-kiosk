@@ -636,10 +636,10 @@ function S2WY(py) { return (py - view.oy) / view.ppm; }
 function rack() {
   S.undo = null;
   st.balls.length = 0;
-  // 흰 공(내 공)이 두 적구의 오른쪽에 놓이는 배치
-  var b0 = P.makeBall(0, st.W * 0.78, st.H / 2);            // 흰  — 맨 오른쪽
-  var b1 = P.makeBall(1, st.W * 0.72, st.H / 2 - 0.1825);   // 노랑 — 흰 공 왼쪽 위
-  var b2 = P.makeBall(2, st.W * 0.25, st.H / 2);            // 빨강 — 반대편
+  // 오른손잡이 배치: 노란 공을 기준으로 흰 공(내 공)을 미러링해 아래쪽(치는 사람 기준 오른쪽)에 둔다
+  var b0 = P.makeBall(0, st.W * 0.25, st.H / 2 + 0.1825);   // 흰
+  var b1 = P.makeBall(1, st.W * 0.25, st.H / 2);            // 노랑
+  var b2 = P.makeBall(2, st.W * 0.75, st.H / 2);            // 빨강
   st.balls.push(b0, b1, b2);
   S.trails = [[], [], []];
   S.breakShot = true;
