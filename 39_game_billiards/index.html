@@ -124,34 +124,40 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .spill.on{background:var(--coral);border-color:var(--coral);color:#fff}
 .spill.help{border-style:dashed;color:#9a8f88;background:#fff}
 /* ---------- 확대 미세조정(당점·두께) ---------- */
-#fineOvl{position:fixed;inset:0;background:rgba(58,51,48,.4);backdrop-filter:blur(3px);
-  display:none;align-items:center;justify-content:center;z-index:75}
-#fineOvl .fCard{background:var(--card);border-radius:28px;box-shadow:0 26px 70px rgba(90,50,40,.35);
-  padding:20px 24px;max-width:min(920px,96vw);max-height:92vh;overflow:auto}
-#fineOvl h3{font-size:21px;font-weight:900;text-align:center;margin-bottom:4px}
+/* 당구대를 가리지 않도록 화면 오른쪽에 도킹 (모달 아님 — 뒤쪽 조준 조작 그대로 가능) */
+#fineOvl{position:fixed;right:10px;top:66px;bottom:150px;
+  display:none;align-items:center;justify-content:flex-end;z-index:75;pointer-events:none}
+#fineOvl .fCard{background:var(--card);border-radius:22px;box-shadow:0 18px 50px rgba(90,50,40,.32);
+  padding:12px 14px;width:268px;max-height:100%;overflow:auto;pointer-events:auto}
+#fineOvl h3{font-size:17px;font-weight:900;text-align:center;margin-bottom:2px}
 #fineOvl h3 em{color:var(--coral);font-style:normal}
-#fineOvl .fsub{text-align:center;font-size:13px;font-weight:700;color:#9a8f88;margin-bottom:14px}
-.fRow{display:flex;gap:22px;justify-content:center;align-items:flex-start}
-.fBox{display:flex;flex-direction:column;align-items:center;gap:6px}
+#fineOvl .fsub{text-align:center;font-size:11px;font-weight:700;color:#9a8f88;margin-bottom:8px;line-height:1.35}
+.fRow{display:flex;flex-direction:column;gap:6px;justify-content:center;align-items:center}
+.fBox canvas{width:172px;height:172px}
+.fBox{display:flex;flex-direction:column;align-items:center;gap:3px}
 .fBox canvas{touch-action:none;cursor:crosshair;border-radius:50%}
 .fBox .ft{font-size:15px;font-weight:900}
-.fBox .fv{font-size:13px;font-weight:700;color:#8a7f78;min-height:18px}
+.fBox .fv{font-size:12px;font-weight:700;color:#8a7f78;min-height:16px;text-align:center;line-height:1.3}
 .fBox .fbtns{display:flex;gap:6px;margin-top:2px}
 .fBox .fbtns button{border:2px solid #f1e6df;background:#fffdfb;border-radius:10px;font-family:inherit;
   font-weight:900;font-size:13px;padding:5px 12px;cursor:pointer;color:var(--ink)}
 .fBox .fbtns button:active{background:var(--coral);border-color:var(--coral);color:#fff}
-#fineClose{display:block;margin:14px auto 0;border:none;border-radius:999px;background:var(--coral);color:#fff;
-  font-family:inherit;font-weight:900;font-size:16px;padding:10px 44px;cursor:pointer}
+#fineClose{display:block;margin:10px auto 0;border:none;border-radius:999px;background:var(--coral);color:#fff;
+  font-family:inherit;font-weight:900;font-size:14px;padding:8px 30px;cursor:pointer}
 @media (max-width:1100px), (max-height:560px){
-  #fineOvl .fCard{padding:10px 12px;border-radius:16px}
-  #fineOvl h3{font-size:15px}
-  #fineOvl .fsub{font-size:10px;margin-bottom:6px}
-  .fRow{gap:10px}
-  .fBox canvas{width:158px;height:158px}
-  .fBox .ft{font-size:12px}
-  .fBox .fv{font-size:10.5px;min-height:14px}
-  .fBox .fbtns button{font-size:10.5px;padding:3px 8px}
-  #fineClose{font-size:13px;padding:7px 28px;margin-top:8px}
+  /* 폰: 세로로 쌓으면 잘리니 두 공을 가로로 나란히 */
+  #fineOvl{right:6px;top:40px;bottom:92px}
+  #fineOvl .fCard{padding:6px 8px;border-radius:14px;width:auto;max-width:250px}
+  #fineOvl h3{font-size:11px;margin-bottom:1px}
+  #fineOvl .fsub{display:none}
+  .fRow{flex-direction:row;gap:7px;align-items:flex-start}
+  .fBox{gap:1px}
+  .fBox canvas{width:104px;height:104px}
+  .fBox .ft{font-size:9.5px}
+  .fBox .fv{font-size:8.5px;min-height:22px;line-height:1.2}
+  .fBox .fbtns{gap:2px;flex-wrap:wrap;justify-content:center}
+  .fBox .fbtns button{font-size:8.5px;padding:2px 4px;border-radius:6px}
+  #fineClose{font-size:10px;padding:4px 16px;margin-top:4px}
 }
 #strokeHelp{position:fixed;inset:0;background:rgba(58,51,48,.35);backdrop-filter:blur(3px);
   display:none;align-items:center;justify-content:center;z-index:70}
@@ -1227,6 +1233,7 @@ function drawFine() { drawBigCue(); drawBigObj(); }
 function openFine() {
   if (S.phase !== 'aim') return;
   fineOn = true; $('fineOvl').style.display = 'flex'; drawFine();
+  resize();          // 눈높이 뷰 등 다른 패널과 자리 경합 없이 다시 배치
 }
 function closeFine() { fineOn = false; $('fineOvl').style.display = 'none'; }
 $('fineBtn').addEventListener('click', function () { fineOn ? closeFine() : openFine(); });
