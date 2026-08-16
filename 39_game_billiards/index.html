@@ -1284,7 +1284,7 @@ $('fineOvl').addEventListener('click', function (e) {
 
 /* ================= 경로 명칭 판별 ================= */
 function isLongRail(r) { return r === 'top' || r === 'bottom'; }
-/* 이벤트 열에서 샷 패턴을 읽어 당구 용어로 이름 붙인다. defl=첫 공 충돌 때 꺾임각(rad, 없으면 null) */
+/* 이벤트 열에서 샷 패턴을 읽어 당구 용어로 이름 붙인다. defl=1적구 충돌 때 꺾임각(rad, 없으면 null) */
 function classifyFromEvents(events, cid, defl) {
   var first = null, second = null, rails = [], firstIdx = -1;
   var lastRail = null, lastT = -1;
@@ -1811,7 +1811,7 @@ function frame(now) {
         var vol = Math.min(1, ev.imp / (P.M * 2.5));
         if (ev.type === 'ball') {
           clack(vol); S.fx.push({ x: ev.x, y: ev.y, t: 0, dur: 0.4 });
-          // 첫 공 충돌의 꺾임각 → 샷 이름 판별(앞/뒤돌리기)에 쓴다
+          // 1적구 충돌의 꺾임각 → 샷 이름 판별(앞/뒤돌리기)에 쓴다
           if (S.shotDefl === null && (ev.a === cueId() || ev.b === cueId()) &&
               Math.hypot(pcvx, pcvy) > 0.05 && Math.hypot(cueB.vx, cueB.vy) > 0.05) {
             var da1 = Math.atan2(pcvy, pcvx), da2 = Math.atan2(cueB.vy, cueB.vx);
@@ -1833,7 +1833,7 @@ function frame(now) {
       // 진행 배지
       var q = quickTrack(S.events, cueId());
       $('liveBadge').textContent = '쿠션 ' + q.cush + '회' +
-        (q.first !== null ? ' · 첫 공 ✓' : '') + (q.second !== null ? ' · 둘째 공 ✓' : '');
+        (q.first !== null ? ' · 1적구 ✓' : '') + (q.second !== null ? ' · 2적구 ✓' : '');
       S.shotTimer += dt;
       if (!moving || S.shotTimer > 40) { S.phase = 'resolve'; setTimeout(resolveShot, 380); }
     }
