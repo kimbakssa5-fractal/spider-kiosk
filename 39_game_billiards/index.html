@@ -426,7 +426,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="srow"><div class="sl"><span>쿠션 마찰(회전 반응)</span><span id="vCushMu">0.16</span></div><input type="range" id="rCushMu" min="5" max="32" value="16"></div>
   <div class="setBtns">
     <button id="btnRack">공 처음 자리로</button>
-    <button id="btnUndo">공 직전 자리로</button>
+    <button id="btnUndo">공 직전 자리로 (Ctrl+Z)</button>
     <button id="btnRestart">게임 다시 시작</button>
     <button id="btnHome">처음 화면</button>
     <button id="btnStrokeHelp">스트로크 설명</button>
@@ -1926,6 +1926,9 @@ $('btnStrokeHelp').addEventListener('click', function () { toggleSettings(); $('
 
 /* ================= 단축키 ================= */
 document.addEventListener('keydown', function (e) {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z' || e.key === 'ㅋ')) {
+    e.preventDefault(); undoShot(); return;      // Ctrl+Z = 직전 배치로 (승리 화면에서도 동작)
+  }
   if (e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') { toggleSettings(); return; }
   if (S.phase !== 'aim') return;
   if (e.key >= '1' && e.key <= '9') {
@@ -2001,6 +2004,20 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
         log.push(want + '→' + got.toFixed(3));
       });
       document.title = (okAll ? 'FINE-OK ' : 'FINE-FAIL ') + log.join(' ');
+      return;
+    }
+    if (qs.has('ctrlztest')) {                // Ctrl+Z 단축키로 직전 배치 복원되는지
+      window.__simMode = 1;
+      var b4 = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      snapshotBeforeShot();
+      applyStrikeTo(st.balls[cueId()]);
+      var gz = 240 * 40; S.events = [];
+      while (P.advance(st, 1 / 240, S.events) && gz-- > 0) {}
+      var mv = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      S.phase = 'aim';
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      var af = st.balls.map(function (b) { return [b.x.toFixed(4), b.y.toFixed(4)].join(','); }).join('|');
+      document.title = (mv !== b4 && af === b4) ? 'CTRLZ-OK' : 'CTRLZ-FAIL';
       return;
     }
     if (qs.has('undotest')) {                 // 무르기 검증: 샷 실행 → undo → 자리 비교
