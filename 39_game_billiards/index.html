@@ -58,8 +58,30 @@ header{display:flex;align-items:center;gap:14px;position:relative;min-height:54p
 #eyeCard{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:10px 10px 6px}
 #eyeCard .lb{font-size:13px;font-weight:700;color:#9a8f88;text-align:center;padding:4px 0 2px}
 canvas#eyeView{border-radius:14px;display:block}
-/* 작은 화면: 눈높이 뷰를 당구대 위 PIP 로 겹친다 */
+/* 작은 화면: 눈높이 뷰를 PIP 로 — 당구대는 왼쪽 정렬해 가림을 피한다 */
+#tableWrap.pipLeft{justify-content:flex-start}
 #eyeCol.pip{position:absolute;right:10px;top:10px;z-index:6}
+/* 세로 회전 모드: vh/vw 는 물리 화면 기준이라 회전 박스(가로=100vh, 세로=100vw)로 다시 묶는다.
+   오버레이는 상단 정렬+스크롤 — 가운데 정렬은 큰 패널의 머리를 잘라먹는다 */
+body.rotated .ovl{align-items:flex-start;overflow:auto}
+body.rotated .panel{max-height:none;max-width:calc(100vh - 24px);margin:8px auto;padding:12px 16px}
+/* 회전 모드에선 패널을 바짝 줄여 폰 세로폭(=회전 후 세로)에 통째로 들어가게 */
+body.rotated .panel h1{font-size:21px;letter-spacing:1px}
+body.rotated .panel .edition{font-size:11px;letter-spacing:2px;margin-top:0}
+body.rotated .panel .sub{margin:3px 0 10px;font-size:11px}
+body.rotated .modeRow{gap:8px;margin-bottom:8px}
+body.rotated .mcard{width:100px;padding:5px}
+body.rotated .mcard .ic{width:58px;height:58px;font-size:30px}
+body.rotated .mcard .t{font-size:12px;margin-top:4px}
+body.rotated .mcard .d{font-size:9.5px}
+body.rotated .optRow{margin:4px 0}
+body.rotated .optRow .cap{font-size:12px}
+body.rotated .opill{font-size:12px;padding:4px 11px}
+body.rotated .bigBtn{font-size:16px;padding:8px 32px;margin-top:6px}
+body.rotated .ghostBtn{font-size:12px;padding:7px 20px;margin-top:8px}
+body.rotated #settings{max-height:calc(100vw - 90px);width:min(420px,calc(100vh - 24px));overflow:auto}
+body.rotated #strokeHelp{align-items:flex-start;overflow:auto}
+body.rotated #strokeHelp .shCard{max-height:none;max-width:calc(100vh - 24px);margin:10px auto}
 #eyeCol.pip #eyeCard{padding:4px;border-radius:12px;box-shadow:0 6px 20px rgba(60,40,30,.35)}
 #eyeCol.pip .lb{display:none}
 canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-action:none}
@@ -475,19 +497,15 @@ function resize() {
   var wrap = $('tableWrap');
   var reserve = 0;
   var vw = viewportW();
-  var pip = vw < 900;                          // 폰: 옆자리 대신 당구대 위 PIP
+  var pip = vw < 900;                          // 폰: 옆자리 대신 PIP
   FRAME = pip ? 0.06 : 0.115;                  // 폰에선 나무 프레임을 얇게 — 천이 최대한 크게
   $('eyeCol').style.display = eyeOn ? '' : 'none';
   $('eyeCol').classList.toggle('pip', pip);
-  if (eyeOn) {
-    if (pip) {
-      eyeW = Math.max(150, Math.min(260, Math.round(vw * 0.28)));
-      eyeH = Math.round(eyeW * 0.62);
-    } else {
-      eyeW = Math.max(260, Math.min(430, Math.round(vw * 0.26)));
-      eyeH = Math.round(eyeW * 0.68);
-      reserve = eyeW + 20 + 14;
-    }
+  wrap.classList.toggle('pipLeft', pip && eyeOn);   // PIP 땐 테이블 왼쪽 정렬 → 가림 최소화
+  if (eyeOn && !pip) {
+    eyeW = Math.max(260, Math.min(430, Math.round(vw * 0.26)));
+    eyeH = Math.round(eyeW * 0.68);
+    reserve = eyeW + 20 + 14;
     eyeCv.style.width = eyeW + 'px'; eyeCv.style.height = eyeH + 'px';
     eyeCv.width = Math.round(eyeW * DPR); eyeCv.height = Math.round(eyeH * DPR);
   }
@@ -499,6 +517,14 @@ function resize() {
   cv.style.width = view.w + 'px'; cv.style.height = view.h + 'px';
   cv.width = Math.round(view.w * DPR); cv.height = Math.round(view.h * DPR);
   view.ox = FRAME * ppm; view.oy = FRAME * ppm;
+  if (eyeOn && pip) {
+    // 테이블 크기가 정해진 뒤, 오른쪽 남는 여백에 맞춰 PIP 크기를 정한다 (가림 최소화)
+    var freeW = Math.min(wrap.clientWidth, vw - 16) - view.w - 14;
+    eyeW = Math.max(150, Math.min(260, Math.round(vw * 0.28), freeW > 150 ? freeW : 150));
+    eyeH = Math.round(eyeW * 0.62);
+    eyeCv.style.width = eyeW + 'px'; eyeCv.style.height = eyeH + 'px';
+    eyeCv.width = Math.round(eyeW * DPR); eyeCv.height = Math.round(eyeH * DPR);
+  }
   S.guideDirty = true;
 }
 /* ---- 세로 폰: 화면 전체를 90도 돌려 가로로 꽉 채운다 ---- */
@@ -1633,6 +1659,9 @@ document.addEventListener('keydown', function (e) {
 /* ================= 부팅 ================= */
 rack();
 fitOrientation();
+/* 인앱 브라우저·헤드리스는 로드 직후 뷰포트가 출렁인다 — 몇 번 더 맞춰 준다 */
+setTimeout(fitOrientation, 350);
+setTimeout(fitOrientation, 1200);
 requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); });
 
 /* ================= 자동 시연 하네스 (헤드리스 검증용) =================
