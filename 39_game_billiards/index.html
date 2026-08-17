@@ -197,6 +197,18 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .stTable td{font-size:15px;font-weight:700;padding:9px 10px;border-bottom:1.5px solid #f7efe9;text-align:left}
 .stTable td:first-child{color:var(--coral);font-weight:900;font-size:17px;white-space:nowrap}
 .stMap{margin-top:14px;font-size:13.5px;font-weight:700;color:#9a8f88;line-height:1.6;text-align:left}
+/* 스트로크 서랍: 평소엔 고른 것만 보이고, 누르면 위로 펼쳐진다(독이 가로로 길어지지 않게) */
+#strokeCard{position:relative}
+#strokeCurrent{display:flex;align-items:center;gap:6px;border:2px solid var(--coral);background:var(--coral);
+  color:#fff;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;padding:7px 14px;cursor:pointer}
+#strokeCurrent i{font-style:normal;font-size:11px;opacity:.9}
+#strokeDrawer{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);margin-bottom:8px;
+  background:var(--card);border-radius:18px;box-shadow:0 16px 40px rgba(90,50,40,.3);
+  padding:10px 12px;display:none;z-index:40;width:max-content;max-width:92vw}
+#strokeDrawer.open{display:block}
+#strokeDrawer .sdTitle{font-size:12px;font-weight:900;color:#b09a8c;text-align:center;margin-bottom:6px}
+#strokePush{display:flex;gap:4px;margin-top:4px}
+.spill.sm{font-size:11px;padding:4px 9px;border-radius:9px}
 #strokeGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
 .spill{border:2px solid #f1e6df;background:#fffdfb;border-radius:10px;font-family:inherit;font-weight:900;
   font-size:12.5px;padding:6px 8px;cursor:pointer;white-space:nowrap;color:var(--ink)}
@@ -269,9 +281,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 #power::-webkit-slider-thumb{-webkit-appearance:none;width:34px;height:34px;border-radius:50%;
   background:#fff;border:5px solid var(--coral);box-shadow:0 3px 10px rgba(0,0,0,.2);cursor:pointer}
 #powerVal{font-size:22px;font-weight:900;min-width:66px;text-align:right}
-#shootBtn{border:none;border-radius:22px;background:linear-gradient(135deg,#ef7a5f,var(--coral));
-  color:#fff;font-family:inherit;font-size:30px;font-weight:900;padding:0 44px;cursor:pointer;
-  box-shadow:0 10px 24px rgba(232,96,76,.4);letter-spacing:4px}
+#shootBtn{border:none;border-radius:26px;background:linear-gradient(135deg,#ef7a5f,var(--coral));
+  color:#fff;font-family:inherit;font-size:40px;font-weight:900;padding:0 62px;cursor:pointer;
+  box-shadow:0 12px 28px rgba(232,96,76,.45);letter-spacing:6px;min-width:150px}
 #shootBtn:disabled{filter:grayscale(.7);opacity:.55;cursor:default}
 #shootBtn:active:not(:disabled){transform:translateY(2px)}
 .pbtn{width:38px;height:38px;border-radius:12px;border:none;background:var(--coral-soft);color:var(--coral);
@@ -370,7 +382,12 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   #strokeDesc{display:none}
   #aimCard{min-width:0}
   #powerCard{min-width:150px}
-  #shootBtn{font-size:14px;padding:0 12px;border-radius:10px;letter-spacing:1px}
+  #shootBtn{font-size:20px;padding:0 22px;border-radius:14px;letter-spacing:2px;min-width:74px}
+  #strokeCurrent{font-size:11px;padding:4px 9px;border-radius:9px;gap:4px}
+  #strokeDrawer{padding:7px 8px;border-radius:14px}
+  #strokeDrawer .sdTitle{font-size:10px;margin-bottom:4px}
+  .spill.sm{font-size:9px;padding:2px 6px}
+  #strokePush{gap:3px;margin-top:3px}
   #liveBadge{font-size:13px;padding:5px 12px}
   #pathBadge{font-size:11px;padding:4px 10px}
   #settings{width:min(420px,94vw);top:60px;max-height:80vh;overflow:auto}
@@ -410,7 +427,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
       <button class="spill help" id="fineBtn" style="margin-top:2px">⤢ 확대 조정</button>
       <div class="lb" id="spinLb">당점 0 · 0 (두 번 눌러 초기화)</div></div>
     <div class="dcard" id="strokeCard">
-      <div class="lb" style="font-weight:900;color:#b09a8c">스트록의 7가지 종류</div>
+      <!-- 평소엔 지금 고른 스트로크만 보이고, 누르면 서랍이 열려 나머지가 나온다 -->
+<div id="strokeDrawer">
+      <div class="sdTitle">스트록의 7가지 종류</div>
       <div id="strokeGrid">
         <button class="spill" data-st="roll">굴려치기</button>
         <button class="spill on" data-st="push">밀어치기</button>
@@ -421,8 +440,17 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
         <button class="spill" data-st="up">마세(업샷)</button>
         <button class="spill help" id="strokeHelpBtn">설명 보기</button>
       </div>
+    </div>
+      <button id="strokeCurrent"><span id="strokeCurName">밀어치기</span><i>▾</i></button>
+      <div id="strokePush">
+        <button class="spill sm on" data-push="mid">보통</button>
+        <button class="spill sm" data-push="short">짧게</button>
+        <button class="spill sm" data-push="long">길게</button>
+        <button class="spill sm" data-push="thru">관통</button>
+      </div>
       <div class="lb" id="strokeDesc">길게 밀어 세로 회전을 크게 싣는다</div>
     </div>
+
     <div class="dcard" id="aimCard">
       <div class="aimRow">
         <button class="abtn" id="aimL">◀</button>
@@ -454,7 +482,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0817-2328</div>
+    <div class="buildStamp" id="buildStamp">build 0818-0007</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -1051,21 +1079,63 @@ $('strokeGrid').addEventListener('click', function (e) {
 $('strokeHelpBtn').addEventListener('click', function () { $('strokeHelp').style.display = 'flex'; });
 $('strokeHelpClose').addEventListener('click', function () { $('strokeHelp').style.display = 'none'; });
 $('strokeHelp').addEventListener('click', function (e) { if (e.target === this) this.style.display = 'none'; });
+/* 밀어치기 세분화 — 큐를 얼마나 길게 밀어 주느냐(팔로우 스루).
+   길수록 전진 회전이 더 실리고 속도도 덜 죽는다. */
+var PUSH_VARIANTS = {
+  short: { name: '짧게', tip: 0.72, v: 0.95, desc: '짧게 끊어 밀기 — 회전을 적게 주고 짧게 세운다' },
+  mid:   { name: '보통', tip: 1.00, v: 1.00, desc: '표준 밀어치기 — 세로 회전을 알맞게 싣는다' },
+  long:  { name: '길게', tip: 1.30, v: 1.05, desc: '길게 밀어 주기 — 전진 회전이 커져 맞고도 잘 따라간다' },
+  thru:  { name: '관통', tip: 1.55, v: 1.12, desc: '끝까지 관통 — 회전·속도 최대, 대회전·긴 동선용' }
+};
+S.pushVar = 'mid';
+function isPushFamily(type) { return type === 'push' || type === 'roll' || type === 'force'; }
+function setPushVar(k) {
+  if (!PUSH_VARIANTS[k]) return;
+  S.pushVar = k;
+  $('strokePush').querySelectorAll('[data-push]').forEach(function (x) {
+    x.classList.toggle('on', x.getAttribute('data-push') === k);
+  });
+  if (isPushFamily(S.strokeType)) $('strokeDesc').textContent = PUSH_VARIANTS[k].desc;
+  S.guideDirty = true;
+}
+$('strokePush').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-push]');
+  if (!b) return;
+  touchForNextShot();
+  setPushVar(b.getAttribute('data-push'));
+});
+/* 서랍 열고 닫기 */
+function openDrawer(v) {
+  $('strokeDrawer').classList.toggle('open', v);
+}
+$('strokeCurrent').addEventListener('click', function (e) {
+  e.stopPropagation();
+  openDrawer(!$('strokeDrawer').classList.contains('open'));
+});
+document.addEventListener('click', function (e) {
+  if ($('strokeDrawer').classList.contains('open') &&
+      !$('strokeDrawer').contains(e.target) && e.target !== $('strokeCurrent')) openDrawer(false);
+});
 function setStroke(type) {
   S.strokeType = type;
   $('strokeGrid').querySelectorAll('.spill[data-st]').forEach(function (x) {
     x.classList.toggle('on', x.getAttribute('data-st') === type);
   });
-  $('strokeDesc').textContent = STROKES[type].desc;
+  $('strokeCurName').textContent = STROKES[type].name;
+  $('strokePush').style.display = isPushFamily(type) ? 'flex' : 'none';   // 밀어치기 계열에서만
+  $('strokeDesc').textContent = isPushFamily(type) ? PUSH_VARIANTS[S.pushVar].desc : STROKES[type].desc;
+  openDrawer(false);                       // 고르면 서랍은 닫는다
   S.guideDirty = true;
 }
 function isAiTurn() { return S.mode !== 'practice' && S.players.length && S.players[S.turn].ai; }
 /* 스트로크 특성을 반영한 타격 (힌트·가이드·실샷이 전부 이 함수를 공유해야 결과가 일치한다) */
 function strikeWith(ball, angle, power, tX, tY, type) {
   var st2 = STROKES[type];
-  var v = speedOf(power) * st2.vMul;
+  // 밀어치기 계열이면 '미는 길이'(팔로우 스루) 단계를 곱한다
+  var pv = isPushFamily(type) ? PUSH_VARIANTS[S.pushVar] : null;
+  var v = speedOf(power) * st2.vMul * (pv ? pv.v : 1);
   var eX = tX * st2.tipXmul;
-  var eY = Math.max(-0.5, Math.min(0.5, tY * st2.tipYmul + st2.bias));
+  var eY = Math.max(-0.5, Math.min(0.5, tY * st2.tipYmul * (pv ? pv.tip : 1) + st2.bias * (pv ? pv.tip : 1)));
   P.strike(ball, angle, v, -eX, eY);
   if (st2.axial && eX) {
     // 진행축 스핀(마세): 접점 속도에 횡성분을 만들어 미끄럼 마찰이 경로를 휘게 한다
@@ -2485,6 +2555,25 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       var cleared = S.trails.every(function (t) { return t.length === 0; });
       document.title = (drew && kept && cleared) ? 'TRAILSTALE-OK'
         : ('TRAILSTALE-FAIL drew=' + drew + ' kept=' + kept + ' cleared=' + cleared);
+      return;
+    }
+    if (qs.has('drawer')) setTimeout(function () { $('strokeCurrent').click(); }, 150);
+    if (qs.has('pushtest')) {                 // 밀어치기 세기 4단계가 실제로 다르게 굴러가는지
+      window.__simMode = 1;
+      var res = [];
+      ['short', 'mid', 'long', 'thru'].forEach(function (k) {
+        var sim = P.cloneState(st), cid = cueId();
+        setPushVar(k);
+        strikeWith(sim.balls[cid], 0, 0.5, 0, 0.3, 'push');
+        var ev = [], g = 240 * 30, dist = 0, lx = sim.balls[cid].x, ly = sim.balls[cid].y;
+        while (P.advance(sim, 1 / 240, ev) && g-- > 0) {
+          dist += Math.hypot(sim.balls[cid].x - lx, sim.balls[cid].y - ly);
+          lx = sim.balls[cid].x; ly = sim.balls[cid].y;
+        }
+        res.push(k + '=' + dist.toFixed(2));
+      });
+      var d1 = +res[0].split('=')[1], d4 = +res[3].split('=')[1];
+      document.title = (d4 > d1 * 1.05 ? 'PUSH-OK ' : 'PUSH-FAIL ') + res.join(' ');
       return;
     }
     if (qs.has('fakesafe')) {                 // 아이폰 노치 흉내: 안전영역을 강제로 주입해 검증
