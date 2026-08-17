@@ -4,7 +4,9 @@
 <meta name="google" content="notranslate">
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<!-- viewport-fit=cover 를 쓰면 노치 영역까지 그리게 되어 아이폰 가로에서 양끝이 잘렸다.
+     기본값(auto)이면 iOS 가 안전영역 안쪽에만 그려 준다 — 잘림이 원천적으로 없다. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <!-- 아이폰은 풀스크린 API가 없다. '홈 화면에 추가'로 열면 이 메타들이 브라우저 UI를 통째로 없앤다. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -284,6 +286,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .panel h1{font-size:44px;font-weight:900;letter-spacing:2px}
 .panel h1 em{color:var(--coral);font-style:normal}
 .panel .edition{font-size:15px;font-weight:700;color:#c9a888;letter-spacing:4px;margin-top:2px;text-transform:uppercase}
+.panel .buildStamp{font-size:11px;font-weight:700;color:#d8ccc2;margin-top:2px;letter-spacing:1px}
 .panel .sub{color:#9a8f88;font-weight:700;margin:6px 0 24px}
 .modeRow{display:flex;gap:16px;justify-content:center;margin-bottom:22px}
 .mcard{width:168px;border-radius:22px;border:3px solid #f1e6df;background:#fffdfb;cursor:pointer;
@@ -451,6 +454,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
+    <div class="buildStamp" id="buildStamp">build 0817-2328</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -782,6 +786,25 @@ function fitOrientation() {
     if (il) app.style.paddingLeft = il + 'px';
   }
   resize();
+  clampToScreen();
+}
+/* 최후 방어선: 그리고 나서도 화면을 넘치면 그만큼 통째로 축소한다.
+   어떤 기기·브라우저에서도 "잘려서 안 보이는" 상태가 되지 않게 하는 보험. */
+function clampToScreen() {
+  var app = $('app');
+  var sw = document.documentElement.clientWidth || window.innerWidth;
+  var sh = document.documentElement.clientHeight || window.innerHeight;
+  var r = app.getBoundingClientRect();
+  var over = Math.max(r.width / sw, r.height / sh, 1);
+  var scale = over > 1.002 ? 1 / over : 1;
+  if (scale >= 0.999) { app.style.zoom = ''; return; }
+  var base = app.style.transform || '';
+  if (rotated) {
+    app.style.transform = base.replace(/\s*scale\([^)]*\)/, '') + ' scale(' + scale.toFixed(4) + ')';
+  } else {
+    app.style.transformOrigin = 'top left';
+    app.style.transform = 'scale(' + scale.toFixed(4) + ')';
+  }
 }
 window.addEventListener('resize', fitOrientation);
 window.addEventListener('orientationchange', function () { setTimeout(fitOrientation, 250); });
