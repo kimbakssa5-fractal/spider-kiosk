@@ -24,8 +24,8 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
 html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
-/* iOS 사파리는 주소창이 접혔다 펴져 100vh 가 틀린다 → 동적 뷰포트(dvh) 사용 */
-@supports (height:100dvh){ html,body{height:100dvh} }
+/* iOS 사파리 툴바는 화면을 '덮는다'. svh = 툴바가 보이는 상태의 높이 → 무슨 상태든 잘리지 않는다. */
+@supports (height:100svh){ html,body{height:100svh} }
 body{
   font-family:'Noto Sans KR','Noto Sans',system-ui,sans-serif;color:var(--ink);
   background:var(--cream);
@@ -81,7 +81,16 @@ canvas#eyeView{border-radius:14px;display:block}
 #eyeCol.pip{position:absolute;right:10px;top:10px;z-index:6}
 /* 세로로 든 폰: 앱 전체를 90도 돌려 가로로 꽉 채운다.
    크기를 vh/vw(가능하면 dvh/dvw)로 잡아 iOS 주소창이 접혔다 펴져도 스스로 따라가게 한다. */
-body.rotated #app{ position:fixed; top:0; left:0; transform-origin:0 0 }
+/* 세로로 든 폰: 앱을 90도 돌려 가로로 쓴다. 크기는 CSS 뷰포트 단위가 스스로 따라가게 두고
+   (JS 픽셀은 iOS 툴바 상태와 어긋난다), 이동은 자기 높이의 100% 라 값이 틀릴 여지가 없다. */
+body.rotated #app{
+  position:fixed; top:0; left:0;
+  width:100vh; height:100vw;
+  transform-origin:0 0; transform:rotate(90deg) translateY(-100%);
+}
+@supports (width:100svh){
+  body.rotated #app{ width:100svh; height:100svw }
+}
 /* 앱이 90도 돌아가면 노치·홈 인디케이터도 앱 기준으론 다른 변에 온다(왼←위, 위←오른쪽, 오른←아래) */
 @supports (padding:env(safe-area-inset-top)){
   body.rotated #app{
@@ -646,7 +655,8 @@ var FRAME = 0.115;             // 나무 프레임 폭 (m) — 폰에서는 resi
 var view = { ppm: 300, ox: 0, oy: 0, w: 0, h: 0 };
 function eyeActive() { return eyeOn; }
 /* 판정 기준은 요소 폭이 아니라 실제 뷰포트 — 독이 넘쳐 요소가 부풀어도 흔들리지 않게 */
-function viewportW() { return rotated ? vpH() : vpW(); }
+/* 실제로 배치된 앱 폭을 그대로 쓴다(회전 여부·툴바 상태와 무관하게 항상 정확) */
+function viewportW() { return $('app').clientWidth || (rotated ? vpH() : vpW()); }
 function resize() {
   var wrap = $('tableWrap');
   var reserve = 0;
@@ -735,18 +745,9 @@ function fitOrientation() {
   rotated = needRot;
   document.body.classList.toggle('rotated', needRot);
   var app = $('app');
-  if (needRot) {
-    // iOS 의 fixed 는 주소창이 있는 레이아웃 뷰포트 기준이라, 보이는 영역만큼 밀어 준다
-    var vv = window.visualViewport;
-    app.style.left = Math.round(vv ? vv.offsetLeft : 0) + 'px';
-    app.style.top = Math.round(vv ? vv.offsetTop : 0) + 'px';
-    app.style.width = ph + 'px';
-    app.style.height = pw + 'px';
-    app.style.transform = 'rotate(90deg) translateY(-' + pw + 'px)';
-  } else {
-    app.style.left = ''; app.style.top = '';
-    app.style.width = ''; app.style.height = ''; app.style.transform = '';
-  }
+  // 크기·회전은 CSS 가 맡는다 — 예전에 넣던 인라인 값이 남아 있으면 지운다
+  app.style.left = ''; app.style.top = '';
+  app.style.width = ''; app.style.height = ''; app.style.transform = '';
   resize();
 }
 window.addEventListener('resize', fitOrientation);
