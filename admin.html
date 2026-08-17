@@ -233,27 +233,43 @@ const firebaseConfig = {
   'use strict';
 
   // ── 관리 비밀번호 ──────────────────────────────────────
-  // 초기값. "🔑 비밀번호 변경"으로 바꾸면 localStorage 값이 우선 적용됨
-  const ADMIN_PIN = '1210';
+  // 소스에 초기 비밀번호를 두지 않는다 — 이 저장소는 공개라 그대로 읽힌다.
+  // 기기마다 처음 열 때 직접 정하고, 값은 그 브라우저 localStorage 에만 남는다.
   const PIN_KEY = 'gb_admin_pin';
   function getPin() {
-    try { return localStorage.getItem(PIN_KEY) || ADMIN_PIN; } catch (e) { return ADMIN_PIN; }
+    try { return localStorage.getItem(PIN_KEY) || ''; } catch (e) { return ''; }
+  }
+  function savePin(v) {
+    try { localStorage.setItem(PIN_KEY, v); return true; }
+    catch (e) { alert('저장 실패: ' + e.message); return false; }
   }
 
   const $ = id => document.getElementById(id);
 
   // ── 잠금 ──────────────────────────────────────────────
+  function open_() {
+    $('lock').style.display = 'none';
+    $('hdr').style.display = 'flex';
+    init();
+  }
   function unlock() {
-    if ($('pin').value === getPin()) {
-      $('lock').style.display = 'none';
-      $('hdr').style.display = 'flex';
-      init();
+    const cur = getPin();
+    const v = $('pin').value;
+    if (!cur) {                       // 이 기기 최초 1회 — 여기서 정한 값이 비밀번호가 된다
+      if (!/^\d{4,8}$/.test(v)) { $('lockMsg').textContent = '이 기기에서 쓸 비밀번호를 숫자 4~8자리로 정하세요'; return; }
+      if (!savePin(v)) return;
+      open_();
+      return;
+    }
+    if (v === cur) {
+      open_();
     } else {
       $('lockMsg').textContent = '비밀번호가 올바르지 않습니다';
       $('pin').value = '';
       $('pin').focus();
     }
   }
+  if (!getPin()) $('lockMsg').textContent = '이 기기에서 쓸 비밀번호를 숫자 4~8자리로 정하세요';
   $('btnUnlock').addEventListener('click', unlock);
   $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
 
@@ -376,7 +392,7 @@ const firebaseConfig = {
     const np2 = prompt('새 비밀번호를 한 번 더 입력하세요');
     if (np2 === null) return;
     if (np2 !== np) { alert('두 입력이 일치하지 않습니다'); return; }
-    try { localStorage.setItem(PIN_KEY, np); } catch (e) { alert('저장 실패: ' + e.message); return; }
+    if (!savePin(np)) return;
     alert('비밀번호가 변경되었습니다.\n(이 브라우저에만 적용되며, 기기마다 따로 설정됩니다)');
   });
 
