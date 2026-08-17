@@ -31,6 +31,7 @@ function kioskLike(){
          Math.abs(window.innerWidth  - screen.width)  <= 2;
 }
 function request(){
+  if(window.__autoFullscreenOff) return;      // 사용자가 '전체화면 자동 유지'를 껐다
   var el = document.documentElement;
   var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
   if(!fn) return;

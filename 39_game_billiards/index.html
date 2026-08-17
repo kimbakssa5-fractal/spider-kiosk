@@ -493,7 +493,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0818-0027</div>
+    <div class="buildStamp" id="buildStamp">build 0818-0036</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -566,6 +566,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="srow"><div class="tog">궤적 남기기 <small style="font-weight:700;color:#b9aca3">(T)</small><div class="sw on" id="swTrail"></div></div></div>
   <div class="srow"><div class="tog">시스템 눈금 <small style="font-weight:700;color:#b9aca3">(S) <b id="sysVal">끔</b></small><div class="sw" id="swSys"></div></div></div>
   <div class="srow"><div class="tog">눈높이 뷰<div class="sw on" id="swEye"></div></div></div>
+  <div class="srow"><div class="tog">전체화면 자동 유지 <small style="font-weight:700;color:#b9aca3">(F)</small><div class="sw on" id="swAutoFs"></div></div></div>
   <div class="srow"><div class="tog">소리<div class="sw on" id="swSound"></div></div></div>
   <div class="srow"><div class="sl"><span>쿠션 반발</span><span id="vCushE">100%</span></div><input type="range" id="rCushE" min="70" max="115" value="100"></div>
   <div class="srow"><div class="sl"><span>천 마찰(미끄럼)</span><span id="vSlide">0.20</span></div><input type="range" id="rSlide" min="10" max="35" value="20"></div>
@@ -1464,6 +1465,15 @@ function setOffset(tb, o) {
   var s = Math.max(-1, Math.min(1, o * 2 * P.R / L));
   setAngle(phi + Math.asin(s));
 }
+/* 당점을 시계 방향으로 읽어 준다 — "2시 방향 · 세기 60%" 처럼 */
+function tipClockText() {
+  var m = Math.hypot(S.aim.tipX, S.aim.tipY);
+  if (m < 0.04) return '한가운데(무회전)';
+  var deg = Math.atan2(S.aim.tipX, S.aim.tipY) * 180 / Math.PI;   // 12시=0, 시계방향 +
+  if (deg < 0) deg += 360;
+  var h = Math.round(deg / 30) % 12;
+  return (h === 0 ? 12 : h) + '시 방향 · 세기 ' + Math.round(m / 0.5 * 100) + '%';
+}
 function drawBigCue() {
   var c = bigCueCtx, S0 = 300, cx = S0 / 2, cy = S0 / 2, r = 128;
   c.setTransform(1, 0, 0, 1, 0, 0);
@@ -1480,18 +1490,33 @@ function drawBigCue() {
     c.beginPath(); c.arc(cx, cy, r * 0.5 * k, 0, Math.PI * 2);
     c.setLineDash([5, 6]); c.strokeStyle = 'rgba(180,165,152,.6)'; c.stroke(); c.setLineDash([]);
   });
-  c.font = '900 12px "Noto Sans KR"'; c.fillStyle = '#b3a598';
-  c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText('밀어치기', cx, cy - r * 0.78);
-  c.fillText('끌어치기', cx, cy + r * 0.78);
-  c.fillText('왼', cx - r * 0.8, cy); c.fillText('오', cx + r * 0.8, cy);
+  /* 30도 각도기 — 시계 방향 12칸. 당점을 "2시 방향"처럼 부르며 익히라고 넣는다. */
+  for (var h = 1; h <= 12; h++) {
+    var a = (h % 12) * Math.PI / 6 - Math.PI / 2;      // 12시가 위
+    var isMain = (h % 3 === 0);                        // 12·3·6·9시는 굵게
+    c.beginPath();
+    c.moveTo(cx + Math.cos(a) * r * (isMain ? 0.86 : 0.92), cy + Math.sin(a) * r * (isMain ? 0.86 : 0.92));
+    c.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+    c.strokeStyle = isMain ? 'rgba(150,132,118,.85)' : 'rgba(180,165,152,.6)';
+    c.lineWidth = isMain ? 2.5 : 1.5;
+    c.stroke();
+    c.font = '900 ' + (isMain ? 12 : 10) + 'px "Noto Sans KR"';
+    c.fillStyle = isMain ? '#9a8577' : '#c2b4a7';
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(String(h), cx + Math.cos(a) * r * 0.75, cy + Math.sin(a) * r * 0.75);
+  }
+  c.font = '900 11px "Noto Sans KR"'; c.fillStyle = '#c2b4a7';
+  c.fillText('밀어치기', cx, cy - r * 0.44);
+  c.fillText('끌어치기', cx, cy + r * 0.44);
   // 현재 당점 (tip 은 ±0.5 = 공 반지름의 절반)
   var px = cx + S.aim.tipX / 0.5 * r, py = cy - S.aim.tipY / 0.5 * r;
+  c.beginPath(); c.moveTo(cx, cy); c.lineTo(px, py);       // 중심에서 당점까지 — 방향을 눈에 보이게
+  c.strokeStyle = 'rgba(232,96,76,.55)'; c.lineWidth = 2.5; c.stroke();
   c.beginPath(); c.arc(px, py, 15, 0, Math.PI * 2);
   c.fillStyle = 'rgba(232,96,76,.9)'; c.fill();
   c.lineWidth = 4; c.strokeStyle = '#fff'; c.stroke();
-  $('bigCueVal').textContent = '가로 ' + Math.round(S.aim.tipX * 200) + ' · 세로 ' + Math.round(S.aim.tipY * 200) +
-    ' (최대 100)';
+  $('bigCueVal').textContent = tipClockText() +
+    ' · 가로 ' + Math.round(S.aim.tipX * 200) + ' 세로 ' + Math.round(S.aim.tipY * 200);
 }
 function drawBigObj() {
   var c = bigObjCtx, S0 = 300, cx = S0 / 2, cy = S0 / 2, r = 96;
@@ -2385,7 +2410,7 @@ function fsIsOn() {
 }
 function updateFsBtn() {
   var b = $('fsBtn');
-  if (!fsSupported()) { b.style.display = 'none'; return; }
+  if (!fsSupported()) { b.style.display = 'none'; $('swAutoFs').parentNode.parentNode.style.display = 'none'; return; }
   b.style.display = '';
   var narrow = (document.documentElement.clientWidth || 999) < 900;
   b.textContent = fsIsOn() ? (narrow ? '창' : '창 모드') : (narrow ? '전체' : '전체화면');
@@ -2394,9 +2419,14 @@ function updateFsBtn() {
 }
 function toggleFullscreen() {
   if (fsIsOn()) {
+    /* 버튼으로 나갈 땐 자동 복귀도 함께 꺼 준다 — 안 그러면 눌러도 곧바로 다시 들어가 못 빠져나온다 */
+    window.__autoFullscreenOff = true;
+    $('swAutoFs').classList.remove('on');
     if (window.__exitFullscreen) window.__exitFullscreen();
     else (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
   } else {
+    window.__autoFullscreenOff = false;
+    $('swAutoFs').classList.add('on');
     var el = document.documentElement;
     var fn = el.requestFullscreen || el.webkitRequestFullscreen;
     if (fn) { try { fn.call(el); } catch (e) {} }
@@ -2430,6 +2460,10 @@ bindSwitch('swTrail', function () { return trailKeep; }, function (v) {
   trailKeep = v;
   trailStale = false;
   if (!v) S.trails = [[], [], []];     // 끄면 쌓인 궤적을 지운다
+});
+bindSwitch('swAutoFs', function () { return !window.__autoFullscreenOff; }, function (v) {
+  window.__autoFullscreenOff = !v;
+  if (!v && fsIsOn()) toggleFullscreen();      // 끄면 지금 전체화면도 바로 해제
 });
 bindSwitch('swEye', function () { return eyeOn; }, function (v) {
   eyeOn = v;
