@@ -1,0 +1,18 @@
+{
+  "name": "쓰리쿠션 3구 당구 — kim joonho edition",
+  "short_name": "3구 당구",
+  "description": "실제 물리 연산으로 굴러가는 쓰리쿠션 3구 당구. 회전·쿠션·스로우까지 계산합니다.",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "landscape",
+  "background_color": "#fff8f3",
+  "theme_color": "#fff8f3",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

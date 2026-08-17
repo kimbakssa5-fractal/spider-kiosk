@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="3구 당구">
 <meta name="theme-color" content="#fff8f3">
+<link rel="manifest" href="manifest.webmanifest"><!--PWA-->
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAD/ElEQVR42u3cPW4TQRiAYWdFg6ChgiKnQKIIrlIBSm5AS5EbcIbcIAUtNyACqlSGAolTpAhVigQlXSgsRRbe2B7vrD3z7fMqBfJPCs+Tb9b2Ljt3t1cjqa3GSyA4BIfgEByCQ3AIDsEhOASHBIfgEByCQ3AIDsEhOASH4JDgEByCQ3AIDsEhOASH4BAcEhyCQ+k9yv4bzycnXtZttTs+yvjbdnL9t09MxFOSAQcWUYk0ZASu4+qsPzmwCD9CGjKMEG9ltZFtZTHDw7MDL+u2+rJ/mnFzScaxQAYW5RNJ8pFtWyGjnHKtRZNlbJBRi4+kI9PGzDA/vFtRnzhaJ5KxUd3wWH1nMTkEh+AQHIJDcAgOwSE4BIfgkOAQHBqVeDlkvCbv3s/fOP76GQ4mltwbWAkcySxaHxySiGOOTjI6PguO+DKi+oAj5+oG8wFH5nWN5AOORSv65PXv6c8wfcDxYLMmUn3AEXlszGtI8hFjeMAhOARHrkPRvz9eLr0l/M5icjzYrIZUGSPfrQzKh21Fqn9y/Pz4Yv7GveMLKzpcHK0m5u+lZFg4FrNofTAigzjmSJKR9Kz+TtIJcPpPE1VG9+eqCSyDj8g4cq3r4t/Tx/yPcUppU52Mx0+fTX/MD8cc/8to/XdRf+hhzkRvKhob8xqSfGxmc4l0jYKPz3Oua7CrV+DItrrxrmtqKjoUvbm+XHrLtj4WC3nFW2XfrdxcX94fZ6TKSF3pFc/Wca1sWT42vMW4yl5DnA0OSAWH4NCgcfR3ko7TfxyQbrnvvz7M3/jm1Sc4mFhyb0VKCsWxd3yR/Uv2/vaUxSxaH1wFEQekG5XR8Vlw9PKH3tPY6LLG5fsoenLkWtECZVTho/Rtpfu6FiujfB8VHHN0Wd0Ny3j+bTL9ieGjjgPS9dZ4wx95zZpI9QFHVx+rL3bSg7OMjXkNST7KHB6VfQh2v+SusofDtyS2lVH1H3n9eTteekt1Owsc2ZrVkCrDtjIsH7YVOeYQHBIcgqOH+jtJp8DTf+AQHIKj0p2lzFNK4RAcBf+hF3smOhxbXtGSr1GAY5vrWvjVK3BsbXXLv64Jju34qOKKN1/ZZ/Ox4tk6rpUd9Ahxlb0izAbHHIJDcAgOwaEYOHbHR/M3ftk/9SIWW+vqtK6jyaGNbyuGR0Vjo0ccD00kPmqRsfqeknNb4SPSzJi2c3d7lfqc88nJgnsPzw4sT5ksksbGmjiW+lCBpcrwbkU94FiDoeoaG+tvK/aX2CzybCtGSFQZGSaHERKSRWYclIQx0SMO+W5FcAgOCQ7BITgEh+AQHIJDcAgOwSHBITgEh+AQHIJDcAgOwSE4JDgEh+AQHIJDcAgOwSE4NID+AZaqdfkKGaUcAAAAAElFTkSuQmCC">
 <title>쓰리쿠션 3구 당구</title>
 <script src="js/fullscreen.js"></script>
@@ -2329,6 +2330,13 @@ document.addEventListener('keydown', function (e) {
     el.addEventListener(ev, function () { clearTimeout(t); });
   });
 })();
+
+/* PWA: 설치해 두면 두 번째부터는 오프라인으로도 뜬다. http(s) 에서만 등록한다(file:// 은 불가). */
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
 
 /* ================= 부팅 ================= */
 rack();
