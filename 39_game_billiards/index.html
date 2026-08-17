@@ -473,6 +473,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="srow"><div class="tog">조준 가이드<div class="sw on" id="swGuide"></div></div></div>
   <div class="srow"><div class="tog">1적구 향방 고스트 <small style="font-weight:700;color:#b9aca3">(G)</small><div class="sw" id="swObj"></div></div></div>
   <div class="srow"><div class="tog">궤적 남기기 <small style="font-weight:700;color:#b9aca3">(T)</small><div class="sw on" id="swTrail"></div></div></div>
+  <div class="srow"><div class="tog">시스템 눈금 <small style="font-weight:700;color:#b9aca3">(S) <b id="sysVal">끔</b></small><div class="sw" id="swSys"></div></div></div>
   <div class="srow"><div class="tog">눈높이 뷰<div class="sw on" id="swEye"></div></div></div>
   <div class="srow"><div class="tog">소리<div class="sw on" id="swSound"></div></div></div>
   <div class="srow"><div class="sl"><span>쿠션 반발</span><span id="vCushE">100%</span></div><input type="range" id="rCushE" min="70" max="115" value="100"></div>
@@ -1459,6 +1460,10 @@ function updatePathBadge() {
   if (cls.second !== null && cls.total >= 3) {
     txt += (S.breakShot && cls.first !== 2) ? ' · 초구는 빨간 공 먼저!' : ' · 득점 경로';
   }
+  if (sysMode) {
+    var sysTxt = systemBadgeText();
+    if (sysTxt) txt += '<br><span style="color:#2f6fd0">' + sysTxt + '</span>';
+  }
   pb.innerHTML = txt;
   pb.style.display = 'block';
 }
@@ -1522,6 +1527,148 @@ function computeGuide() {
   }
   S.guide = { pts: pts, cush: cush, ghost: ghost, after: after,
               objPath: objTrackOn ? objPath : null, objRest: objTrackOn ? objRest : null };
+}
+
+/* ================= 시스템 학습 (파이브앤하프 · 플러스) =================
+ * 레일 위 다이아에 표준(코너5) 수치를 얹고, 현재 조준으로 계산되는 식을 보여 준다.
+ *   파이브앤하프 : 수구수 − 1쿠션수 = 도착수
+ *   플러스       : 수구수 + 1쿠션수 = 도착수
+ * 이론값 옆에 물리 엔진이 실제로 굴려 본 도착 수치를 함께 띄워 눈으로 대조하게 한다.
+ */
+var sysMode = 0;               // 0=끔 1=파이브앤하프 2=플러스
+var SYS_NAMES = ['', '파이브앤하프', '플러스'];
+
+/* 레일 위 점 → 수치. rail: 'bottom'|'top'|'left'|'right' */
+function railOf(p) {
+  var e = 0.06;
+  if (p.y > st.H - e) return 'bottom';
+  if (p.y < e) return 'top';
+  if (p.x < e) return 'left';
+  if (p.x > st.W - e) return 'right';
+  return null;
+}
+/* 시스템 수치는 '치는 쪽'을 기준으로 읽는다. 왼쪽으로 보내는 배치면 좌우를 뒤집어 적용
+   (실전에서도 수구가 반대편이면 대칭으로 읽는다). */
+function sysMirror() { return Math.cos(S.aim.angle) < 0; }
+function numOnRail(rail, p, role) {
+  var tx = p.x / st.W, ty = (st.H - p.y) / st.H;      // ty: 아래=0, 위=1
+  if (sysMirror()) tx = 1 - tx;
+  if (sysMode === 1) {                                 // 파이브앤하프
+    if (rail === 'bottom') return role === 'arrive' ? 40 * tx : 10 + 40 * tx;
+    if (rail === 'top') return 50 - 40 * tx;
+    if (rail === 'left') return 50 + 40 * ty;          // 수구수 확장 60·70·80
+    if (rail === 'right') return 50 + 40 * ty;
+  } else {                                             // 플러스
+    if (rail === 'left') return 40 * ty;               // 수구수 (단쿠션, 다이아당 10)
+    if (rail === 'right') return 40 * ty;              // 도착수
+    if (rail === 'top') return 10 + 40 * tx;           // 1쿠션수 (장쿠션, 다이아당 5)
+    if (rail === 'bottom') return 10 + 40 * tx;
+  }
+  return null;
+}
+/* 수구수는 시스템이 정한 '출발 레일'에서 읽는다.
+   파이브앤하프: 아래 장쿠션(좌측 단쿠션 쪽으로 넘어가면 60·70·80 확장)
+   플러스      : 왼쪽 단쿠션 */
+function cueBallNumber() {
+  var b = st.balls[cueId()];
+  var nearShort = sysMirror() ? (b.x > st.W * 7 / 8) : (b.x < st.W / 8);
+  var sx = sysMirror() ? st.W : 0;
+  if (sysMode === 2 || nearShort) {
+    var sr = sysMirror() ? 'right' : 'left';
+    return { rail: sr, num: numOnRail(sr, { x: sx, y: b.y }, 'cue'), p: { x: sx, y: b.y } };
+  }
+  return { rail: 'bottom', num: numOnRail('bottom', { x: b.x, y: st.H }, 'cue'), p: { x: b.x, y: st.H } };
+}
+/* 이론 도착 수치를 실제 레일 좌표로 되돌린다 */
+function pointForArrival(num) {
+  if (sysMode === 1) {
+    var tx = num / 40;                                  // bottom 레일 도착 스케일
+    if (tx < 0 || tx > 1) return null;
+    if (sysMirror()) tx = 1 - tx;
+    return { x: tx * st.W, y: st.H };
+  }
+  var ty = num / 40;                                    // 플러스: 반대쪽 단쿠션
+  if (ty < 0 || ty > 1) return null;
+  return { x: sysMirror() ? 0 : st.W, y: st.H - ty * st.H };
+}
+function systemInfo() {
+  if (!sysMode) return null;
+  var cue = cueBallNumber();
+  var g = S.guide;
+  if (!g || !g.cush || !g.cush.length) return { cue: cue, first: null, why: '1쿠션을 맞히도록 조준하세요' };
+  var f = g.cush[0], fr = railOf(f);
+  // 두 시스템 모두 '1쿠션 = 맞은편 장쿠션'이 전제다. 아니면 식을 세우지 않는다.
+  if (fr !== 'top') return { cue: cue, first: null, why: '먼저 맞은 쿠션이 장쿠션(위쪽)이 아니라 적용 대상이 아닙니다' };
+  var firstNum = numOnRail('top', f, 'first');
+  var theory = sysMode === 1 ? cue.num - firstNum : cue.num + firstNum;
+  var arriveRail = sysMode === 1 ? 'bottom' : (sysMirror() ? 'left' : 'right');
+  var actual = null;
+  if (g.cush.length >= 3) {
+    var a = g.cush[2];
+    if (railOf(a) === arriveRail) actual = numOnRail(arriveRail, a, 'arrive');
+  }
+  return { cue: cue, first: { p: f, num: firstNum, rail: fr }, theory: theory, actual: actual };
+}
+/* 프레임(나무 테) 위에 다이아 수치를 적는다 — 천은 가리지 않는다 */
+function drawSystemOverlay() {
+  if (!sysMode) return;
+  var ppm = view.ppm, fo = FRAME * 0.5 * ppm;
+  ctx.font = '900 ' + Math.max(9, Math.round(ppm * 0.028)) + 'px "Noto Sans KR"';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  var i;
+  for (i = 0; i <= 8; i++) {                       // 장쿠션(위·아래) 다이아 9개
+    var x = st.W * i / 8;
+    var top = numOnRail('top', { x: x, y: 0 }, 'first');
+    var bot = numOnRail('bottom', { x: x, y: st.H }, sysMode === 1 ? 'cue' : 'first');
+    ctx.fillStyle = sysMode === 1 ? '#2f6fd0' : '#c0562f';
+    ctx.fillText(Math.round(top), W2SX(x), view.oy - fo * 0.55);
+    ctx.fillStyle = sysMode === 1 ? '#c0562f' : '#2f6fd0';
+    ctx.fillText(Math.round(bot), W2SX(x), view.oy + st.H * ppm + fo * 0.55);
+  }
+  for (i = 0; i <= 4; i++) {                       // 단쿠션(좌·우) 다이아 5개
+    var y = st.H * i / 4;
+    var lf = numOnRail('left', { x: 0, y: y }, 'cue');
+    var rt = numOnRail('right', { x: st.W, y: y }, 'arrive');
+    ctx.fillStyle = '#7a6e66';
+    ctx.fillText(Math.round(lf), view.ox - fo * 0.55, W2SY(y));
+    ctx.fillText(Math.round(rt), view.ox + st.W * ppm + fo * 0.55, W2SY(y));
+  }
+  var info = systemInfo();
+  if (!info) return;
+  // 수구 위치 표시
+  ctx.beginPath(); ctx.arc(W2SX(info.cue.p.x), W2SY(info.cue.p.y), 7, 0, Math.PI * 2);
+  ctx.fillStyle = '#2f6fd0'; ctx.fill();
+  if (info.first) {
+    ctx.beginPath(); ctx.arc(W2SX(info.first.p.x), W2SY(info.first.p.y), 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#f0a92c'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  }
+  if (info.theory !== null && info.theory !== undefined) {
+    var tp = pointForArrival(info.theory);
+    if (tp) {                                      // 이론 도착점(속 빈 원)
+      ctx.beginPath(); ctx.arc(W2SX(tp.x), W2SY(tp.y), 10, 0, Math.PI * 2);
+      ctx.strokeStyle = '#2f6fd0'; ctx.lineWidth = 3; ctx.stroke();
+    }
+  }
+  if (S.guide && S.guide.cush && S.guide.cush.length >= 3) {
+    var ap = S.guide.cush[2];                      // 실제 3쿠션 지점(채운 원)
+    ctx.beginPath(); ctx.arc(W2SX(ap.x), W2SY(ap.y), 7, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(232,96,76,.9)'; ctx.fill();
+  }
+}
+function systemBadgeText() {
+  var info = systemInfo();
+  if (!info) return '';
+  var s = SYS_NAMES[sysMode] + ' · 수구 ' + Math.round(info.cue.num);
+  if (info.first && info.first.num !== null) {
+    var th = Math.round(info.theory);
+    s += (sysMode === 1 ? ' − ' : ' + ') + Math.round(info.first.num) + ' = 도착 ' +
+         ((th < 0 || th > 40) ? th + '(표 범위 밖)' : th);
+    s += info.actual !== null ? ' · 실제 ' + Math.round(info.actual) : ' · 실제 —';
+  } else {
+    s += ' · ' + (info.why || '');
+  }
+  return s;
 }
 
 /* ================= 렌더 ================= */
@@ -1973,6 +2120,7 @@ function frame(now) {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, view.w, view.h);
     drawTable();
+    drawSystemOverlay();
     drawTrails();
     if (S.phase !== 'rolling' && S.phase !== 'resolve') drawGuide();
     for (var k = 0; k < st.balls.length; k++) drawBall(st.balls[k]);
@@ -2032,6 +2180,11 @@ function bindSwitch(id, get, set) {
 }
 bindSwitch('swGuide', function () { return guideOn; }, function (v) { guideOn = v; S.guideDirty = true; });
 bindSwitch('swObj', function () { return objTrackOn; }, function (v) { objTrackOn = v; S.guideDirty = true; });
+bindSwitch('swSys', function () { return !!sysMode; }, function (v) {
+  sysMode = v ? 1 : 0;                     // 스위치는 켬/끔, 종류 전환은 S 키
+  $('sysVal').textContent = sysMode ? SYS_NAMES[sysMode] : '끔';
+  S.guideDirty = true;
+});
 bindSwitch('swTrail', function () { return trailKeep; }, function (v) {
   trailKeep = v;
   trailStale = false;
@@ -2073,6 +2226,11 @@ document.addEventListener('keydown', function (e) {
     undoShot();
   } else if (e.key === 'z' || e.key === 'Z' || e.key === 'ㅋ') {
     fineOn ? closeFine() : openFine();
+  } else if (e.key === 's' || e.key === 'S' || e.key === 'ㄴ') {
+    sysMode = (sysMode + 1) % 3;                 // 끔 → 파이브앤하프 → 플러스
+    $('sysVal').textContent = sysMode ? SYS_NAMES[sysMode] : '끔';
+    $('swSys').classList.toggle('on', !!sysMode);
+    S.guideDirty = true;
   } else if (e.key === 't' || e.key === 'T' || e.key === 'ㅅ') {
     trailKeep = !trailKeep;
     trailStale = false;
@@ -2133,6 +2291,12 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
     if (qs.has('ty')) S.aim.tipY = (+qs.get('ty')) / 100;
     if (qs.has('obj')) { objTrackOn = true; $('swObj').classList.add('on'); }
     if (qs.has('trail')) { trailKeep = true; $('swTrail').classList.add('on'); }
+    if (qs.has('sys')) {
+      sysMode = Math.max(0, Math.min(2, +qs.get('sys') || 1));
+      $('swSys').classList.toggle('on', !!sysMode);
+      $('sysVal').textContent = sysMode ? SYS_NAMES[sysMode] : '끔';
+      S.guideDirty = true;
+    }
     if (qs.has('fine')) setTimeout(openFine, 120);
     if (qs.has('ovtest')) {        // 배지·토스트가 당구대를 덮지 않는지 (폰 레이아웃 회귀 점검)
       setTimeout(function () {
