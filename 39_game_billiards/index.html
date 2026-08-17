@@ -79,7 +79,19 @@ canvas#eyeView{border-radius:14px;display:block}
 /* 작은 화면: 눈높이 뷰를 PIP 로 — 당구대는 왼쪽 정렬해 가림을 피한다 */
 #tableWrap.pipLeft{justify-content:flex-start}
 #eyeCol.pip{position:absolute;right:10px;top:10px;z-index:6}
-/* 세로 회전 모드: vh/vw 는 물리 화면 기준이라 회전 박스(가로=100vh, 세로=100vw)로 다시 묶는다.
+/* 세로로 든 폰: 앱 전체를 90도 돌려 가로로 꽉 채운다.
+   크기를 vh/vw(가능하면 dvh/dvw)로 잡아 iOS 주소창이 접혔다 펴져도 스스로 따라가게 한다. */
+body.rotated #app{ position:fixed; top:0; left:0; transform-origin:0 0 }
+/* 앱이 90도 돌아가면 노치·홈 인디케이터도 앱 기준으론 다른 변에 온다(왼←위, 위←오른쪽, 오른←아래) */
+@supports (padding:env(safe-area-inset-top)){
+  body.rotated #app{
+    padding-left:max(2px, env(safe-area-inset-top));
+    padding-top:max(4px, env(safe-area-inset-right));
+    padding-right:max(2px, env(safe-area-inset-bottom));
+    padding-bottom:max(4px, env(safe-area-inset-left));
+  }
+}
+/* 회전 모드: vh/vw 는 물리 화면 기준이라 회전 박스(가로=100vh, 세로=100vw)로 다시 묶는다.
    오버레이는 상단 정렬+스크롤 — 가운데 정렬은 큰 패널의 머리를 잘라먹는다 */
 body.rotated .ovl{align-items:flex-start;overflow:auto}
 body.rotated .panel{max-height:none;max-width:calc(100vh - 24px);margin:8px auto;padding:12px 16px}
@@ -302,6 +314,11 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 /* ---------- 작은 화면(폰 가로) ---------- */
 @media (max-width:1100px), (max-height:560px){
   #app{padding:2px 4px;gap:1px}
+  @supports (padding:env(safe-area-inset-left)){    /* 아이폰 가로: 노치 쪽만 비켜 준다 */
+    body:not(.rotated) #app{padding-left:max(4px, env(safe-area-inset-left));
+      padding-right:max(4px, env(safe-area-inset-right));
+      padding-bottom:max(2px, env(safe-area-inset-bottom))}
+  }
   header{min-height:24px}
   /* 배지·토스트 배치는 resize() 의 ovSide/ovTop 체계가 맡는다(여기서 건드리지 않음) */
   #powerSub{display:none}
@@ -697,24 +714,38 @@ var isIOS = /iP(hone|ad|od)/.test(navigator.platform || '') ||
             (/Mac/.test(navigator.userAgent) && 'ontouchend' in document);
 var isStandalone = (window.navigator.standalone === true) ||
   (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-function vpW() { return (window.visualViewport && window.visualViewport.width) || window.innerWidth; }
-function vpH() { return (window.visualViewport && window.visualViewport.height) || window.innerHeight; }
+/* 폭은 레이아웃 뷰포트(스크롤바 제외)로, 높이는 '보이는 높이'와 레이아웃 높이 중 작은 쪽으로.
+   visualViewport 만 믿으면 값이 레이아웃보다 커서 화면 밖으로 삐져나간다(실측). */
+function vpW() {
+  var d = document.documentElement.clientWidth || window.innerWidth;
+  var v = window.visualViewport ? window.visualViewport.width : d;
+  return Math.min(d, v);
+}
+function vpH() {
+  var d = document.documentElement.clientHeight || window.innerHeight;
+  var v = window.visualViewport ? window.visualViewport.height : d;
+  return Math.min(d, v);
+}
+/* 회전 크기는 '실제로 보이는' 뷰포트(visualViewport)를 재서 넣는다.
+   iOS 는 주소창이 접혔다 펴질 때마다 이 값이 바뀌므로 그때마다 다시 부른다(아래 리스너). */
 function fitOrientation() {
-  var pw = Math.round(vpW()), ph = Math.round(vpH());
+  var pw = Math.floor(vpW()), ph = Math.floor(vpH());
   var force = /[?&]rot=1/.test(location.search);
   var needRot = ph > pw * 1.15 && (('ontouchstart' in window) || force);
   rotated = needRot;
   document.body.classList.toggle('rotated', needRot);
   var app = $('app');
   if (needRot) {
-    app.style.position = 'fixed'; app.style.left = '0'; app.style.top = '0';
-    app.style.width = ph + 'px'; app.style.height = pw + 'px';
-    app.style.transformOrigin = 'top left';
-    app.style.transform = 'rotate(90deg) translate(0px,-' + pw + 'px)';
+    // iOS 의 fixed 는 주소창이 있는 레이아웃 뷰포트 기준이라, 보이는 영역만큼 밀어 준다
+    var vv = window.visualViewport;
+    app.style.left = Math.round(vv ? vv.offsetLeft : 0) + 'px';
+    app.style.top = Math.round(vv ? vv.offsetTop : 0) + 'px';
+    app.style.width = ph + 'px';
+    app.style.height = pw + 'px';
+    app.style.transform = 'rotate(90deg) translateY(-' + pw + 'px)';
   } else {
-    app.style.position = ''; app.style.left = ''; app.style.top = '';
-    app.style.width = ''; app.style.height = '';
-    app.style.transform = ''; app.style.transformOrigin = '';
+    app.style.left = ''; app.style.top = '';
+    app.style.width = ''; app.style.height = ''; app.style.transform = '';
   }
   resize();
 }
@@ -2400,7 +2431,10 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
         var kids = [].map.call($('dock').children, function (c) {
           return (c.id || c.className).slice(0, 10) + ':' + Math.round(c.getBoundingClientRect().height);
         });
-        document.title = JSON.stringify({ vw: viewportW(), ih: window.innerHeight,
+        document.title = JSON.stringify({ rot: rotated,
+          client: [document.documentElement.clientWidth, document.documentElement.clientHeight],
+          appRect: [Math.round($('app').getBoundingClientRect().width), Math.round($('app').getBoundingClientRect().height)],
+          vw: viewportW(), ih: window.innerHeight,
           table: [view.w, view.h], wrap: [Math.round(wrap.width), Math.round(wrap.height)],
           header: Math.round(hd.height), dock: Math.round(dk.height), kids: kids });
       }, 700);
