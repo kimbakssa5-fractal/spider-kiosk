@@ -4,7 +4,14 @@
 <meta name="google" content="notranslate">
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<!-- 아이폰은 풀스크린 API가 없다. '홈 화면에 추가'로 열면 이 메타들이 브라우저 UI를 통째로 없앤다. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="3구 당구">
+<meta name="theme-color" content="#fff8f3">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAD/ElEQVR42u3cPW4TQRiAYWdFg6ChgiKnQKIIrlIBSm5AS5EbcIbcIAUtNyACqlSGAolTpAhVigQlXSgsRRbe2B7vrD3z7fMqBfJPCs+Tb9b2Ljt3t1cjqa3GSyA4BIfgEByCQ3AIDsEhOASHBIfgEByCQ3AIDsEhOASH4JDgEByCQ3AIDsEhOASH4BAcEhyCQ+k9yv4bzycnXtZttTs+yvjbdnL9t09MxFOSAQcWUYk0ZASu4+qsPzmwCD9CGjKMEG9ltZFtZTHDw7MDL+u2+rJ/mnFzScaxQAYW5RNJ8pFtWyGjnHKtRZNlbJBRi4+kI9PGzDA/vFtRnzhaJ5KxUd3wWH1nMTkEh+AQHIJDcAgOwSE4BIfgkOAQHBqVeDlkvCbv3s/fOP76GQ4mltwbWAkcySxaHxySiGOOTjI6PguO+DKi+oAj5+oG8wFH5nWN5AOORSv65PXv6c8wfcDxYLMmUn3AEXlszGtI8hFjeMAhOARHrkPRvz9eLr0l/M5icjzYrIZUGSPfrQzKh21Fqn9y/Pz4Yv7GveMLKzpcHK0m5u+lZFg4FrNofTAigzjmSJKR9Kz+TtIJcPpPE1VG9+eqCSyDj8g4cq3r4t/Tx/yPcUppU52Mx0+fTX/MD8cc/8to/XdRf+hhzkRvKhob8xqSfGxmc4l0jYKPz3Oua7CrV+DItrrxrmtqKjoUvbm+XHrLtj4WC3nFW2XfrdxcX94fZ6TKSF3pFc/Wca1sWT42vMW4yl5DnA0OSAWH4NCgcfR3ko7TfxyQbrnvvz7M3/jm1Sc4mFhyb0VKCsWxd3yR/Uv2/vaUxSxaH1wFEQekG5XR8Vlw9PKH3tPY6LLG5fsoenLkWtECZVTho/Rtpfu6FiujfB8VHHN0Wd0Ny3j+bTL9ieGjjgPS9dZ4wx95zZpI9QFHVx+rL3bSg7OMjXkNST7KHB6VfQh2v+SusofDtyS2lVH1H3n9eTteekt1Owsc2ZrVkCrDtjIsH7YVOeYQHBIcgqOH+jtJp8DTf+AQHIKj0p2lzFNK4RAcBf+hF3smOhxbXtGSr1GAY5vrWvjVK3BsbXXLv64Jju34qOKKN1/ZZ/Ox4tk6rpUd9Ahxlb0izAbHHIJDcAgOwaEYOHbHR/M3ftk/9SIWW+vqtK6jyaGNbyuGR0Vjo0ccD00kPmqRsfqeknNb4SPSzJi2c3d7lfqc88nJgnsPzw4sT5ksksbGmjiW+lCBpcrwbkU94FiDoeoaG+tvK/aX2CzybCtGSFQZGSaHERKSRWYclIQx0SMO+W5FcAgOCQ7BITgEh+AQHIJDcAgOwSHBITgEh+AQHIJDcAgOwSE4JDgEh+AQHIJDcAgOwSE4NID+AZaqdfkKGaUcAAAAAElFTkSuQmCC">
 <title>쓰리쿠션 3구 당구</title>
 <script src="js/fullscreen.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,7 +23,9 @@
   --cloth:#2e7cd6; --wood:#e3bd8b;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
-html,body{width:100%;height:100%;overflow:hidden}
+html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
+/* iOS 사파리는 주소창이 접혔다 펴져 100vh 가 틀린다 → 동적 뷰포트(dvh) 사용 */
+@supports (height:100dvh){ html,body{height:100dvh} }
 body{
   font-family:'Noto Sans KR','Noto Sans',system-ui,sans-serif;color:var(--ink);
   background:var(--cream);
@@ -29,6 +38,12 @@ body{
   background-size:260px 260px;
 }
 #app{display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:10px 14px;gap:8px}
+/* 노치·홈 인디케이터 영역을 피한다(가로 모드에서 좌우 노치가 화면을 먹는다) */
+@supports (padding:env(safe-area-inset-left)){
+  #app{padding-left:max(14px, env(safe-area-inset-left));
+       padding-right:max(14px, env(safe-area-inset-right));
+       padding-bottom:max(10px, env(safe-area-inset-bottom))}
+}
 
 /* ---------- 헤더 ---------- */
 header{display:flex;align-items:center;gap:14px;position:relative;min-height:54px}
@@ -614,7 +629,7 @@ var FRAME = 0.115;             // 나무 프레임 폭 (m) — 폰에서는 resi
 var view = { ppm: 300, ox: 0, oy: 0, w: 0, h: 0 };
 function eyeActive() { return eyeOn; }
 /* 판정 기준은 요소 폭이 아니라 실제 뷰포트 — 독이 넘쳐 요소가 부풀어도 흔들리지 않게 */
-function viewportW() { return rotated ? window.innerHeight : window.innerWidth; }
+function viewportW() { return rotated ? vpH() : vpW(); }
 function resize() {
   var wrap = $('tableWrap');
   var reserve = 0;
@@ -676,8 +691,16 @@ function placeOverlays(pip) {
 }
 /* ---- 세로 폰: 화면 전체를 90도 돌려 가로로 꽉 채운다 ---- */
 var rotated = false;
+/* iOS 는 requestFullscreen 이 없다(사파리가 막음). 대신 실제로 보이는 영역을 정확히 재서 꽉 채운다.
+   '홈 화면에 추가'로 연 경우(standalone)는 브라우저 UI 자체가 없어 그대로 전체화면이 된다. */
+var isIOS = /iP(hone|ad|od)/.test(navigator.platform || '') ||
+            (/Mac/.test(navigator.userAgent) && 'ontouchend' in document);
+var isStandalone = (window.navigator.standalone === true) ||
+  (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+function vpW() { return (window.visualViewport && window.visualViewport.width) || window.innerWidth; }
+function vpH() { return (window.visualViewport && window.visualViewport.height) || window.innerHeight; }
 function fitOrientation() {
-  var pw = window.innerWidth, ph = window.innerHeight;
+  var pw = Math.round(vpW()), ph = Math.round(vpH());
   var force = /[?&]rot=1/.test(location.search);
   var needRot = ph > pw * 1.15 && (('ontouchstart' in window) || force);
   rotated = needRot;
@@ -696,6 +719,19 @@ function fitOrientation() {
   resize();
 }
 window.addEventListener('resize', fitOrientation);
+window.addEventListener('orientationchange', function () { setTimeout(fitOrientation, 250); });
+if (window.visualViewport) {                 // iOS 주소창이 접히고 펴질 때마다 다시 맞춘다
+  window.visualViewport.addEventListener('resize', fitOrientation);
+  window.visualViewport.addEventListener('scroll', fitOrientation);
+}
+if (isIOS && !isStandalone) {
+  /* 사파리 주소창을 접어 화면을 더 쓰게 한다(가로 모드에서 효과가 크다). 안 되면 조용히 넘어간다. */
+  var iosNudge = function () {
+    try { window.scrollTo(0, 1); setTimeout(function () { window.scrollTo(0, 0); fitOrientation(); }, 60); } catch (e) {}
+  };
+  window.addEventListener('load', function () { setTimeout(iosNudge, 300); });
+  document.addEventListener('touchend', iosNudge, { once: true, passive: true });
+}
 /* 전체화면 진입 순간 가로 고정 시도 (폰) */
 document.addEventListener('fullscreenchange', function () {
   if (document.fullscreenElement && screen.orientation && screen.orientation.lock) {
