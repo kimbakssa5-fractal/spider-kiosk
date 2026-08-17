@@ -754,16 +754,19 @@ function fitOrientation() {
   var app = $('app');
   app.style.left = ''; app.style.top = '';
   app.style.width = ''; app.style.height = ''; app.style.transform = '';
+  app.style.paddingTop = ''; app.style.paddingRight = '';
+  app.style.paddingBottom = ''; app.style.paddingLeft = '';
+  /* 노치·상태바·홈바 두께를 실제로 재서 쓴다. CSS @supports/@media 조합보다 확실하다.
+     값이 0인 기기(PC·안드로이드 대부분)에서는 인라인을 비워 CSS 기본값을 그대로 둔다. */
+  var pr = $('saProbe'), cs = pr ? getComputedStyle(pr) : null;
+  var it = cs ? parseFloat(cs.paddingTop) || 0 : 0;
+  var ir = cs ? parseFloat(cs.paddingRight) || 0 : 0;
+  var ib = cs ? parseFloat(cs.paddingBottom) || 0 : 0;
+  var il = cs ? parseFloat(cs.paddingLeft) || 0 : 0;
   if (needRot) {
-    /* 안전영역을 실제로 재서 앱 상자를 확정한다.
-       (아이폰 홈 화면 앱에서 100svh 에 상태바·홈바가 포함돼 화면 밖으로 밀리던 문제) */
-    var pr = $('saProbe'), cs = pr ? getComputedStyle(pr) : null;
-    var it = cs ? parseFloat(cs.paddingTop) || 0 : 0;
-    var ir = cs ? parseFloat(cs.paddingRight) || 0 : 0;
-    var ib = cs ? parseFloat(cs.paddingBottom) || 0 : 0;
-    var il = cs ? parseFloat(cs.paddingLeft) || 0 : 0;
-    var availH = Math.floor(ph - it - ib);        // 화면 세로에서 상태바·홈바 제외 → 앱의 '가로'
-    var availW = Math.floor(pw - il - ir);        // 화면 가로에서 노치 제외      → 앱의 '세로'
+    // 회전 시엔 앱 상자 자체를 안전영역 안쪽으로 만든다
+    var availH = Math.floor(ph - it - ib);        // 화면 세로 − 상태바·홈바 → 앱의 '가로'
+    var availW = Math.floor(pw - il - ir);        // 화면 가로 − 노치        → 앱의 '세로'
     if (availH > 100 && availW > 100) {
       app.style.top = it + 'px';
       app.style.left = il + 'px';
@@ -771,6 +774,12 @@ function fitOrientation() {
       app.style.height = availW + 'px';
       app.style.transform = 'rotate(90deg) translateY(-' + availW + 'px)';
     }
+  } else if (it || ir || ib || il) {
+    // 가로로 눕힌 아이폰: 좌우 노치·아래 홈바만큼 안쪽으로 (양옆 잘림 방지)
+    if (it) app.style.paddingTop = it + 'px';
+    if (ir) app.style.paddingRight = ir + 'px';
+    if (ib) app.style.paddingBottom = ib + 'px';
+    if (il) app.style.paddingLeft = il + 'px';
   }
   resize();
 }
@@ -2455,6 +2464,15 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
         : ('TRAILSTALE-FAIL drew=' + drew + ' kept=' + kept + ' cleared=' + cleared);
       return;
     }
+    if (qs.has('fakesafe')) {                 // 아이폰 노치 흉내: 안전영역을 강제로 주입해 검증
+      var fs2 = qs.get('fakesafe').split(',');   // top,right,bottom,left
+      var pr2 = $('saProbe');
+      pr2.style.paddingTop = (+fs2[0] || 0) + 'px';
+      pr2.style.paddingRight = (+fs2[1] || 0) + 'px';
+      pr2.style.paddingBottom = (+fs2[2] || 0) + 'px';
+      pr2.style.paddingLeft = (+fs2[3] || 0) + 'px';
+      fitOrientation();
+    }
     if (qs.has('measure')) {                  // 레이아웃 실측: 테이블이 차지하는 크기
       setTimeout(function () {
         var wrap = $('tableWrap').getBoundingClientRect();
@@ -2463,9 +2481,13 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
         var kids = [].map.call($('dock').children, function (c) {
           return (c.id || c.className).slice(0, 10) + ':' + Math.round(c.getBoundingClientRect().height);
         });
+        var ar = $('app').getBoundingClientRect();
+        var cvr = $('table').getBoundingClientRect();
         document.title = JSON.stringify({ rot: rotated,
           client: [document.documentElement.clientWidth, document.documentElement.clientHeight],
-          appRect: [Math.round($('app').getBoundingClientRect().width), Math.round($('app').getBoundingClientRect().height)],
+          appRect: [Math.round(ar.width), Math.round(ar.height)],
+          appPos: [Math.round(ar.left), Math.round(ar.top)],
+          tableBox: [Math.round(cvr.left), Math.round(cvr.top), Math.round(cvr.right), Math.round(cvr.bottom)],
           vw: viewportW(), ih: window.innerHeight,
           table: [view.w, view.h], wrap: [Math.round(wrap.width), Math.round(wrap.height)],
           header: Math.round(hd.height), dock: Math.round(dk.height), kids: kids });
