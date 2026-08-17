@@ -214,6 +214,11 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   font-size:12.5px;padding:6px 8px;cursor:pointer;white-space:nowrap;color:var(--ink)}
 .spill.on{background:var(--coral);border-color:var(--coral);color:#fff}
 .spill.help{border-style:dashed;color:#9a8f88;background:#fff}
+/* 확대 조정 — 자주 쓰는 도구라 눈에 띄게(샷 버튼과 헷갈리지 않게 파란 계열) */
+#fineBtn{border:none;border-radius:12px;background:linear-gradient(135deg,#6aa6ef,#2f6fd0);color:#fff;
+  font-family:inherit;font-weight:900;font-size:14px;padding:8px 16px;cursor:pointer;margin-top:4px;
+  box-shadow:0 5px 14px rgba(47,111,208,.4);letter-spacing:.5px;white-space:nowrap}
+#fineBtn:active{transform:translateY(1px);filter:brightness(.95)}
 /* ---------- 확대 미세조정(당점·두께) ---------- */
 /* 당구대를 가리지 않도록 화면 오른쪽에 도킹 (모달 아님 — 뒤쪽 조준 조작 그대로 가능) */
 #fineOvl{position:fixed;right:10px;top:66px;bottom:150px;
@@ -356,6 +361,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   .spill{font-size:9.5px;padding:2px 4px}
   #gearBtn{font-size:14px;padding:3px 8px}
   .spill.help{font-size:8.5px;padding:2px 5px}
+  #fineBtn{font-size:10px;padding:4px 9px;border-radius:9px;margin-top:0;box-shadow:0 3px 8px rgba(47,111,208,.35)}
   #scoreArea{max-width:82%}
   #undoBtn{margin-left:auto;font-size:12px;padding:4px 10px}
   .logo{display:none}
@@ -424,7 +430,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 
   <div id="dock">
     <div class="dcard" id="spinCard"><canvas id="spinPad" width="112" height="112"></canvas>
-      <button class="spill help" id="fineBtn" style="margin-top:2px">⤢ 확대 조정</button>
+      <button id="fineBtn">⤢ 확대 조정</button>
       <div class="lb" id="spinLb">당점 0 · 0 (두 번 눌러 초기화)</div></div>
     <div class="dcard" id="strokeCard">
       <!-- 평소엔 지금 고른 스트로크만 보이고, 누르면 서랍이 열려 나머지가 나온다 -->
@@ -482,11 +488,11 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0818-0007</div>
+    <div class="buildStamp" id="buildStamp">build 0818-0014</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
-      <div class="mcard" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
-      <div class="mcard on" data-mode="pvp"><div class="ic">👥</div><div class="t">둘이 대결</div><div class="d">번갈아 치기</div></div>
+      <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
+      <div class="mcard" data-mode="pvp"><div class="ic">👥</div><div class="t">둘이 대결</div><div class="d">번갈아 치기</div></div>
       <div class="mcard" data-mode="ai"><div class="ic">🤖</div><div class="t">컴퓨터 대결</div><div class="d">AI가 수를 찾음</div></div>
     </div>
     <div class="optRow" id="diffRow" style="display:none">
@@ -607,7 +613,7 @@ var NAMES  = ['흰 공', '노란 공', '빨간 공'];
 var st = P.makeState(); st.visual = true;
 var S = {
   phase: 'start',            // start | aim | stroke | rolling | resolve | ai | over
-  mode: 'pvp', diff: 'normal', target: 10,
+  mode: 'practice', diff: 'normal', target: 10,   // 기본은 혼자 연습
   players: [], turn: 0, breakShot: true, innings: 0,
   practice: { tries: 0, pts: 0, streak: 0, best: 0 },
   aim: { angle: 0, power: 0.45, tipX: 0, tipY: 0 },
@@ -2344,6 +2350,9 @@ bindPills('modeRow', 'mode', function (v) {
 });
 bindPills('diffRow', 'diff', function (v) { S.diff = v; });
 bindPills('targetRow', 'tg', function (v) { S.target = +v; });
+/* 기본이 '혼자 연습'이므로 시작 화면의 목표 점수 줄은 처음부터 숨긴다 */
+$('targetRow').style.display = S.mode === 'practice' ? 'none' : 'flex';
+$('diffRow').style.display = S.mode === 'ai' ? 'flex' : 'none';
 $('startBtn').addEventListener('click', function () {
   $('startOverlay').style.display = 'none';
   newGame();
