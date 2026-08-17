@@ -92,15 +92,17 @@ body.rotated #app{
 @supports (width:100svh){
   body.rotated #app{ width:100svh; height:100svw }
 }
-/* 앱이 90도 돌아가면 노치·홈 인디케이터도 앱 기준으론 다른 변에 온다(왼←위, 위←오른쪽, 오른←아래) */
-@supports (padding:env(safe-area-inset-top)){
+/* 아이폰(홈 화면 앱)은 100svh 에 상태바·홈 인디케이터 영역이 포함된다 →
+   그만큼 빼고, 시작점도 안전영역 안으로 옮겨야 화면 밖으로 밀리지 않는다. */
+@supports (width:calc(100svh - env(safe-area-inset-top))){
   body.rotated #app{
-    padding-left:max(2px, env(safe-area-inset-top));
-    padding-top:max(4px, env(safe-area-inset-right));
-    padding-right:max(2px, env(safe-area-inset-bottom));
-    padding-bottom:max(4px, env(safe-area-inset-left));
+    top:env(safe-area-inset-top); left:env(safe-area-inset-left);
+    width:calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    height:calc(100svw - env(safe-area-inset-left) - env(safe-area-inset-right));
   }
 }
+/* 안전영역은 위에서 앱 상자 자체를 줄여 해결했으니, 안쪽 여백은 최소로만 준다(이중 적용 금지) */
+body.rotated #app{ padding:2px 4px }
 /* 회전 모드: vh/vw 는 물리 화면 기준이라 회전 박스(가로=100vh, 세로=100vw)로 다시 묶는다.
    오버레이는 상단 정렬+스크롤 — 가운데 정렬은 큰 패널의 머리를 잘라먹는다 */
 body.rotated .ovl{align-items:flex-start;overflow:auto}
@@ -439,6 +441,10 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
     <button id="shootBtn">샷</button>
   </div>
 <div id="quitCorner"></div>
+<!-- 안전영역(노치·상태바·홈바) 실측용 — JS 가 이 요소의 padding 을 읽어 앱 크기를 확정한다 -->
+<div id="saProbe" style="position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;
+  padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right);
+  padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left)"></div>
 
 <!-- 시작 화면 -->
 <div class="ovl" id="startOverlay">
@@ -746,9 +752,26 @@ function fitOrientation() {
   rotated = needRot;
   document.body.classList.toggle('rotated', needRot);
   var app = $('app');
-  // 크기·회전은 CSS 가 맡는다 — 예전에 넣던 인라인 값이 남아 있으면 지운다
   app.style.left = ''; app.style.top = '';
   app.style.width = ''; app.style.height = ''; app.style.transform = '';
+  if (needRot) {
+    /* 안전영역을 실제로 재서 앱 상자를 확정한다.
+       (아이폰 홈 화면 앱에서 100svh 에 상태바·홈바가 포함돼 화면 밖으로 밀리던 문제) */
+    var pr = $('saProbe'), cs = pr ? getComputedStyle(pr) : null;
+    var it = cs ? parseFloat(cs.paddingTop) || 0 : 0;
+    var ir = cs ? parseFloat(cs.paddingRight) || 0 : 0;
+    var ib = cs ? parseFloat(cs.paddingBottom) || 0 : 0;
+    var il = cs ? parseFloat(cs.paddingLeft) || 0 : 0;
+    var availH = Math.floor(ph - it - ib);        // 화면 세로에서 상태바·홈바 제외 → 앱의 '가로'
+    var availW = Math.floor(pw - il - ir);        // 화면 가로에서 노치 제외      → 앱의 '세로'
+    if (availH > 100 && availW > 100) {
+      app.style.top = it + 'px';
+      app.style.left = il + 'px';
+      app.style.width = availH + 'px';
+      app.style.height = availW + 'px';
+      app.style.transform = 'rotate(90deg) translateY(-' + availW + 'px)';
+    }
+  }
   resize();
 }
 window.addEventListener('resize', fitOrientation);
