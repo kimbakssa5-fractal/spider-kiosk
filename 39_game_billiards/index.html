@@ -53,6 +53,9 @@ header{display:flex;align-items:center;gap:14px;position:relative;min-height:54p
 #targetPill{margin-left:auto}
 header.noTarget #undoBtn{margin-left:auto}   /* 연습 모드: 목표 pill 이 없어도 오른쪽 끝으로 */
 #undoBtn{cursor:pointer;font-size:15px;color:var(--coral)}
+#fsBtn{cursor:pointer;font-size:14px;color:#7a6e66;white-space:nowrap}
+#fsBtn.on{color:var(--coral)}
+#fsBtn:active{background:var(--coral-soft)}
 #undoBtn:active{background:var(--coral-soft)}
 /* 점수판은 좌우 요소 폭과 무관하게 화면 정중앙 고정 */
 #scoreArea{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max-content;max-width:72%}
@@ -364,6 +367,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   #fineBtn{font-size:10px;padding:4px 9px;border-radius:9px;margin-top:0;box-shadow:0 3px 8px rgba(47,111,208,.35)}
   #scoreArea{max-width:82%}
   #undoBtn{margin-left:auto;font-size:12px;padding:4px 10px}
+  #fsBtn{font-size:13px;padding:3px 8px}
   .logo{display:none}
   #targetPill{display:none}
   .pcard{padding:2px 8px;gap:4px;border-width:2px}
@@ -415,6 +419,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
     <div id="scoreArea"></div>
     <div class="pill" id="targetPill"><small>목표</small><span id="targetVal">10</span>점</div>
     <div class="pill" id="undoBtn" title="직전 배치로 (Ctrl+Z)">↶ 무르기</div>
+  <div class="pill" id="fsBtn" title="전체화면 켜고 끄기 (F)">전체화면</div>
   <div class="pill" id="gearBtn">⚙</div>
   </header>
 
@@ -488,7 +493,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0818-0014</div>
+    <div class="buildStamp" id="buildStamp">build 0818-0027</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -2369,6 +2374,39 @@ $('homeBtn').addEventListener('click', function () {
 
 /* ================= 설정 ================= */
 $('undoBtn').addEventListener('click', undoShot);     // 폰에는 키보드가 없으니 화면 버튼으로
+/* 전체화면 켜고 끄기 — 키보드 없는 기기(폰·터치 키오스크)에서 Esc 를 대신한다.
+   아이폰 사파리는 이 API 자체가 없어 버튼을 숨긴다. */
+function fsSupported() {
+  var el = document.documentElement;
+  return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+}
+function fsIsOn() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+function updateFsBtn() {
+  var b = $('fsBtn');
+  if (!fsSupported()) { b.style.display = 'none'; return; }
+  b.style.display = '';
+  var narrow = (document.documentElement.clientWidth || 999) < 900;
+  b.textContent = fsIsOn() ? (narrow ? '창' : '창 모드') : (narrow ? '전체' : '전체화면');
+  b.title = fsIsOn() ? '전체화면 나가기 (F)' : '전체화면 (F)';
+  b.classList.toggle('on', fsIsOn());
+}
+function toggleFullscreen() {
+  if (fsIsOn()) {
+    if (window.__exitFullscreen) window.__exitFullscreen();
+    else (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+  } else {
+    var el = document.documentElement;
+    var fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) { try { fn.call(el); } catch (e) {} }
+  }
+  setTimeout(updateFsBtn, 200);
+}
+$('fsBtn').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', updateFsBtn);
+document.addEventListener('webkitfullscreenchange', updateFsBtn);
+updateFsBtn();
 $('gearBtn').addEventListener('click', toggleSettings);
 function toggleSettings() {
   var s = $('settings');
@@ -2417,6 +2455,7 @@ document.addEventListener('keydown', function (e) {
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z' || e.key === 'ㅋ')) {
     e.preventDefault(); undoShot(); return;      // Ctrl+Z = 직전 배치로 (승리 화면에서도 동작)
   }
+  if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') { toggleFullscreen(); return; }
   if (e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') { toggleSettings(); return; }
   if (S.phase !== 'aim') return;
   if (e.key >= '1' && e.key <= '9') {

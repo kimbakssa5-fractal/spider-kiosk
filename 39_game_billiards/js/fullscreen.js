@@ -71,6 +71,16 @@ function reenter(){
   setTimeout(function(){ if(!isFs()) on(); }, 200);   // 막혔으면 다음 입력에서
 }
 window.__enterFullscreen = reenter;
+/* 화면의 [전체화면 해제] 버튼처럼 "사용자가 스스로 나간" 경우를 알려 주는 창구.
+   이걸 부르면 Esc 로 나간 것과 똑같이 취급해 자동 복귀가 붙잡지 않는다. */
+window.__exitFullscreen = function () {
+  userExited = Date.now();
+  wanted = false;
+  var d = document;
+  var fn = d.exitFullscreen || d.webkitExitFullscreen || d.msExitFullscreen;
+  if (fn && isFs()) { try { fn.call(d); } catch (e) {} }
+};
+window.__isFullscreen = isFs;
 
 /* Esc 는 크롬이 풀스크린 해제로 먹어 버려 keydown 이 안 올 수도 있다.
    capture 로 먼저 받아 "사용자가 직접 나가려 한다"를 기록한다. */
