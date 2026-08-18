@@ -200,6 +200,13 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 #tableWrap.ovTop #toast .sub{font-size:12px;margin-top:0}
 #tableWrap.ovTop #liveBadge,
 #tableWrap.ovTop #pathBadge{top:4px;font-size:11px;padding:3px 10px}
+
+/* 경로 배지(옆돌리기 · Short First …)는 당구대 외곽선 위에 걸터앉고 왼쪽 끝에 붙인다.
+   (2026-08-19 지시) 천 한가운데를 가리지 않고, 어느 줄에 걸린 정보인지도 또렷해진다. */
+#tableWrap:not(.ovSide) #pathBadge{
+  top:var(--pbTop,10px); left:var(--pbL,6px); right:auto;
+  transform:translateY(-50%);          /* 세로 중심을 외곽선에 맞춤 */
+}
 #quitCorner{position:fixed;left:0;top:0;width:92px;height:92px;z-index:99}
 
 /* ---------- 하단 조작부 ---------- */
@@ -640,7 +647,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-0221</div>
+    <div class="buildStamp" id="buildStamp">build 0819-0227</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -995,6 +1002,12 @@ function placeOverlays(pip) {
     wrap.style.setProperty('--ovL', Math.round(ovL) + 'px');
     wrap.style.setProperty('--ovW', Math.round(ovW) + 'px');
   }
+  /* 경로 배지: 당구대 외곽선(천을 감싼 나무 테두리의 바깥 선) 높이에 중심을 맞추고,
+     가로는 그 외곽선의 왼쪽 끝에서 6px 안쪽에 둔다. */
+  /* 캔버스의 실제 자리를 offsetLeft/Top 으로 읽는다 — 데스크톱은 눈높이 뷰가 옆에 붙어
+     '가운데 정렬' 가정이 깨지고, transform 배율에도 영향받지 않는다. */
+  wrap.style.setProperty('--pbTop', Math.round(cv.offsetTop) + 'px');
+  wrap.style.setProperty('--pbL', Math.round(cv.offsetLeft + 6) + 'px');
 }
 /* ---- 세로 폰: 화면 전체를 90도 돌려 가로로 꽉 채운다 ---- */
 var rotated = false;
