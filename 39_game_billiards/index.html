@@ -44,13 +44,16 @@ body.rails #app{grid-template-columns:auto 1fr auto;
 body.rails header{grid-area:hdr}
 body.rails #tableWrap{grid-area:table;min-width:0;min-height:0}   /* 1fr 트랙이 캔버스에 밀리지 않게 */
 body.rails #dock{grid-area:dock}
-body.rails #leftRail{grid-area:left;display:flex;flex-direction:column;gap:4px;justify-content:center;align-items:stretch}
-body.rails #rightRail{grid-area:right;display:flex;flex-direction:column;gap:4px;justify-content:center;align-items:stretch}
-body.rails #leftRail .pill{justify-content:center;padding:6px 8px;font-size:11px;white-space:nowrap}
-body.rails #rightRail #shootBtn{height:100%;min-width:56px;font-size:20px;padding:0 10px;
-  writing-mode:vertical-rl;letter-spacing:6px;border-radius:16px}
-body.rails #rightRail #strokeCard{padding:4px 6px}
-body.rails #leftRail #fineBtn{margin:0;font-size:11px;padding:5px 8px}
+/* 좌우 열은 화면을 위아래로 관통한다 — 버튼이 세로로 균등하게 늘어난다 */
+body.rails #leftRail{grid-area:left;display:flex;flex-direction:column;gap:4px;align-items:stretch}
+body.rails #rightRail{grid-area:right;display:flex;flex-direction:column;gap:4px;align-items:stretch}
+body.rails #leftRail > *{flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:center}
+body.rails #rightRail > *{flex:1 1 0;min-height:0}
+body.rails #leftRail .pill{padding:4px 8px;font-size:11px;white-space:nowrap;border-radius:12px}
+body.rails #leftRail #fineBtn{margin:0;font-size:11px;padding:4px 8px;width:100%;height:100%}
+body.rails #rightRail #shootBtn{flex:2 1 0;height:auto;min-width:56px;font-size:20px;padding:0 8px;
+  writing-mode:vertical-rl;letter-spacing:8px;border-radius:16px}
+body.rails #rightRail #strokeCard{padding:4px 6px;justify-content:center}
 /* 노치·홈 인디케이터 영역을 피한다(가로 모드에서 좌우 노치가 화면을 먹는다) */
 @supports (padding:env(safe-area-inset-left)){
   #app{padding-left:max(14px, env(safe-area-inset-left));
@@ -608,7 +611,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0818-2357</div>
+    <div class="buildStamp" id="buildStamp">build 0819-0005</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -892,9 +895,8 @@ function resize() {
   var reserve = 0;
   var vw = viewportW();
   var pip = vw < 900;                          // 폰: 옆자리 대신 PIP
-  /* 좌우 세로 열 배치(손그림)는 아직 눈높이 뷰와 높이가 충돌해 보류 — ?rails=1 로만 켠다 */
-  var wantRails = /[?&]rails=1/.test(location.search);
-  if (applyRails(pip && wantRails)) {           // 폰이면 버튼을 좌우 세로 열로
+  /* 폰에서는 버튼을 화면 위아래로 관통하는 세로 열로 세운다(가운데는 전부 당구대) */
+  if (applyRails(pip)) {
     // DOM 을 옮긴 직후엔 아직 옛 크기라, 브라우저가 다시 배치한 뒤 한 번 더 잰다
     requestAnimationFrame(function () { resize(); });
   }
@@ -920,6 +922,8 @@ function resize() {
   var dockH = $('dock').offsetHeight || 0;
   var gapPx = parseFloat(getComputedStyle($('app')).rowGap) || 0;
   var ch = Math.max(80, appH - hdrH - dockH - gapPx * 2 - 8);
+  /* 높이를 못박아 캔버스↔wrap 되먹임을 끊는다(안 그러면 wrap 이 계속 부풀어 독을 밀어낸다) */
+  wrap.style.height = ch + 'px';
   var aw = st.W + FRAME * 2, ah = st.H + FRAME * 2;
   var ppm = Math.min(cw / aw, ch / ah);
   view.ppm = ppm;
