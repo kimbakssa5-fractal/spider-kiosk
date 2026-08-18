@@ -631,7 +631,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-0154</div>
+    <div class="buildStamp" id="buildStamp">build 0819-0208</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -2607,7 +2607,8 @@ function renderEye(dt) {
   c.setTransform(DPR, 0, 0, DPR, 0, 0);
   var Wp = eyeW, Hp = eyeH;
   var bg = c.createLinearGradient(0, 0, 0, Hp);
-  bg.addColorStop(0, '#f2e0ca'); bg.addColorStop(0.5, '#fbf0e2'); bg.addColorStop(1, '#eddfd0');
+  /* 중간 회색 배경 (2026-08-19 지시) — 위가 조금 어둡고 아래로 살짝 밝아진다 */
+  bg.addColorStop(0, '#6f757d'); bg.addColorStop(0.5, '#818890'); bg.addColorStop(1, '#767d85');
   c.fillStyle = bg; c.fillRect(0, 0, Wp, Hp);
 
   var cue = st.balls[cueId()];
