@@ -4,15 +4,17 @@
 <meta name="google" content="notranslate">
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
-<!-- viewport-fit=cover 를 쓰면 노치 영역까지 그리게 되어 아이폰 가로에서 양끝이 잘렸다.
-     기본값(auto)이면 iOS 가 안전영역 안쪽에만 그려 준다 — 잘림이 원천적으로 없다. -->
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<!-- viewport-fit=cover 는 반드시 있어야 한다. 이게 없으면 iOS 가 env(safe-area-inset-*) 을 전부 0 으로 준다
+     → 아래의 안전영역 계산(#saProbe·@supports·fitOrientation)이 0 을 받아 아무 일도 못 한다.
+     반면 status-bar-style=black-translucent 때문에 홈 화면 앱은 상태바·홈바 아래까지 꽉 차므로,
+     "화면은 풀블리드인데 인셋은 0" 인 상태가 되어 샷 버튼·당점 패드가 덮인다. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
 <!-- 아이폰은 풀스크린 API가 없다. '홈 화면에 추가'로 열면 이 메타들이 브라우저 UI를 통째로 없앤다. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="3구 당구">
-<meta name="theme-color" content="#fff8f3">
+<meta name="theme-color" content="#2b2e33">
 <link rel="manifest" href="manifest.webmanifest"><!--PWA-->
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAD/ElEQVR42u3cPW4TQRiAYWdFg6ChgiKnQKIIrlIBSm5AS5EbcIbcIAUtNyACqlSGAolTpAhVigQlXSgsRRbe2B7vrD3z7fMqBfJPCs+Tb9b2Ljt3t1cjqa3GSyA4BIfgEByCQ3AIDsEhOASHBIfgEByCQ3AIDsEhOASH4JDgEByCQ3AIDsEhOASH4BAcEhyCQ+k9yv4bzycnXtZttTs+yvjbdnL9t09MxFOSAQcWUYk0ZASu4+qsPzmwCD9CGjKMEG9ltZFtZTHDw7MDL+u2+rJ/mnFzScaxQAYW5RNJ8pFtWyGjnHKtRZNlbJBRi4+kI9PGzDA/vFtRnzhaJ5KxUd3wWH1nMTkEh+AQHIJDcAgOwSE4BIfgkOAQHBqVeDlkvCbv3s/fOP76GQ4mltwbWAkcySxaHxySiGOOTjI6PguO+DKi+oAj5+oG8wFH5nWN5AOORSv65PXv6c8wfcDxYLMmUn3AEXlszGtI8hFjeMAhOARHrkPRvz9eLr0l/M5icjzYrIZUGSPfrQzKh21Fqn9y/Pz4Yv7GveMLKzpcHK0m5u+lZFg4FrNofTAigzjmSJKR9Kz+TtIJcPpPE1VG9+eqCSyDj8g4cq3r4t/Tx/yPcUppU52Mx0+fTX/MD8cc/8to/XdRf+hhzkRvKhob8xqSfGxmc4l0jYKPz3Oua7CrV+DItrrxrmtqKjoUvbm+XHrLtj4WC3nFW2XfrdxcX94fZ6TKSF3pFc/Wca1sWT42vMW4yl5DnA0OSAWH4NCgcfR3ko7TfxyQbrnvvz7M3/jm1Sc4mFhyb0VKCsWxd3yR/Uv2/vaUxSxaH1wFEQekG5XR8Vlw9PKH3tPY6LLG5fsoenLkWtECZVTho/Rtpfu6FiujfB8VHHN0Wd0Ny3j+bTL9ieGjjgPS9dZ4wx95zZpI9QFHVx+rL3bSg7OMjXkNST7KHB6VfQh2v+SusofDtyS2lVH1H3n9eTteekt1Owsc2ZrVkCrDtjIsH7YVOeYQHBIcgqOH+jtJp8DTf+AQHIKj0p2lzFNK4RAcBf+hF3smOhxbXtGSr1GAY5vrWvjVK3BsbXXLv64Jju34qOKKN1/ZZ/Ox4tk6rpUd9Ahxlb0izAbHHIJDcAgOwaEYOHbHR/M3ftk/9SIWW+vqtK6jyaGNbyuGR0Vjo0ccD00kPmqRsfqeknNb4SPSzJi2c3d7lfqc88nJgnsPzw4sT5ksksbGmjiW+lCBpcrwbkU94FiDoeoaG+tvK/aX2CzybCtGSFQZGSaHERKSRWYclIQx0SMO+W5FcAgOCQ7BITgEh+AQHIJDcAgOwSHBITgEh+AQHIJDcAgOwSE4JDgEh+AQHIJDcAgOwSE4NID+AZaqdfkKGaUcAAAAAElFTkSuQmCC">
 <title>쓰리쿠션 3구 당구</title>
@@ -21,8 +23,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --cream:#fff8f3; --coral:#e8604c; --coral-soft:#fceae6; --ink:#3a3330;
-  --card:#ffffff; --shadow:0 10px 28px rgba(120,80,60,.12);
+  /* 바탕은 진한 회색 — 당구대(파란 천)와 흰 카드가 또렷하게 뜬다 */
+  --cream:#2b2e33; --coral:#e8604c; --coral-soft:#3a3f47; --ink:#eceff3;
+  --card:#3a3f47; --shadow:0 10px 28px rgba(0,0,0,.45);
   --cloth:#2e7cd6; --wood:#e3bd8b;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
@@ -33,11 +36,11 @@ body{
   font-family:'Noto Sans KR','Noto Sans',system-ui,sans-serif;color:var(--ink);
   background:var(--cream);
   background-image:
-    radial-gradient(circle 7px at 30px 40px, #ffe1d6 99%, transparent),
-    radial-gradient(circle 5px at 140px 130px, #d9ecff 99%, transparent),
-    radial-gradient(circle 6px at 230px 60px, #fff3c9 99%, transparent),
-    radial-gradient(circle 4px at 90px 210px, #dff3e3 99%, transparent),
-    radial-gradient(circle 5px at 210px 190px, #ffd9e2 99%, transparent);
+    radial-gradient(circle 7px at 30px 40px, rgba(255,225,214,.10) 99%, transparent),
+    radial-gradient(circle 5px at 140px 130px, rgba(217,236,255,.10) 99%, transparent),
+    radial-gradient(circle 6px at 230px 60px, rgba(255,243,201,.10) 99%, transparent),
+    radial-gradient(circle 4px at 90px 210px, rgba(223,243,227,.10) 99%, transparent),
+    radial-gradient(circle 5px at 210px 190px, rgba(255,217,226,.10) 99%, transparent);
   background-size:260px 260px;
 }
 #app{display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:10px 14px;gap:8px}
@@ -185,7 +188,8 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 #quitCorner{position:fixed;left:0;top:0;width:92px;height:92px;z-index:99}
 
 /* ---------- 하단 조작부 ---------- */
-#dock{display:flex;gap:10px;align-items:stretch;justify-content:center}
+#dock{display:flex;gap:10px;align-items:stretch;justify-content:center;min-width:0;overflow:hidden}
+.dcard{min-width:0}                    /* 좁은 화면에서 카드가 줄어들 수 있게(넘쳐서 잘리지 않게) */
 .dcard{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:8px 14px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
 .dcard .lb{font-size:13px;font-weight:700;color:#9a8f88}
@@ -348,6 +352,92 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .setBtns button{flex:1;border:none;border-radius:14px;background:var(--coral-soft);color:var(--coral);
   font-family:inherit;font-weight:900;font-size:14px;padding:11px 6px;cursor:pointer;white-space:nowrap}
 
+/* ---------- 기보(복기) 창 ---------- */
+#kifuBtn{cursor:pointer;font-size:14px;color:#c7ccd4}
+#kifuBtn.on{color:var(--coral)}
+#kifuOvl{position:fixed;inset:0;background:rgba(22,24,28,.86);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:85}
+#kifuOvl .kCard{background:var(--card);border-radius:26px;box-shadow:0 26px 70px rgba(0,0,0,.5);
+  padding:22px 26px;width:min(680px,94vw);max-height:90vh;overflow:auto}
+#kifuOvl h3{font-size:22px;font-weight:900;text-align:center}
+#kifuOvl h3 em{color:var(--coral);font-style:normal}
+#kifuOvl .ksub{text-align:center;font-size:12.5px;font-weight:700;color:#a9b2bd;margin:4px 0 12px}
+.kRow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1.5px solid #434951;
+  font-weight:700;font-size:14px;cursor:pointer;color:#e6eaf0;border-radius:10px}
+.kRow:hover{background:#454b54}
+.kRow.on{background:#4d3b38;border-color:var(--coral)}
+.kRow .no{width:34px;height:26px;border-radius:8px;background:#555b63;color:#dfe4ea;font-weight:900;
+  display:flex;align-items:center;justify-content:center;flex:none;font-size:12px}
+.kRow.hit .no{background:var(--coral);color:#fff}
+.kRow .who{flex:none;width:74px;font-weight:900}
+.kRow .det{color:#a9b2bd;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kRow .res{margin-left:auto;font-weight:900;white-space:nowrap}
+.kRow.hit .res{color:var(--coral)}
+.kEmpty{text-align:center;color:#a9b2bd;font-weight:700;padding:26px 0}
+.kBtns{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.kBtns button{border:2px solid #5a616b;background:#4a5058;border-radius:12px;font-family:inherit;
+  font-weight:900;font-size:14px;padding:9px 16px;cursor:pointer;color:#eceff3}
+.kBtns button:active{background:var(--coral);border-color:var(--coral);color:#fff}
+.kClose{display:block;margin:14px auto 0;border:none;border-radius:999px;background:var(--coral);color:#fff;
+  font-family:inherit;font-weight:900;font-size:16px;padding:10px 44px;cursor:pointer}
+#kifuBar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:60;display:none;
+  background:rgba(58,63,71,.97);border-radius:999px;padding:8px 14px;gap:8px;align-items:center;
+  box-shadow:0 12px 30px rgba(0,0,0,.45)}
+#kifuBar.on{display:flex}
+#kifuBar span{font-weight:900;font-size:14px;color:#e6eaf0;white-space:nowrap}
+#kifuBar button{border:none;background:#4a5058;color:#eceff3;border-radius:10px;font-family:inherit;
+  font-weight:900;font-size:13px;padding:7px 12px;cursor:pointer}
+@media (max-width:1100px), (max-height:560px){
+  #kifuBtn{font-size:12px;padding:3px 8px}
+  #kifuOvl .kCard{padding:12px 14px;border-radius:16px}
+  #kifuOvl h3{font-size:16px}
+  #kifuOvl .ksub{font-size:10px;margin:2px 0 6px}
+  .kRow{font-size:11.5px;padding:5px 6px;gap:6px}
+  .kRow .who{width:56px}
+  .kRow .det{font-size:10px}
+  .kBtns button{font-size:11px;padding:6px 10px}
+  .kClose{font-size:13px;padding:7px 28px;margin-top:8px}
+  #kifuBar{padding:5px 10px;gap:5px}
+  #kifuBar span{font-size:11px}
+  #kifuBar button{font-size:11px;padding:5px 9px}
+}
+
+/* ---------- 진한 회색 바탕에 맞춘 대비 보정 ----------
+   (밝은 배경 시절의 하드코딩 색들이 다크에서 안 보이는 것을 한 번에 잡는다) */
+.spill{background:#4a5058;border-color:#5a616b;color:#eceff3}
+.spill.on{background:var(--coral);border-color:var(--coral);color:#fff}
+.spill.help{background:transparent;border-color:#5a616b;color:#b9c2cc}
+.mcard{background:#434951;border-color:#5a616b}
+.mcard .ic{background:#4f565f}
+.mcard .d{color:#aab3bd}
+.opill{background:#4a5058;border-color:#5a616b;color:#eceff3}
+.opill.on{background:var(--coral);border-color:var(--coral);color:#fff}
+.ghostBtn{background:#434951;border-color:#5a616b;color:#c3ccd6}
+.dcard .lb,.panel .sub,.pcard .meta,#spinLb,#strokeDesc,#powerSub,.stMap,#fineOvl .fsub{color:#a9b2bd}
+.panel .buildStamp{color:#6f7883}
+#fsBtn{color:#c7ccd4}
+#angleRead,#powerVal{color:#eceff3}
+.srow .sl,.srow .tog{color:#c3ccd6}
+.srow input[type=range]{background:#555b63}
+.sw{background:#555b63}
+#power{background:linear-gradient(90deg,#6b5350,var(--coral))}
+#strokeDrawer .sdTitle{color:#c9ae9d}
+.shRow{border-bottom-color:#474d55}
+.shRow b{color:#f08a76}
+.shRow span{color:#c3ccd6}
+.stTable th{color:#a9b2bd;border-bottom-color:#4a5058}
+.stTable td{border-bottom-color:#434951}
+.stTable td:first-child{color:#f08a76}
+.fBox .fv{color:#c3ccd6}
+.fBox .fbtns button{background:#4a5058;border-color:#5a616b;color:#eceff3}
+.pbtn,.abtn{background:#4a5058;color:#f08a76}
+.setBtns button{background:#4a5058;color:#f0a08e}
+.ovl{background:rgba(22,24,28,.88)}
+#toast{background:rgba(58,63,71,.97)}
+#toast .sub{color:#b9c2cc}
+#liveBadge,#pathBadge{background:rgba(58,63,71,.95);color:#dfe4ea}
+#rankName,.rAdmin input{background:#4a5058;border-color:#5a616b;color:#eceff3}
+
 /* ---------- 작은 화면(폰 가로) ---------- */
 @media (max-width:1100px), (max-height:560px){
   #app{padding:2px 4px;gap:1px}
@@ -393,7 +483,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   #strokeGrid{gap:2px}
   #strokeDesc{display:none}
   #aimCard{min-width:0}
-  #powerCard{min-width:150px}
+  #powerCard{min-width:0;flex:1 1 90px}
+  #power{min-width:40px}
+  #spinCard,#strokeCard,#aimCard{flex:0 0 auto}
   #shootBtn{font-size:20px;padding:0 22px;border-radius:14px;letter-spacing:2px;min-width:74px}
   #strokeCurrent{font-size:15px;padding:6px 14px;border-radius:11px;gap:5px;box-shadow:0 4px 10px rgba(232,96,76,.35)}
   #strokeCurrent i{font-size:10px}
@@ -423,6 +515,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
     <div class="pill" id="targetPill"><small>목표</small><span id="targetVal">10</span>점</div>
     <div class="pill" id="undoBtn" title="직전 배치로 (Ctrl+Z)">↶ 무르기</div>
   <div class="pill" id="fsBtn" title="전체화면 켜고 끄기 (F)">전체화면</div>
+  <div class="pill" id="kifuBtn" title="기보 — 지난 샷 복기 (K)">기보</div>
   <div class="pill" id="gearBtn">⚙</div>
   </header>
 
@@ -486,6 +579,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
     <button id="shootBtn">샷</button>
   </div>
 <div id="quitCorner"></div>
+<div id="kifuBar"><span id="kifuBarTxt">복기</span>
+  <button id="kbPrev">◀</button><button id="kbReplay">↻</button><button id="kbNext">▶</button>
+  <button id="kbExit">복기 끝</button></div>
 <!-- 안전영역(노치·상태바·홈바) 실측용 — JS 가 이 요소의 padding 을 읽어 앱 크기를 확정한다 -->
 <div id="saProbe" style="position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;
   padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right);
@@ -496,7 +592,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0818-2307</div>
+    <div class="buildStamp" id="buildStamp">build 0818-2326</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -517,6 +613,26 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
       <button class="opill" data-tg="20">20점</button>
     </div>
     <button class="bigBtn" id="startBtn">시작하기</button>
+  </div>
+</div>
+
+<!-- 기보(복기) -->
+<div id="kifuOvl">
+  <div class="kCard">
+    <h3>기보 <em>복기</em></h3>
+    <div class="ksub">바둑 기보처럼 한 수씩 되짚어 본다 — 목록에서 고르면 그때 배치와 궤적이 그대로 재현된다</div>
+    <div id="kifuList"></div>
+    <div class="kBtns">
+      <button id="kifuPrev">◀ 이전 수</button>
+      <button id="kifuReplay">↻ 다시 보기</button>
+      <button id="kifuNext">다음 수 ▶</button>
+      <button id="kifuExit">복기 끝내고 돌아가기</button>
+    </div>
+    <div class="kBtns">
+      <button id="kifuSave">기보 저장(파일)</button>
+      <button id="kifuClear">기보 비우기</button>
+    </div>
+    <button class="kClose" id="kifuClose">닫기</button>
   </div>
 </div>
 
@@ -843,7 +959,10 @@ function clampToScreen() {
   if (scale >= 0.999) { app.style.zoom = ''; return; }
   var base = app.style.transform || '';
   if (rotated) {
-    app.style.transform = base.replace(/\s*scale\([^)]*\)/, '') + ' scale(' + scale.toFixed(4) + ')';
+    /* CSS 변환은 오른쪽부터 적용된다. scale 을 뒤에 붙이면 translateY 이동량이 줄지 않아
+       상자가 옆으로 밀린다 → scale 을 맨 앞에 둬야 이동량까지 같이 줄어든다. */
+    app.style.transform = 'scale(' + scale.toFixed(4) + ') ' +
+      base.replace(/\s*scale\([^)]*\)/, '').trim();
   } else {
     app.style.transformOrigin = 'top left';
     app.style.transform = 'scale(' + scale.toFixed(4) + ')';
@@ -1220,6 +1339,7 @@ function undoShot() {
 function fireShot() {
   touchForNextShot();          // 곧장 다시 친 경우에도 직전 궤적은 정리
   snapshotBeforeShot();
+  if (!kifuMode) kifuRecordShot();      // 기보에 한 수 남긴다(복기 재생 중에는 기록 안 함)
   var b = st.balls[cueId()];
   /* tipX 부호 반전은 applyStrikeTo 안에서 — 화면(y-아래) ↔ 물리(z-위) 거울상 보정 */
   applyStrikeTo(b);
@@ -1237,12 +1357,17 @@ function fireShot() {
 function resolveShot() {
   $('liveBadge').style.display = 'none';
   if (trailKeep) trailStale = true;   // 이번 궤적은 남겨 두되, 다음 샷을 만지면 지운다
+  if (kifuMode) {                     // 복기 재생이면 점수·차례는 건드리지 않는다
+    S.phase = 'aim'; $('shootBtn').disabled = false; S.guideDirty = true;
+    return;
+  }
   var cid = cueId();
   var j = P.judge(S.events, cid, 3);
   var cls = classifyFromEvents(S.events, cid, S.shotDefl === undefined ? null : S.shotDefl);
   var scored = j.score;
   if (S.breakShot && j.first !== null && j.first !== 2) scored = false;   // 초구는 빨간 공 먼저
   S.breakShot = false;
+  kifuFinishShot(scored, cls.ko, j.cushionsBeforeSecond);   // 기보에 결과 기록
 
   if (S.mode === 'practice') {
     S.practice.tries++;
@@ -1424,6 +1549,130 @@ function aiPlay() {
     setTimeout(function () { S.phase = 'aim'; beginStroke(); }, 900);
   }
 }
+
+/* ================= 기보(복기) =================
+ * 샷마다 '치기 직전 배치 + 조준·힘·당점·스트로크 + 결과'를 남긴다.
+ * 바둑 기보처럼 목록에서 한 수를 고르면 그 배치로 되돌리고 같은 샷을 다시 굴려 보여 준다.
+ */
+var KIFU_KEY = 'billiards39_kifu';
+var kifu = [];                  // {no, who, balls, aim, power, tipX, tipY, stroke, pushVar, mode, result, cls, cush, at}
+var kifuMode = false;           // 복기 중인가
+var kifuIdx = -1;
+function loadKifu() {
+  try { var a = JSON.parse(localStorage.getItem(KIFU_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function saveKifu() {
+  try { localStorage.setItem(KIFU_KEY, JSON.stringify(kifu.slice(-300))); } catch (e) {}
+}
+function kifuRecordShot() {     // 샷을 치기 직전에 부른다
+  var who = S.mode === 'practice' ? '연습'
+    : (S.players[S.turn] ? S.players[S.turn].name : '');
+  kifu.push({
+    no: kifu.length + 1, who: who,
+    balls: st.balls.map(function (b) { return { id: b.id, x: +b.x.toFixed(4), y: +b.y.toFixed(4) }; }),
+    aim: S.aim.angle, power: S.aim.power, tipX: S.aim.tipX, tipY: S.aim.tipY,
+    stroke: S.strokeType, pushVar: S.pushVar, mode: S.mode,
+    result: null, cls: '', cush: 0,
+    at: new Date().toISOString().slice(0, 16).replace('T', ' ')
+  });
+}
+function kifuFinishShot(scored, cls, cush) {   // 판정이 끝나면 결과를 채운다
+  if (!kifu.length) return;
+  var k = kifu[kifu.length - 1];
+  k.result = !!scored; k.cls = cls || ''; k.cush = cush || 0;
+  saveKifu();
+}
+function renderKifu() {
+  var el = $('kifuList');
+  el.innerHTML = '';
+  if (!kifu.length) { el.innerHTML = '<div class="kEmpty">아직 기록된 샷이 없습니다 — 한 번 치면 쌓입니다</div>'; return; }
+  kifu.slice().reverse().forEach(function (k) {
+    var i = k.no - 1;
+    var row = document.createElement('div');
+    row.className = 'kRow' + (k.result ? ' hit' : '') + (i === kifuIdx ? ' on' : '');
+    var deg = (k.aim * 180 / Math.PI) % 360; if (deg < 0) deg += 360;
+    var stName = (STROKES[k.stroke] || {}).name || k.stroke;
+    if (isPushFamily(k.stroke) && PUSH_VARIANTS[k.pushVar]) stName += '·' + PUSH_VARIANTS[k.pushVar].name;
+    row.innerHTML = '<span class="no">' + k.no + '</span><span class="who"></span>' +
+      '<span class="det">' + stName + ' · ' + deg.toFixed(1) + '° · 힘 ' + Math.round(k.power * 100) + '%' +
+      ' · 당점 ' + Math.round(k.tipX * 200) + '/' + Math.round(k.tipY * 200) + '</span>' +
+      '<span class="res">' + (k.result ? '득점 · ' + k.cls : (k.cls || '실패')) + '</span>';
+    row.querySelector('.who').textContent = k.who;
+    row.addEventListener('click', function () { kifuGo(i); });
+    el.appendChild(row);
+  });
+}
+/* 한 수로 이동: 그때 배치로 되돌리고 같은 샷을 그대로 굴린다 */
+function kifuGo(i) {
+  if (i < 0 || i >= kifu.length) return;
+  var k = kifu[i];
+  kifuIdx = i;
+  kifuMode = true;
+  clearTimeout(S.resolveTimer); S.resolveTimer = 0;
+  $('kifuOvl').style.display = 'none';
+  $('kifuBar').classList.add('on');
+  $('kifuBtn').classList.add('on');
+  $('kifuBarTxt').textContent = '복기 ' + k.no + '수 / ' + kifu.length;
+  // 배치 복원
+  k.balls.forEach(function (src) {
+    var b = st.balls[src.id];
+    b.x = src.x; b.y = src.y;
+    b.vx = 0; b.vy = 0; b.wx = 0; b.wy = 0; b.wz = 0; b.moving = false;
+  });
+  S.trails = [[], [], []]; S.events = []; S.fx = []; S.shotDefl = null;
+  // 그때의 조준값 복원
+  setAngle(k.aim); setPower(k.power * 100);
+  S.aim.tipX = k.tipX; S.aim.tipY = k.tipY; drawSpin();
+  setStroke(k.stroke); setPushVar(k.pushVar || 'mid');
+  S.guideDirty = true;
+  // 같은 샷을 다시 굴린다(판정·점수는 건드리지 않는다)
+  var b0 = st.balls[cueId()];
+  strikeWith(b0, k.aim, k.power, k.tipX, k.tipY, k.stroke);
+  S.phase = 'rolling'; S.shotTimer = 0;
+  $('liveBadge').style.display = 'block';
+  renderKifu();
+}
+function kifuExit() {
+  kifuMode = false; kifuIdx = -1;
+  $('kifuBar').classList.remove('on');
+  $('kifuBtn').classList.remove('on');
+  if (S.undo) undoShot();          // 복기 전 상태로
+  else { S.phase = 'aim'; setPhase('aim'); }
+}
+function openKifu() { kifu = kifu.length ? kifu : loadKifu(); renderKifu(); $('kifuOvl').style.display = 'flex'; }
+$('kifuBtn').addEventListener('click', function () {
+  $('kifuOvl').style.display === 'flex' ? ($('kifuOvl').style.display = 'none') : openKifu();
+});
+$('kifuClose').addEventListener('click', function () { $('kifuOvl').style.display = 'none'; });
+$('kifuOvl').addEventListener('click', function (e) { if (e.target === this) this.style.display = 'none'; });
+$('kifuPrev').addEventListener('click', function () { kifuGo(kifuIdx > 0 ? kifuIdx - 1 : 0); });
+$('kifuNext').addEventListener('click', function () { kifuGo(Math.min(kifu.length - 1, kifuIdx + 1)); });
+$('kifuReplay').addEventListener('click', function () { kifuGo(kifuIdx < 0 ? kifu.length - 1 : kifuIdx); });
+$('kifuExit').addEventListener('click', function () { $('kifuOvl').style.display = 'none'; kifuExit(); });
+$('kbPrev').addEventListener('click', function () { kifuGo(kifuIdx > 0 ? kifuIdx - 1 : 0); });
+$('kbNext').addEventListener('click', function () { kifuGo(Math.min(kifu.length - 1, kifuIdx + 1)); });
+$('kbReplay').addEventListener('click', function () { kifuGo(kifuIdx); });
+$('kbExit').addEventListener('click', kifuExit);
+$('kifuClear').addEventListener('click', function () {
+  kifu = []; saveKifu(); kifuIdx = -1; renderKifu();
+});
+$('kifuSave').addEventListener('click', function () {
+  var lines = ['# 쓰리쿠션 3구 기보', ''];
+  kifu.forEach(function (k) {
+    var deg = (k.aim * 180 / Math.PI) % 360; if (deg < 0) deg += 360;
+    lines.push(k.no + '. [' + k.who + '] ' + (STROKES[k.stroke] || {}).name +
+      ' 각도 ' + deg.toFixed(1) + '° 힘 ' + Math.round(k.power * 100) + '% 당점 ' +
+      Math.round(k.tipX * 200) + '/' + Math.round(k.tipY * 200) +
+      ' → ' + (k.result ? '득점(' + k.cls + ', 쿠션 ' + k.cush + ')' : '실패') + '  ' + k.at);
+  });
+  var blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'billiards_kifu.txt';
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+});
 
 /* ================= 떠 있는 창 옮기기 =================
  * 제목줄을 잡아 끌면 창이 따라온다. 화면 밖으로는 못 나가게 가둔다.
@@ -2619,6 +2868,7 @@ document.addEventListener('keydown', function (e) {
     e.preventDefault(); undoShot(); return;      // Ctrl+Z = 직전 배치로 (승리 화면에서도 동작)
   }
   if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') { toggleFullscreen(); return; }
+  if (e.key === 'k' || e.key === 'K' || e.key === 'ㅏ') { $('kifuBtn').click(); return; }
   if (e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') { toggleSettings(); return; }
   if (S.phase !== 'aim') return;
   if (e.key >= '1' && e.key <= '9') {
@@ -2675,6 +2925,7 @@ if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
 }
 
 /* ================= 부팅 ================= */
+kifu = loadKifu();               // 지난 판 기보를 이어 받는다(기기에 영구 보관)
 rack();
 fitOrientation();
 /* 인앱 브라우저·헤드리스는 로드 직후 뷰포트가 출렁인다 — 몇 번 더 맞춰 준다 */
@@ -2785,6 +3036,66 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       });
       var d1 = +res[0].split('=')[1], d4 = +res[3].split('=')[1];
       document.title = (d4 > d1 * 1.05 ? 'PUSH-OK ' : 'PUSH-FAIL ') + res.join(' ');
+      return;
+    }
+    if (qs.has('kifudemo')) {                 // 화면 확인용: 기보 몇 수를 채우고 창을 연다
+      window.__simMode = 1;
+      kifu = [];
+      [[352, 55, '앞돌리기', true, 3], [200, 60, '옆돌리기', false, 1],
+       [8, 45, '뒤돌리기', true, 4], [280, 70, '뱅크샷', false, 2]].forEach(function (v, i) {
+        setAngle(v[0] * Math.PI / 180); setPower(v[1]);
+        kifuRecordShot();
+        kifuFinishShot(v[3], v[2], v[4]);
+      });
+      setTimeout(openKifu, 120);
+    }
+    if (qs.has('kifutest')) {                 // 기보 기록 → 복기 재생이 배치를 되돌리는지
+      window.__simMode = 1;
+      try { localStorage.removeItem(KIFU_KEY); } catch (e) {}
+      kifu = [];
+      setAngle(352 * Math.PI / 180); setPower(55);
+      var before5 = st.balls.map(function (b) { return b.x.toFixed(3) + ',' + b.y.toFixed(3); }).join('|');
+      kifuRecordShot();
+      applyStrikeTo(st.balls[cueId()]);
+      S.events = []; var g5 = 240 * 40;
+      while (P.advance(st, 1 / 240, S.events) && g5-- > 0) {}
+      var moved5 = st.balls.map(function (b) { return b.x.toFixed(3) + ',' + b.y.toFixed(3); }).join('|');
+      kifuFinishShot(true, '앞돌리기', 3);
+      var saved = loadKifu().length;
+      kifuGo(0);                                  // 복기: 그 배치로 되돌리고 다시 굴린다
+      var restored = st.balls.map(function (b) { return b.x.toFixed(3) + ',' + b.y.toFixed(3); }).join('|');
+      var ok5 = (moved5 !== before5) && (restored === before5) && saved === 1 && kifuMode;
+      document.title = (ok5 ? 'KIFU-OK' : 'KIFU-FAIL') + ' saved=' + saved + ' restored=' + (restored === before5);
+      return;
+    }
+    if (qs.has('insettest')) {                // 안전영역 주입 후 주요 컨트롤이 화면 안에 있는지
+      var fs4 = (qs.get('insettest') || '47,0,34,0').split(',');
+      var pr4 = $('saProbe');
+      pr4.style.paddingTop = (+fs4[0] || 0) + 'px';
+      pr4.style.paddingRight = (+fs4[1] || 0) + 'px';
+      pr4.style.paddingBottom = (+fs4[2] || 0) + 'px';
+      pr4.style.paddingLeft = (+fs4[3] || 0) + 'px';
+      fitOrientation();
+      setTimeout(function () {
+        var sw = document.documentElement.clientWidth, sh = document.documentElement.clientHeight;
+        var it4 = +fs4[0] || 0, ir4 = +fs4[1] || 0, ib4 = +fs4[2] || 0, il4 = +fs4[3] || 0;
+        var names = ['shootBtn', 'spinPad', 'eyeCard', 'strokeCurrent'];
+        var bad = [], info = [];
+        names.forEach(function (id) {
+          var el = $(id); if (!el) return;
+          var r = el.getBoundingClientRect();
+          if (!r.width) return;
+          var inside = r.left >= il4 - 1 && r.top >= it4 - 1 &&
+                       r.right <= sw - ir4 + 1 && r.bottom <= sh - ib4 + 1;
+          info.push(id + '=' + Math.round(r.left) + ',' + Math.round(r.top) + '~' +
+                    Math.round(r.right) + ',' + Math.round(r.bottom));
+          if (!inside) bad.push(id);
+        });
+        var ar4 = $('app').getBoundingClientRect();
+        document.title = (bad.length ? 'INSET-FAIL ' + bad.join('/') : 'INSET-OK') +
+          ' | screen=' + sw + 'x' + sh + ' app=' + Math.round(ar4.width) + 'x' + Math.round(ar4.height) +
+          '@' + Math.round(ar4.left) + ',' + Math.round(ar4.top) + ' | ' + info.join(' ');
+      }, 500);
       return;
     }
     if (qs.has('dragtest')) {                 // 떠 있는 창을 제목줄로 끌어 옮길 수 있는지
