@@ -34,16 +34,23 @@ html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-
 @supports (height:100svh){ html,body{height:100svh} }
 body{
   font-family:'Noto Sans KR','Noto Sans',system-ui,sans-serif;color:var(--ink);
-  background:var(--cream);
-  background-image:
-    radial-gradient(circle 7px at 30px 40px, rgba(255,225,214,.10) 99%, transparent),
-    radial-gradient(circle 5px at 140px 130px, rgba(217,236,255,.10) 99%, transparent),
-    radial-gradient(circle 6px at 230px 60px, rgba(255,243,201,.10) 99%, transparent),
-    radial-gradient(circle 4px at 90px 210px, rgba(223,243,227,.10) 99%, transparent),
-    radial-gradient(circle 5px at 210px 190px, rgba(255,217,226,.10) 99%, transparent);
-  background-size:260px 260px;
+  background:var(--cream);      /* 점 패턴 없이 깔끔한 진회색 */
 }
 #app{display:grid;grid-template-rows:auto 1fr auto;height:100%;padding:10px 14px;gap:8px}
+#leftRail,#rightRail{display:none}
+/* 폰: 3열 격자로 바꿔 좌우에 컨트롤을 세우고 가운데를 전부 당구대에 준다 */
+body.rails #app{grid-template-columns:auto 1fr auto;
+  grid-template-areas:"hdr hdr hdr" "left table right" "dock dock dock"}
+body.rails header{grid-area:hdr}
+body.rails #tableWrap{grid-area:table;min-width:0;min-height:0}   /* 1fr 트랙이 캔버스에 밀리지 않게 */
+body.rails #dock{grid-area:dock}
+body.rails #leftRail{grid-area:left;display:flex;flex-direction:column;gap:4px;justify-content:center;align-items:stretch}
+body.rails #rightRail{grid-area:right;display:flex;flex-direction:column;gap:4px;justify-content:center;align-items:stretch}
+body.rails #leftRail .pill{justify-content:center;padding:6px 8px;font-size:11px;white-space:nowrap}
+body.rails #rightRail #shootBtn{height:100%;min-width:56px;font-size:20px;padding:0 10px;
+  writing-mode:vertical-rl;letter-spacing:6px;border-radius:16px}
+body.rails #rightRail #strokeCard{padding:4px 6px}
+body.rails #leftRail #fineBtn{margin:0;font-size:11px;padding:5px 8px}
 /* 노치·홈 인디케이터 영역을 피한다(가로 모드에서 좌우 노치가 화면을 먹는다) */
 @supports (padding:env(safe-area-inset-left)){
   #app{padding-left:max(14px, env(safe-area-inset-left));
@@ -239,6 +246,14 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 #fineOvl .fsub{text-align:center;font-size:11px;font-weight:700;color:#9a8f88;margin-bottom:8px;line-height:1.35}
 .fRow{display:flex;flex-direction:column;gap:6px;justify-content:center;align-items:center}
 .fBox canvas{width:172px;height:172px}
+/* 가로형 — 두 공을 나란히 (창을 옆으로 눕힌다) */
+#fineOvl.wide{align-items:flex-start;justify-content:center;left:0;right:0;top:66px;bottom:auto}
+#fineOvl.wide .fCard{width:auto;max-width:96vw}
+#fineOvl.wide .fRow{flex-direction:row;align-items:flex-start;gap:18px}
+#fineOvl.wide .fBox canvas{width:200px;height:200px}
+#fineLayoutBtn{border:2px solid #5a616b;background:#4a5058;color:#c7ccd4;border-radius:9px;
+  font-family:inherit;font-weight:900;font-size:11px;padding:3px 8px;margin-left:6px;cursor:pointer;vertical-align:middle}
+#fineLayoutBtn:active{background:var(--coral);border-color:var(--coral);color:#fff}
 .fBox{display:flex;flex-direction:column;align-items:center;gap:3px}
 .fBox canvas{touch-action:none;cursor:crosshair;border-radius:50%}
 .fBox .ft{font-size:15px;font-weight:900}
@@ -519,6 +534,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="pill" id="gearBtn">⚙</div>
   </header>
 
+  <!-- 폰(가로)에서 버튼들이 옮겨 오는 좌우 세로 열 — 당구대를 최대한 키우려는 배치 -->
+  <div id="leftRail"></div>
+  <div id="rightRail"></div>
   <div id="tableWrap">
     <canvas id="table"></canvas>
     <div id="eyeCol">
@@ -592,7 +610,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0818-2326</div>
+    <div class="buildStamp" id="buildStamp">build 0818-2351</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -639,7 +657,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 <!-- 확대 미세조정: 당점 / 두께 -->
 <div id="fineOvl">
   <div class="fCard">
-    <h3>확대 <em>미세 조정</em></h3>
+    <h3>확대 <em>미세 조정</em> <button id="fineLayoutBtn" title="세로형 ↔ 가로형">⇄ 가로형</button></h3>
     <div class="fsub">공을 끌어서 조정 — 왼쪽은 큐볼 당점, 오른쪽은 1적구를 맞히는 두께</div>
     <div class="fRow">
       <div class="fBox">
@@ -823,6 +841,34 @@ document.addEventListener('pointerdown', function () { audio(); }, { capture: tr
 /* ================= 레이아웃 ================= */
 var FRAME = 0.115;             // 나무 프레임 폭 (m) — 폰에서는 resize()가 얇게 줄인다
 var view = { ppm: 300, ox: 0, oy: 0, w: 0, h: 0 };
+/* ---- 폰: 버튼을 좌우 세로 열로 옮겨 당구대를 최대한 키운다 (손그림 배치) ---- */
+var railHome = null;            // 원래 자리(부모, 다음 형제) 기억 — 데스크톱에서 되돌리려고
+function applyRails(on) {
+  var L = $('leftRail'), R = $('rightRail');
+  if (!L || !R) return;
+  if (!railHome) {
+    railHome = [];
+    ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'fineBtn', 'strokeCard', 'shootBtn'].forEach(function (id) {
+      var el = $(id);
+      if (el) railHome.push({ el: el, parent: el.parentNode, next: el.nextSibling });
+    });
+  }
+  if (on === document.body.classList.contains('rails')) return false;   // 이미 그 상태면 건너뜀
+  document.body.classList.toggle('rails', on);
+  if (on) {
+    ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'fineBtn'].forEach(function (id) {
+      var el = $(id); if (el) L.appendChild(el);
+    });
+    var sc = $('strokeCard'); if (sc) R.appendChild(sc);
+    var sb = $('shootBtn'); if (sb) R.appendChild(sb);
+  } else {
+    railHome.forEach(function (h) {
+      if (h.next && h.next.parentNode === h.parent) h.parent.insertBefore(h.el, h.next);
+      else h.parent.appendChild(h.el);
+    });
+  }
+  return true;                                  // 배치가 바뀌었다 → 크기를 다시 재야 한다
+}
 function eyeActive() { return eyeOn; }
 /* 판정 기준은 요소 폭이 아니라 실제 뷰포트 — 독이 넘쳐 요소가 부풀어도 흔들리지 않게 */
 /* 실제로 배치된 앱 폭을 그대로 쓴다(회전 여부·툴바 상태와 무관하게 항상 정확) */
@@ -832,6 +878,12 @@ function resize() {
   var reserve = 0;
   var vw = viewportW();
   var pip = vw < 900;                          // 폰: 옆자리 대신 PIP
+  /* 좌우 세로 열 배치(손그림)는 아직 눈높이 뷰와 높이가 충돌해 보류 — ?rails=1 로만 켠다 */
+  var wantRails = /[?&]rails=1/.test(location.search);
+  if (applyRails(pip && wantRails)) {           // 폰이면 버튼을 좌우 세로 열로
+    // DOM 을 옮긴 직후엔 아직 옛 크기라, 브라우저가 다시 배치한 뒤 한 번 더 잰다
+    requestAnimationFrame(function () { resize(); });
+  }
   FRAME = pip ? 0.06 : 0.115;                  // 폰에선 나무 프레임을 얇게 — 천이 최대한 크게
   $('eyeCol').style.display = eyeOn ? '' : 'none';
   $('eyeCol').classList.toggle('pip', pip);
@@ -843,7 +895,17 @@ function resize() {
     eyeCv.style.width = eyeW + 'px'; eyeCv.style.height = eyeH + 'px';
     eyeCv.width = Math.round(eyeW * DPR); eyeCv.height = Math.round(eyeH * DPR);
   }
-  var cw = Math.min(wrap.clientWidth, vw - 16) - 8 - reserve, ch = wrap.clientHeight - 8;
+  /* 캔버스가 커지면 wrap 도 같이 커져(되먹임) 다음 계산이 틀어진다.
+     재기 전에 캔버스를 접어 두고 '진짜 남는 공간'을 읽는다. */
+  cv.style.width = '0px'; cv.style.height = '0px';
+  void wrap.offsetHeight;                      // 리플로우 강제 — 접힌 뒤의 실제 크기를 읽으려면 필요
+  var cw = Math.min(wrap.clientWidth, vw - 16) - 8 - reserve;
+  /* 세로는 wrap 을 믿지 않는다(캔버스↔wrap 되먹임). 앱 높이에서 머리·발을 빼서 직접 구한다. */
+  var appH = $('app').clientHeight || vpH();
+  var hdrH = document.querySelector('header').offsetHeight || 0;
+  var dockH = $('dock').offsetHeight || 0;
+  var gapPx = parseFloat(getComputedStyle($('app')).rowGap) || 0;
+  var ch = Math.max(80, appH - hdrH - dockH - gapPx * 2 - 8);
   var aw = st.W + FRAME * 2, ah = st.H + FRAME * 2;
   var ppm = Math.min(cw / aw, ch / ah);
   view.ppm = ppm;
@@ -1929,6 +1991,12 @@ function openFine() {
 }
 function closeFine() { fineOn = false; $('fineOvl').style.display = 'none'; }
 $('fineBtn').addEventListener('click', function () { fineOn ? closeFine() : openFine(); });
+$('fineLayoutBtn').addEventListener('click', function (e) {
+  e.stopPropagation();                       // 제목줄 드래그와 겹치지 않게
+  var w = $('fineOvl').classList.toggle('wide');
+  this.textContent = w ? '⇄ 세로형' : '⇄ 가로형';
+  drawFine();
+});
 $('fineClose').addEventListener('click', closeFine);
 $('fineOvl').addEventListener('click', function (e) { if (e.target === this) closeFine(); });
 /* 큐볼 확대: 끌어서 당점 */
