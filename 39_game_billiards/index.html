@@ -528,11 +528,11 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
    위쪽: 로고·점수판이 상단 테두리 밖까지 이어지고, 아래쪽: 힘 카드·샷 버튼이 하단을 뚫는다.
    폰(rails)에서는 좌우 세로 열이 양옆을 뚫는다. 배경을 음수 마진으로 늘이고 그쪽 라운드를 0으로.
    ⚠ 반드시 모든 미디어쿼리보다 뒤에 둘 것 — 앞에 두면 폰 규칙이 padding·border 를 도로 덮는다. */
-.logo{align-self:flex-start;margin-top:-40px;padding-top:44px;border-top-left-radius:0;border-top-right-radius:0}
-#scoreArea{top:-30px;transform:translateX(-50%)}
+.logo{background:none;box-shadow:none;padding:10px 0}   /* 로고는 빨강 배경 없이 글자만 (2026-08-19) */
+#scoreArea{top:-30px;transform:translateX(-50%)}         /* left 는 resize()가 당구대 중앙으로 잡는다 */
 .pcard{padding-top:30px;border-top-width:0;border-radius:0 0 30px 30px;transform-origin:50% 100%}
 body.rails .pcard{padding-top:24px;padding-bottom:2px;border-radius:0 0 14px 14px}
-body:not(.rails) #powerCard{margin-bottom:-50px;padding-bottom:58px;
+body:not(.rails) .dcard{margin-bottom:-50px;padding-bottom:58px;
   border-bottom-left-radius:0;border-bottom-right-radius:0}
 body:not(.rails) #shootBtn{margin-bottom:-50px;padding-bottom:50px;
   border-bottom-left-radius:0;border-bottom-right-radius:0}
@@ -631,28 +631,12 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-0035</div>
+    <div class="buildStamp" id="buildStamp">build 0819-0154</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
       <div class="mcard" data-mode="pvp"><div class="ic">👥</div><div class="t">둘이 대결</div><div class="d">번갈아 치기</div></div>
-      <div class="mcard" data-mode="ai"><div class="ic">
-        <!-- 폰에서 보이는 로봇 이모지 모양으로 그려 박았다 — PC·폰 어디서나 같게 보인다 -->
-        <svg viewBox="0 0 72 72" width="72" height="72" aria-label="로봇">
-          <rect x="34.2" y="8" width="3.6" height="9" rx="1.8" fill="#9aa3ad"/>
-          <circle cx="36" cy="7" r="4" fill="#c3cad2"/>
-          <rect x="12" y="17" width="48" height="38" rx="12" fill="#cfd6de"/>
-          <rect x="12" y="17" width="48" height="38" rx="12" fill="none" stroke="#aab3bd" stroke-width="1.5"/>
-          <rect x="4" y="29" width="7" height="15" rx="3.5" fill="#aab3bd"/>
-          <rect x="61" y="29" width="7" height="15" rx="3.5" fill="#aab3bd"/>
-          <rect x="18" y="24" width="36" height="17" rx="8.5" fill="#3d4650"/>
-          <circle cx="27.5" cy="32.5" r="4.6" fill="#7fd4ff"/>
-          <circle cx="44.5" cy="32.5" r="4.6" fill="#7fd4ff"/>
-          <circle cx="26" cy="31" r="1.5" fill="#ffffff" opacity=".9"/>
-          <circle cx="43" cy="31" r="1.5" fill="#ffffff" opacity=".9"/>
-          <rect x="25" y="45" width="22" height="5" rx="2.5" fill="#8c96a1"/>
-        </svg>
-      </div><div class="t">컴퓨터 대결</div><div class="d">AI가 수를 찾음</div></div>
+      <div class="mcard" data-mode="ai"><div class="ic">🤖</div><div class="t">컴퓨터 대결</div><div class="d">AI가 수를 찾음</div></div>
     </div>
     <div class="optRow" id="diffRow" style="display:none">
       <span class="cap">난이도</span>
@@ -960,6 +944,14 @@ function resize() {
     eyeCv.width = Math.round(eyeW * DPR); eyeCv.height = Math.round(eyeH * DPR);
   }
   placeOverlays(pip);
+  /* 점수판은 화면이 아니라 '당구대 평면'의 가로 중앙에 둔다 (2026-08-19 지시) */
+  (function () {
+    var sa = $('scoreArea'), hd = document.querySelector('header');
+    if (!sa || !hd) return;
+    var cr = cv.getBoundingClientRect(), hr = hd.getBoundingClientRect();
+    var sc = hd.offsetWidth ? (hr.width / hd.offsetWidth) : 1;   // clampToScreen 배율 보정
+    if (cr.width > 0) sa.style.left = Math.round((cr.left + cr.width / 2 - hr.left) / sc) + 'px';
+  })();
   S.guideDirty = true;
 }
 
