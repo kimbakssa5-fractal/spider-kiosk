@@ -202,9 +202,11 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .stMap{margin-top:14px;font-size:13.5px;font-weight:700;color:#9a8f88;line-height:1.6;text-align:left}
 /* 스트로크 서랍: 평소엔 고른 것만 보이고, 누르면 위로 펼쳐진다(독이 가로로 길어지지 않게) */
 #strokeCard{position:relative}
-#strokeCurrent{display:flex;align-items:center;gap:6px;border:2px solid var(--coral);background:var(--coral);
-  color:#fff;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;padding:7px 14px;cursor:pointer}
-#strokeCurrent i{font-style:normal;font-size:11px;opacity:.9}
+#strokeCurrent{display:flex;align-items:center;gap:8px;border:none;background:linear-gradient(135deg,#ef7a5f,var(--coral));
+  color:#fff;border-radius:16px;font-family:inherit;font-weight:900;font-size:22px;padding:12px 26px;cursor:pointer;
+  box-shadow:0 6px 16px rgba(232,96,76,.4);letter-spacing:1px}
+#strokeCurrent:active{transform:translateY(1px)}
+#strokeCurrent i{font-style:normal;font-size:14px;opacity:.9}
 #strokeDrawer{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);margin-bottom:8px;
   background:var(--card);border-radius:18px;box-shadow:0 16px 40px rgba(90,50,40,.3);
   padding:10px 12px;display:none;z-index:40;width:max-content;max-width:92vw}
@@ -393,7 +395,8 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   #aimCard{min-width:0}
   #powerCard{min-width:150px}
   #shootBtn{font-size:20px;padding:0 22px;border-radius:14px;letter-spacing:2px;min-width:74px}
-  #strokeCurrent{font-size:11px;padding:4px 9px;border-radius:9px;gap:4px}
+  #strokeCurrent{font-size:15px;padding:6px 14px;border-radius:11px;gap:5px;box-shadow:0 4px 10px rgba(232,96,76,.35)}
+  #strokeCurrent i{font-size:10px}
   #strokeDrawer{padding:7px 8px;border-radius:14px}
   #strokeDrawer .sdTitle{font-size:10px;margin-bottom:4px}
   .spill.sm{font-size:9px;padding:2px 6px}
@@ -493,7 +496,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0818-0056</div>
+    <div class="buildStamp" id="buildStamp">build 0818-2207</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
