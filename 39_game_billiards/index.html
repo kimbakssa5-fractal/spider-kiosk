@@ -196,7 +196,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 #quitCorner{position:fixed;left:0;top:0;width:92px;height:92px;z-index:99}
 
 /* ---------- 하단 조작부 ---------- */
-#dock{display:flex;gap:10px;align-items:stretch;justify-content:center;min-width:0;overflow:hidden}
+#dock{display:flex;gap:10px;align-items:stretch;justify-content:center;min-width:0;overflow:visible}  /* 블리드가 아래로 나가야 해서 visible */
 .dcard{min-width:0}                    /* 좁은 화면에서 카드가 줄어들 수 있게(넘쳐서 잘리지 않게) */
 .dcard{background:var(--card);border-radius:20px;box-shadow:var(--shadow);padding:8px 14px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
@@ -319,6 +319,8 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .pbtn{width:38px;height:38px;border-radius:12px;border:none;background:var(--coral-soft);color:var(--coral);
   font-size:20px;font-weight:900;cursor:pointer;flex:none;touch-action:none}
 .pbtn:active{background:var(--coral);color:#fff}
+
+/* (블리드 규칙은 미디어쿼리에 덮이지 않게 스타일시트 맨 끝에 있다) */
 
 /* ---------- 오버레이 공통 ---------- */
 .ovl{position:fixed;inset:0;background:rgba(255,248,243,.9);backdrop-filter:blur(6px);
@@ -521,6 +523,24 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   .opill{font-size:13px;padding:6px 13px}
   .bigBtn{font-size:19px;padding:11px 42px}
 }
+
+/* ---------- 화면 밖 블리드 — 일부 버튼 배경이 테두리를 관통해 잘린 형태 (2026-08-19 손그림) ----------
+   위쪽: 로고·점수판이 상단 테두리 밖까지 이어지고, 아래쪽: 힘 카드·샷 버튼이 하단을 뚫는다.
+   폰(rails)에서는 좌우 세로 열이 양옆을 뚫는다. 배경을 음수 마진으로 늘이고 그쪽 라운드를 0으로.
+   ⚠ 반드시 모든 미디어쿼리보다 뒤에 둘 것 — 앞에 두면 폰 규칙이 padding·border 를 도로 덮는다. */
+.logo{align-self:flex-start;margin-top:-40px;padding-top:44px;border-top-left-radius:0;border-top-right-radius:0}
+#scoreArea{top:-30px;transform:translateX(-50%)}
+.pcard{padding-top:30px;border-top-width:0;border-radius:0 0 30px 30px;transform-origin:50% 100%}
+body.rails .pcard{padding-top:24px;padding-bottom:2px;border-radius:0 0 14px 14px}
+body:not(.rails) #powerCard{margin-bottom:-50px;padding-bottom:58px;
+  border-bottom-left-radius:0;border-bottom-right-radius:0}
+body:not(.rails) #shootBtn{margin-bottom:-50px;padding-bottom:50px;
+  border-bottom-left-radius:0;border-bottom-right-radius:0}
+body.rails #leftRail > *{margin-left:-20px;padding-left:28px;
+  border-top-left-radius:0;border-bottom-left-radius:0}
+body.rails #rightRail #strokeCard,
+body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
+  border-top-right-radius:0;border-bottom-right-radius:0}
 </style>
 </head>
 <body>
@@ -611,7 +631,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-0005</div>
+    <div class="buildStamp" id="buildStamp">build 0819-0035</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
