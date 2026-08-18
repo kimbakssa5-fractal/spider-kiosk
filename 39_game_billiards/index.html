@@ -496,7 +496,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0818-2207</div>
+    <div class="buildStamp" id="buildStamp">build 0818-2307</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -1425,6 +1425,61 @@ function aiPlay() {
   }
 }
 
+/* ================= 떠 있는 창 옮기기 =================
+ * 제목줄을 잡아 끌면 창이 따라온다. 화면 밖으로는 못 나가게 가둔다.
+ * (회전 모드에서도 맞게 localXY 대신 화면 좌표 그대로 쓰되, 회전 축을 감안해 이동량을 바꾼다)
+ */
+function makeDraggable(panel, handle) {
+  if (!panel || !handle) return;
+  handle.style.cursor = 'move';
+  handle.style.touchAction = 'none';
+  var dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  handle.addEventListener('pointerdown', function (e) {
+    if (e.target.closest('button,input,canvas,.sw')) return;    // 안의 조작기는 그대로 동작
+    var r = panel.getBoundingClientRect();
+    // 처음 끌기 시작할 때 현재 위치를 고정 좌표로 바꿔 놓는다(가운데 정렬 등 해제)
+    panel.style.position = 'fixed';
+    panel.style.margin = '0';
+    panel.style.right = 'auto'; panel.style.bottom = 'auto';
+    panel.style.transform = 'none';
+    panel.style.left = r.left + 'px';
+    panel.style.top = r.top + 'px';
+    ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
+    dragging = true;
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var dx = e.clientX - sx, dy = e.clientY - sy;
+    if (rotated) { var t = dx; dx = dy; dy = -t; }               // 앱이 90도 돌아가 있으면 축도 돌려서
+    var w = panel.offsetWidth, h = panel.offsetHeight;
+    var sw = document.documentElement.clientWidth, sh = document.documentElement.clientHeight;
+    var nx = Math.max(4 - w * 0.5, Math.min(sw - w * 0.5 - 4, ox + dx));
+    var ny = Math.max(4, Math.min(sh - 40, oy + dy));
+    panel.style.left = nx + 'px';
+    panel.style.top = ny + 'px';
+  });
+  ['pointerup', 'pointercancel'].forEach(function (ev) {
+    handle.addEventListener(ev, function () { dragging = false; });
+  });
+}
+/* 각 창의 제목줄을 손잡이로 */
+makeDraggable($('fineOvl').querySelector('.fCard'), $('fineOvl').querySelector('h3'));
+makeDraggable($('settings'), $('settings').querySelector('h3'));
+makeDraggable($('strokeHelp').querySelector('.shCard'), $('strokeHelp').querySelector('h3'));
+/* 옮겨 둔 창이 화면 밖에 남아 있으면(창 크기 변경·회전 등) 열 때 원래 자리로 되돌린다 */
+function ensureOnScreen(panel) {
+  if (!panel || panel.style.position !== 'fixed') return;
+  var r = panel.getBoundingClientRect();
+  var sw = document.documentElement.clientWidth, sh = document.documentElement.clientHeight;
+  if (r.right < 60 || r.left > sw - 60 || r.bottom < 40 || r.top > sh - 40) {
+    ['position', 'left', 'top', 'right', 'bottom', 'transform', 'margin'].forEach(function (k) {
+      panel.style[k] = '';
+    });
+  }
+}
+
 /* ================= 확대 미세조정 (당점 · 두께) =================
  * 왼쪽: 큐볼을 크게 그려 당점을 끌어서 지정.
  * 오른쪽: 1적구를 크게 그리고 큐볼 고스트를 겹쳐 '두께'를 끌어서 지정 →
@@ -1618,7 +1673,9 @@ function drawBigObj() {
 function drawFine() { drawBigCue(); drawBigObj(); }
 function openFine() {
   if (S.phase !== 'aim') return;
-  fineOn = true; $('fineOvl').style.display = 'flex'; drawFine();
+  fineOn = true; $('fineOvl').style.display = 'flex';
+  ensureOnScreen($('fineOvl').querySelector('.fCard'));
+  drawFine();
   resize();          // 눈높이 뷰 등 다른 패널과 자리 경합 없이 다시 배치
 }
 function closeFine() { fineOn = false; $('fineOvl').style.display = 'none'; }
@@ -2512,6 +2569,7 @@ $('gearBtn').addEventListener('click', toggleSettings);
 function toggleSettings() {
   var s = $('settings');
   s.style.display = s.style.display === 'block' ? 'none' : 'block';
+  if (s.style.display === 'block') ensureOnScreen(s);
 }
 function bindSwitch(id, get, set) {
   var el = $(id);
@@ -2727,6 +2785,26 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       });
       var d1 = +res[0].split('=')[1], d4 = +res[3].split('=')[1];
       document.title = (d4 > d1 * 1.05 ? 'PUSH-OK ' : 'PUSH-FAIL ') + res.join(' ');
+      return;
+    }
+    if (qs.has('dragtest')) {                 // 떠 있는 창을 제목줄로 끌어 옮길 수 있는지
+      openFine();
+      setTimeout(function () {
+        var card = $('fineOvl').querySelector('.fCard');
+        var h3 = $('fineOvl').querySelector('h3');
+        var before = card.getBoundingClientRect();
+        function pe(type, x, y) {
+          h3.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true, pointerId: 1 }));
+        }
+        var hx = before.left + 60, hy = before.top + 12;
+        pe('pointerdown', hx, hy);
+        pe('pointermove', hx - 220, hy + 90);
+        pe('pointerup', hx - 220, hy + 90);
+        var after = card.getBoundingClientRect();
+        var dx = Math.round(after.left - before.left), dy = Math.round(after.top - before.top);
+        var ok = Math.abs(dx + 220) < 6 && Math.abs(dy - 90) < 6;
+        document.title = (ok ? 'DRAG-OK ' : 'DRAG-FAIL ') + 'dx=' + dx + ' dy=' + dy;
+      }, 400);
       return;
     }
     if (qs.has('snaptest')) {                 // 두께 스냅이 표준값에 정확히 붙는지
