@@ -45,14 +45,21 @@ body.rails header{grid-area:hdr}
 body.rails #tableWrap{grid-area:table;min-width:0;min-height:0}   /* 1fr 트랙이 캔버스에 밀리지 않게 */
 body.rails #dock{grid-area:dock}
 /* 좌우 열은 화면을 위아래로 관통한다 — 버튼이 세로로 균등하게 늘어난다 */
-body.rails #leftRail{grid-area:left;display:flex;flex-direction:column;gap:4px;align-items:stretch}
-body.rails #rightRail{grid-area:right;display:flex;flex-direction:column;gap:4px;align-items:stretch}
-body.rails #leftRail > *{flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:center}
-body.rails #rightRail > *{flex:1 1 0;min-height:0}
+body.rails #leftRail{grid-area:left;display:flex;flex-direction:column;gap:4px;align-items:stretch;
+  justify-content:space-between;width:74px;flex:none}
+body.rails #rightRail{grid-area:right;display:flex;flex-direction:column;gap:4px;align-items:stretch;
+  justify-content:space-between;width:132px;flex:none}
+/* 늘어나되 지나치게 커지지는 않게 — 첫 버튼은 위, 마지막은 아래에 붙어 '관통'으로 보인다 */
+body.rails #leftRail > *{flex:1 1 0;min-height:0;max-height:52px;
+  display:flex;align-items:center;justify-content:center}
+body.rails #rightRail > *{flex:0 0 auto;min-height:0}
+body.rails #rightRail #eyeCol{width:100%;align-items:stretch;gap:0}
+body.rails #rightRail #eyeCard{width:100%}
+body.rails #rightRail canvas#eyeView{margin:0 auto}
 body.rails #leftRail .pill{padding:4px 8px;font-size:11px;white-space:nowrap;border-radius:12px}
 body.rails #leftRail #fineBtn{margin:0;font-size:11px;padding:4px 8px;width:100%;height:100%}
-body.rails #rightRail #shootBtn{flex:2 1 0;height:auto;min-width:56px;font-size:20px;padding:0 8px;
-  writing-mode:vertical-rl;letter-spacing:8px;border-radius:16px}
+body.rails #rightRail #shootBtn{flex:1 1 0;height:auto;min-width:56px;font-size:20px;padding:8px;
+  writing-mode:horizontal-tb;letter-spacing:4px;border-radius:16px}
 body.rails #rightRail #strokeCard{padding:4px 6px;justify-content:center}
 /* 노치·홈 인디케이터 영역을 피한다(가로 모드에서 좌우 노치가 화면을 먹는다) */
 @supports (padding:env(safe-area-inset-left)){
@@ -531,7 +538,9 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 .logo{background:none;box-shadow:none;padding:10px 0}   /* 로고는 빨강 배경 없이 글자만 (2026-08-19) */
 #scoreArea{top:-30px;transform:translateX(-50%)}         /* left 는 resize()가 당구대 중앙으로 잡는다 */
 .pcard{padding-top:30px;border-top-width:0;border-radius:0 0 30px 30px;transform-origin:50% 100%}
-body.rails .pcard{padding-top:24px;padding-bottom:2px;border-radius:0 0 14px 14px}
+/* 폰: 위로 조금만 뚫는다 — 많이 올리면 글씨가 화면 밖으로 잘려 읽을 수 없다 */
+body.rails #scoreArea{top:-8px}
+body.rails .pcard{padding-top:15px;padding-bottom:3px;border-radius:0 0 14px 14px}
 body:not(.rails) .dcard{margin-bottom:-50px;padding-bottom:58px;
   border-bottom-left-radius:0;border-bottom-right-radius:0}
 body:not(.rails) #shootBtn{margin-bottom:-50px;padding-bottom:50px;
@@ -631,7 +640,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-0208</div>
+    <div class="buildStamp" id="buildStamp">build 0819-0221</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -869,7 +878,7 @@ function applyRails(on) {
   if (!L || !R) return;
   if (!railHome) {
     railHome = [];
-    ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'fineBtn', 'strokeCard', 'shootBtn'].forEach(function (id) {
+    ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'fineBtn', 'eyeCol', 'strokeCard', 'shootBtn'].forEach(function (id) {
       var el = $(id);
       if (el) railHome.push({ el: el, parent: el.parentNode, next: el.nextSibling });
     });
@@ -880,6 +889,8 @@ function applyRails(on) {
     ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'fineBtn'].forEach(function (id) {
       var el = $(id); if (el) L.appendChild(el);
     });
+    /* 눈높이 뷰도 오른쪽 열에 넣는다 — 떠 있으면 당구대를 가려서 */
+    var ec = $('eyeCol'); if (ec) R.appendChild(ec);
     var sc = $('strokeCard'); if (sc) R.appendChild(sc);
     var sb = $('shootBtn'); if (sb) R.appendChild(sb);
   } else {
@@ -905,9 +916,10 @@ function resize() {
     requestAnimationFrame(function () { resize(); });
   }
   FRAME = pip ? 0.06 : 0.115;                  // 폰에선 나무 프레임을 얇게 — 천이 최대한 크게
+  var inRail = document.body.classList.contains('rails');   // 폰: 눈높이 뷰가 오른쪽 열 안에 있다
   $('eyeCol').style.display = eyeOn ? '' : 'none';
-  $('eyeCol').classList.toggle('pip', pip);
-  wrap.classList.toggle('pipLeft', pip && eyeOn);   // PIP 땐 테이블 왼쪽 정렬 → 가림 최소화
+  $('eyeCol').classList.toggle('pip', pip && !inRail);       // 열 안에 있으면 떠 있지 않는다
+  wrap.classList.toggle('pipLeft', pip && eyeOn && !inRail);
   if (eyeOn && !pip) {
     eyeW = Math.max(260, Math.min(430, Math.round(vw * 0.26)));
     eyeH = eyeW;                                    // 정사각
@@ -936,9 +948,15 @@ function resize() {
   cv.width = Math.round(view.w * DPR); cv.height = Math.round(view.h * DPR);
   view.ox = FRAME * ppm; view.oy = FRAME * ppm;
   if (eyeOn && pip) {
-    // 테이블 크기가 정해진 뒤, 오른쪽 남는 여백에 맞춰 PIP 크기를 정한다 (가림 최소화)
-    var freeW = Math.min(wrap.clientWidth, vw - 16) - view.w - 14;
-    eyeW = Math.max(150, Math.min(260, Math.round(vw * 0.28), freeW > 150 ? freeW : 150));
+    if (inRail) {
+      // 오른쪽 열 폭에 딱 맞는 정사각 — 당구대를 전혀 가리지 않는다
+      eyeW = Math.max(70, $('rightRail').clientWidth - 8);
+      eyeW = Math.min(eyeW, Math.round(ch * 0.42));   // 열 높이를 다 먹지 않게
+    } else {
+      // 테이블 크기가 정해진 뒤, 오른쪽 남는 여백에 맞춰 PIP 크기를 정한다 (가림 최소화)
+      var freeW = Math.min(wrap.clientWidth, vw - 16) - view.w - 14;
+      eyeW = Math.max(150, Math.min(260, Math.round(vw * 0.28), freeW > 150 ? freeW : 150));
+    }
     eyeH = eyeW;                                    // 정사각
     eyeCv.style.width = eyeW + 'px'; eyeCv.style.height = eyeH + 'px';
     eyeCv.width = Math.round(eyeW * DPR); eyeCv.height = Math.round(eyeH * DPR);
@@ -3256,7 +3274,15 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
           tableBox: [Math.round(cvr.left), Math.round(cvr.top), Math.round(cvr.right), Math.round(cvr.bottom)],
           vw: viewportW(), ih: window.innerHeight,
           table: [view.w, view.h], wrap: [Math.round(wrap.width), Math.round(wrap.height)],
-          header: Math.round(hd.height), dock: Math.round(dk.height), kids: kids });
+          header: Math.round(hd.height), dock: Math.round(dk.height), kids: kids,
+          dockBottom: Math.round(dk.bottom),
+          spin: (function () { var r = $('spinPad').getBoundingClientRect();
+            return [Math.round(r.width), Math.round(r.height), Math.round(r.bottom)]; })(),
+          score: (function () { var e = $('scoreArea').firstElementChild;
+            if (!e) return null; var r = e.getBoundingClientRect();
+            return [Math.round(r.left), Math.round(r.top), Math.round(r.height)]; })(),
+          eye: (function () { var r = $('eyeCard').getBoundingClientRect();
+            return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; })() });
       }, 700);
     }
     if (qs.has('undobtntest')) {              // 폰용 [무르기] 버튼이 실제로 되돌리는지
