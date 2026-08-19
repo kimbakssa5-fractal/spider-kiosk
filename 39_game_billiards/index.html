@@ -647,7 +647,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-0227</div>
+    <div class="buildStamp" id="buildStamp">build 0819-2104</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -2924,6 +2924,14 @@ function updateFsBtn() {
   b.title = fsIsOn() ? '전체화면 나가기 (F)' : '전체화면 (F)';
   b.classList.toggle('on', fsIsOn());
 }
+/* 전체화면에서 확실히 빠져나온다 — 자동 복귀 스위치까지 함께 끈다 */
+function exitFullscreenHard() {
+  window.__autoFullscreenOff = true;
+  $('swAutoFs').classList.remove('on');
+  if (window.__exitFullscreen) window.__exitFullscreen();
+  else (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+  setTimeout(updateFsBtn, 200);
+}
 function toggleFullscreen() {
   if (fsIsOn()) {
     /* 버튼으로 나갈 땐 자동 복귀도 함께 꺼 준다 — 안 그러면 눌러도 곧바로 다시 들어가 못 빠져나온다 */
@@ -2996,6 +3004,14 @@ $('btnStrokeHelp').addEventListener('click', function () { toggleSettings(); $('
 document.addEventListener('keydown', function (e) {
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z' || e.key === 'ㅋ')) {
     e.preventDefault(); undoShot(); return;      // Ctrl+Z = 직전 배치로 (승리 화면에서도 동작)
+  }
+  if (e.key === 'Escape' || e.keyCode === 27) {
+    /* Esc = 전체화면 탈출. 브라우저가 자체로 풀스크린을 풀어 주지만, 그것만으로는
+       자동 복귀가 다음 클릭에 다시 집어넣는다 → 버튼으로 나갈 때와 같은 경로로 확실히 끈다.
+       키오스크(--kiosk)처럼 브라우저 풀스크린이 아닌 경우엔 창 모드로 내려갈 방법이 없으니
+       그때는 조용히 넘어간다. */
+    exitFullscreenHard();
+    return;
   }
   if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') { toggleFullscreen(); return; }
   if (e.key === 'k' || e.key === 'K' || e.key === 'ㅏ') { $('kifuBtn').click(); return; }
@@ -3269,6 +3285,18 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       pr2.style.paddingBottom = (+fs2[2] || 0) + 'px';
       pr2.style.paddingLeft = (+fs2[3] || 0) + 'px';
       fitOrientation();
+    }
+    if (qs.has('esctest')) {                  // Esc 가 전체화면 탈출 경로를 타는지
+      setTimeout(function () {
+        window.__autoFullscreenOff = false;
+        $('swAutoFs').classList.add('on');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+        setTimeout(function () {
+          var offOK = window.__autoFullscreenOff === true;
+          var swOK = !$('swAutoFs').classList.contains('on');
+          document.title = (offOK && swOK) ? 'ESC-OK' : ('ESC-FAIL off=' + offOK + ' sw=' + swOK);
+        }, 300);
+      }, 600);
     }
     if (qs.has('measure')) {                  // 레이아웃 실측: 테이블이 차지하는 크기
       setTimeout(function () {
