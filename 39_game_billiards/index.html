@@ -338,7 +338,7 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 #closeBtn{position:fixed;top:6px;right:8px;z-index:60;width:36px;height:36px;border-radius:50%;
   display:none;align-items:center;justify-content:center;cursor:pointer;
   background:rgba(58,63,71,.92);color:#eceff3;font-size:17px;font-weight:900;box-shadow:var(--shadow);
-  line-height:1;padding-bottom:2px}   /* ✕ 글리프가 아래로 처져서 살짝 끌어올림 */
+  line-height:1;padding-bottom:7px}   /* ✕ 글리프가 아래로 처져서 끌어올림(아래 여백의 절반만큼 올라간다) */
 #closeBtn.show{display:flex}
 /* X 가 떠 있는 동안엔 헤더 오른쪽 끝(⚙)이 그 밑에 깔리지 않게 자리를 비켜 준다 */
 body.hasClose header{padding-right:42px}
@@ -659,7 +659,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-2137</div>
+    <div class="buildStamp" id="buildStamp">build 0819-2142</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>

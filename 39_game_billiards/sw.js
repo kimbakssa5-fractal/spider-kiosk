@@ -2,7 +2,7 @@
  * 앱 껍데기를 캐시해 두 번째 실행부터는 인터넷 없이도 뜬다.
  * 캐시 이름의 버전을 올리면 옛 캐시는 activate 때 지워진다(배포마다 build_variants.py 가 갱신).
  */
-var CACHE = 'billiards39-v20260819-213739';
+var CACHE = 'billiards39-v20260819-214251';
 var SHELL = [
   './',
   './index.html',
