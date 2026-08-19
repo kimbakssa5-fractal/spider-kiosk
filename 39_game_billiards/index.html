@@ -647,7 +647,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-2104</div>
+    <div class="buildStamp" id="buildStamp">build 0819-2115</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -2941,6 +2941,7 @@ function toggleFullscreen() {
     else (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
   } else {
     window.__autoFullscreenOff = false;
+    if (window.__allowFullscreen) window.__allowFullscreen();   // 잠금 해제 후 다시 진입
     $('swAutoFs').classList.add('on');
     var el = document.documentElement;
     var fn = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -3285,6 +3286,25 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       pr2.style.paddingBottom = (+fs2[2] || 0) + 'px';
       pr2.style.paddingLeft = (+fs2[3] || 0) + 'px';
       fitOrientation();
+    }
+    if (qs.has('fstest')) {                   // 풀스크린이 풀린 뒤 자동으로 다시 들어가지 않는지
+      setTimeout(function () {
+        var el = document.documentElement, n = 0;
+        var orig = el.requestFullscreen;
+        el.requestFullscreen = function () { n++; return Promise.resolve(); };
+        document.dispatchEvent(new Event('fullscreenchange'));   // 풀스크린이 풀렸다
+        window.dispatchEvent(new Event('pointerdown'));          // 그 뒤 아무거나 만져도
+        window.dispatchEvent(new Event('click'));                // 다시 들어가면 안 된다
+        setTimeout(function () {
+          var byGesture = n;
+          if (window.__enterFullscreen) window.__enterFullscreen();   // 앱이 부탁하면 들어가야
+          setTimeout(function () {
+            el.requestFullscreen = orig;
+            document.title = (byGesture === 0 && n > 0)
+              ? 'FSLOCK-OK' : ('FSLOCK-FAIL gesture=' + byGesture + ' explicit=' + n);
+          }, 250);
+        }, 250);
+      }, 900);
     }
     if (qs.has('esctest')) {                  // Esc 가 전체화면 탈출 경로를 타는지
       setTimeout(function () {

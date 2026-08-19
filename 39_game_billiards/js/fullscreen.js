@@ -42,13 +42,20 @@ function request(){
 }
 
 var wanted = false;        // 한 번이라도 풀스크린에 들어갔다 = 앞으로도 풀스크린이 정상 상태
-var userExited = 0;        // Esc 로 직접 나간 시각 (이 뒤 10초는 자동 복귀 안 함)
+var userExited = 0;        // Esc 로 직접 나간 시각
+var blocked = false;       // ★ 풀스크린이 풀렸다 = 다시 밀어 넣지 않는다 (아래 설명)
 var armed = false;
 
+/* ★ 2026-08-19 — "Esc 를 눌러도 못 빠져나온다"의 진짜 원인.
+   크롬은 풀스크린 중의 Esc 를 **자기가 삼켜서** 풀스크린만 풀고 keydown 을 안 준다.
+   그래서 "Esc 를 눌렀다"는 표시(userExited)가 남지 않았고, 그 틈에 자동 복귀가
+   120ms 뒤 다시 집어넣어 영영 못 나갔다.
+   → 이제는 '누가 풀었는지' 따지지 않는다. 풀스크린이 풀리면 무조건 blocked 로 두고,
+     되돌아가는 건 앱이 명시적으로 부탁할 때(__enterFullscreen: 저장 대화상자 뒤)뿐이다. */
 var events = ['pointerdown','touchstart','keydown','click'];
 function onGesture(){
   if(isFs() || kioskLike()){ off(); return; }
-  if(Date.now() - userExited < 10000) return;   // 사용자가 방금 Esc 로 나갔다 — 존중
+  if(blocked) return;                           // 사용자가 나갔다 — 존중
   request();
   setTimeout(function(){ if(isFs()) off(); }, 300);
 }
@@ -67,16 +74,20 @@ function off(){
    그 시점엔 사용자 제스처가 살아 있는 경우가 있어 곧바로 성공하기도 한다. */
 function reenter(){
   if(kioskLike() || isFs()) return;
-  if(Date.now() - userExited < 10000) return;
+  blocked = false;                                    // 앱이 명시적으로 부탁했다 = 되돌아가도 된다
   request();
   setTimeout(function(){ if(!isFs()) on(); }, 200);   // 막혔으면 다음 입력에서
 }
 window.__enterFullscreen = reenter;
+/* 화면의 [전체화면] 버튼·F 키로 들어갈 때 잠금을 푼다 */
+window.__allowFullscreen = function(){ blocked = false; };
 /* 화면의 [전체화면 해제] 버튼처럼 "사용자가 스스로 나간" 경우를 알려 주는 창구.
    이걸 부르면 Esc 로 나간 것과 똑같이 취급해 자동 복귀가 붙잡지 않는다. */
 window.__exitFullscreen = function () {
   userExited = Date.now();
   wanted = false;
+  blocked = true;
+  off();                                    // 다음 클릭에 다시 들어가지 않게 감시도 푼다
   var d = document;
   var fn = d.exitFullscreen || d.webkitExitFullscreen || d.msExitFullscreen;
   if (fn && isFs()) { try { fn.call(d); } catch (e) {} }
@@ -89,14 +100,15 @@ window.addEventListener('keydown', function(e){
   if(e.key === 'Escape' || e.keyCode === 27) userExited = Date.now();
 }, true);
 
-document.addEventListener('fullscreenchange', function(){
-  if(isFs()){ wanted = true; off(); return; }
-  /* 풀스크린이 풀렸다 */
-  if(!wanted) return;
-  if(Date.now() - userExited < 10000) return;         // Esc 로 나갔으면 그대로 둔다
-  /* 대화상자가 닫히는 타이밍보다 조금 뒤에 시도해야 먹는다 */
-  setTimeout(reenter, 120);
-});
+function onFsChange(){
+  if(isFs()){ wanted = true; blocked = false; off(); return; }
+  /* 풀스크린이 풀렸다 — 누가 풀었든 다시 밀어 넣지 않는다.
+     저장·인쇄 대화상자로 풀린 경우는 그 코드가 끝나고 __enterFullscreen() 을 직접 부른다. */
+  blocked = true;
+  off();
+}
+document.addEventListener('fullscreenchange', onFsChange);
+document.addEventListener('webkitfullscreenchange', onFsChange);   // 사파리·아이폰
 
 function boot(){
   if(kioskLike()){ wanted = true; return; }   // 런처로 띄운 경우 — 이미 전체화면
