@@ -659,7 +659,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-2142</div>
+    <div class="buildStamp" id="buildStamp">build 0820-0204</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -2936,13 +2936,29 @@ function updateFsBtn() {
   b.title = fsIsOn() ? '전체화면 나가기 (F)' : '전체화면 (F)';
   b.classList.toggle('on', fsIsOn());
 }
+/* 지금 떠 있는 팝업 중 맨 위의 것을 닫는다. 닫았으면 true.
+   Esc 와 [✕] 가 같은 순서로 쓴다 — 위에 뜬 것부터 하나씩. */
+function closeTopmost() {
+  var vis = function (id) {
+    var el = $(id);
+    return el && getComputedStyle(el).display !== 'none';
+  };
+  if (vis('strokeHelp')) { $('strokeHelp').style.display = 'none'; return true; }
+  if (vis('kifuOvl')) { $('kifuOvl').style.display = 'none'; return true; }
+  if (vis('fineOvl')) { closeFine(); return true; }
+  if (vis('settings')) { $('settings').style.display = 'none'; return true; }
+  if ($('strokeDrawer') && $('strokeDrawer').classList.contains('open')) { openDrawer(false); return true; }
+  if (typeof kifuMode !== 'undefined' && kifuMode) { kifuExit(); return true; }
+  return false;
+}
 /* 전체화면에서 확실히 빠져나온다 — 자동 복귀 스위치까지 함께 끈다 */
 function exitFullscreenHard() {
   window.__autoFullscreenOff = true;
   $('swAutoFs').classList.remove('on');
   if (window.__exitFullscreen) window.__exitFullscreen();
   else (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
-  setTimeout(updateFsBtn, 200);
+  if (isExeShell()) fetch('/__fs?on=0').catch(function () {});   // exe: 창 자체를 창 모드로
+  setTimeout(function () { updateFsBtn(); updateCloseBtn(); }, 250);
 }
 function toggleFullscreen() {
   if (fsIsOn()) {
@@ -2958,8 +2974,9 @@ function toggleFullscreen() {
     var el = document.documentElement;
     var fn = el.requestFullscreen || el.webkitRequestFullscreen;
     if (fn) { try { fn.call(el); } catch (e) {} }
+    if (isExeShell()) fetch('/__fs?on=1').catch(function () {});   // exe: 창 자체를 전체화면으로
   }
-  setTimeout(updateFsBtn, 200);
+  setTimeout(function () { updateFsBtn(); updateCloseBtn(); }, 250);
 }
 $('fsBtn').addEventListener('click', toggleFullscreen);
 /* ── 닫기 [✕] ──────────────────────────────────────────────
@@ -3050,10 +3067,9 @@ document.addEventListener('keydown', function (e) {
     e.preventDefault(); undoShot(); return;      // Ctrl+Z = 직전 배치로 (승리 화면에서도 동작)
   }
   if (e.key === 'Escape' || e.keyCode === 27) {
-    /* Esc = 전체화면 탈출. 브라우저가 자체로 풀스크린을 풀어 주지만, 그것만으로는
-       자동 복귀가 다음 클릭에 다시 집어넣는다 → 버튼으로 나갈 때와 같은 경로로 확실히 끈다.
-       키오스크(--kiosk)처럼 브라우저 풀스크린이 아닌 경우엔 창 모드로 내려갈 방법이 없으니
-       그때는 조용히 넘어간다. */
+    /* Esc 는 '지금 열려 있는 것'을 위에서부터 하나씩 닫는다.
+       열린 팝업이 하나도 없을 때에만 전체화면을 벗어난다. */
+    if (closeTopmost()) { e.preventDefault(); return; }
     exitFullscreenHard();
     return;
   }
@@ -3329,6 +3345,24 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       pr2.style.paddingBottom = (+fs2[2] || 0) + 'px';
       pr2.style.paddingLeft = (+fs2[3] || 0) + 'px';
       fitOrientation();
+    }
+    if (qs.has('popesctest')) {               // Esc 가 열린 팝업을 위에서부터 닫는지
+      setTimeout(function () {
+        var esc = function () {
+          document.dispatchEvent(new KeyboardEvent('keydown',
+            { key: 'Escape', keyCode: 27, bubbles: true }));
+        };
+        var vis = function (id) { return getComputedStyle($(id)).display !== 'none'; };
+        var log = [];
+        $('settings').style.display = 'block';
+        $('fineOvl').style.display = 'flex';
+        $('strokeHelp').style.display = 'flex';
+        esc(); log.push('help=' + vis('strokeHelp'));      // 맨 위(설명)부터
+        esc(); log.push('fine=' + vis('fineOvl'));         // 그 다음 확대조정
+        esc(); log.push('set=' + vis('settings'));         // 그 다음 설정
+        var ok = log.join(',') === 'help=false,fine=false,set=false';
+        document.title = ok ? 'POPESC-OK' : ('POPESC-FAIL ' + log.join(' '));
+      }, 800);
     }
     if (qs.has('fstest')) {                   // 풀스크린이 풀린 뒤 자동으로 다시 들어가지 않는지
       setTimeout(function () {
