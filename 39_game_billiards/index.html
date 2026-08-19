@@ -334,6 +334,13 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
   font-size:20px;font-weight:900;cursor:pointer;flex:none;touch-action:none}
 .pbtn:active{background:var(--coral);color:#fff}
 
+/* 전체화면을 벗어났을 때만 보이는 닫기 버튼 — 화면 우상단 고정 */
+#closeBtn{position:fixed;top:6px;right:8px;z-index:60;width:36px;height:36px;border-radius:50%;
+  display:none;align-items:center;justify-content:center;cursor:pointer;
+  background:rgba(58,63,71,.92);color:#eceff3;font-size:17px;font-weight:900;box-shadow:var(--shadow)}
+#closeBtn.show{display:flex}
+#closeBtn:active{background:var(--coral);color:#fff}
+
 /* (블리드 규칙은 미디어쿼리에 덮이지 않게 스타일시트 맨 끝에 있다) */
 
 /* ---------- 오버레이 공통 ---------- */
@@ -567,6 +574,8 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
     <div class="pill" id="targetPill"><small>목표</small><span id="targetVal">10</span>점</div>
     <div class="pill" id="undoBtn" title="직전 배치로 (Ctrl+Z)">↶ 무르기</div>
   <div class="pill" id="fsBtn" title="전체화면 켜고 끄기 (F)">전체화면</div>
+  <!-- 전체화면을 벗어났을 때만 뜨는 닫기 버튼. exe 창은 테두리가 없어 자체 X 가 없다. -->
+  <div id="closeBtn" title="닫기">✕</div>
   <div class="pill" id="kifuBtn" title="기보 — 지난 샷 복기 (K)">기보</div>
   <div class="pill" id="gearBtn">⚙</div>
   </header>
@@ -647,7 +656,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-2115</div>
+    <div class="buildStamp" id="buildStamp">build 0819-2125</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -2950,6 +2959,34 @@ function toggleFullscreen() {
   setTimeout(updateFsBtn, 200);
 }
 $('fsBtn').addEventListener('click', toggleFullscreen);
+/* ── 닫기 [✕] ──────────────────────────────────────────────
+   화면 전체를 덮고 있을 때는 숨기고, 벗어났을 때만 띄운다.
+   exe 는 창에 테두리가 없어(frame:false) 윈도우 X 가 아예 없다 → /__quit 로 종료. */
+function coversScreen() {
+  return Math.abs(window.innerHeight - screen.height) <= 2 &&
+         Math.abs(window.innerWidth - screen.width) <= 2;
+}
+function updateCloseBtn() {
+  $('closeBtn').classList.toggle('show', !coversScreen());
+}
+function isExeShell() {
+  return location.protocol === 'http:' && location.port === '47839';
+}
+$('closeBtn').addEventListener('click', function () {
+  if (isExeShell()) {                       // 오프라인 exe — 앱을 종료한다
+    fetch('/__quit').catch(function () {});
+    setTimeout(function () { try { window.close(); } catch (e) {} }, 250);
+    return;
+  }
+  try { window.close(); } catch (e) {}      // 앱으로 설치(PWA)했으면 이걸로 닫힌다
+  setTimeout(function () {                  // 일반 탭이면 브라우저가 막는다 → 전체화면만 해제
+    if (!document.hidden) exitFullscreenHard();
+  }, 250);
+});
+window.addEventListener('resize', updateCloseBtn);
+document.addEventListener('fullscreenchange', updateCloseBtn);
+document.addEventListener('webkitfullscreenchange', updateCloseBtn);
+updateCloseBtn();
 document.addEventListener('fullscreenchange', updateFsBtn);
 document.addEventListener('webkitfullscreenchange', updateFsBtn);
 updateFsBtn();
