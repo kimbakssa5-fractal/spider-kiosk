@@ -337,8 +337,11 @@ canvas#table{border-radius:26px;box-shadow:0 18px 44px rgba(90,60,40,.22);touch-
 /* 전체화면을 벗어났을 때만 보이는 닫기 버튼 — 화면 우상단 고정 */
 #closeBtn{position:fixed;top:6px;right:8px;z-index:60;width:36px;height:36px;border-radius:50%;
   display:none;align-items:center;justify-content:center;cursor:pointer;
-  background:rgba(58,63,71,.92);color:#eceff3;font-size:17px;font-weight:900;box-shadow:var(--shadow)}
+  background:rgba(58,63,71,.92);color:#eceff3;font-size:17px;font-weight:900;box-shadow:var(--shadow);
+  line-height:1;padding-bottom:2px}   /* ✕ 글리프가 아래로 처져서 살짝 끌어올림 */
 #closeBtn.show{display:flex}
+/* X 가 떠 있는 동안엔 헤더 오른쪽 끝(⚙)이 그 밑에 깔리지 않게 자리를 비켜 준다 */
+body.hasClose header{padding-right:42px}
 #closeBtn:active{background:var(--coral);color:#fff}
 
 /* (블리드 규칙은 미디어쿼리에 덮이지 않게 스타일시트 맨 끝에 있다) */
@@ -656,7 +659,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0819-2125</div>
+    <div class="buildStamp" id="buildStamp">build 0819-2137</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -2967,7 +2970,10 @@ function coversScreen() {
          Math.abs(window.innerWidth - screen.width) <= 2;
 }
 function updateCloseBtn() {
-  $('closeBtn').classList.toggle('show', !coversScreen());
+  var on = !coversScreen();
+  $('closeBtn').classList.toggle('show', on);
+  document.body.classList.toggle('hasClose', on);
+  if (typeof resize === 'function') resize();     // 자리를 비켜 준 만큼 다시 잰다
 }
 function isExeShell() {
   return location.protocol === 'http:' && location.port === '47839';
