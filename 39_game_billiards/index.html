@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="ko" translate="no">
 <head>
+<script>/*__saveToDesktopShim*/(function(){if(window.__saveShimOn)return;window.__saveShimOn=1;
+var oc=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){
+var self=this;if(self.download&&window.showSaveFilePicker&&/^(blob|data):/.test(self.href)){
+var href=self.href,name=self.download;(async function(){try{
+var h=await window.showSaveFilePicker({suggestedName:name,startIn:'desktop'});
+var b=await(await fetch(href)).blob();var w=await h.createWritable();await w.write(b);await w.close();
+}catch(e){if(e&&e.name==='AbortError')return;try{oc.call(self)}catch(_){}}})();return;}
+return oc.apply(self,arguments);};})();</script>
 <meta name="google" content="notranslate">
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
@@ -567,6 +575,25 @@ body.rails #leftRail > *{margin-left:-20px;padding-left:28px;
 body.rails #rightRail #strokeCard,
 body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   border-top-right-radius:0;border-bottom-right-radius:0}
+
+/* ── 공 배치 모드(연습 전용) ─────────────────────────────
+   특정 포지션을 만들어 두고 반복해서 연습하는 용도. */
+#placeBtn.on{background:var(--coral);color:#fff}
+#placeBar{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:40;
+  display:none;gap:6px;align-items:center;background:rgba(58,63,71,.96);
+  border-radius:16px;padding:7px 10px;box-shadow:var(--shadow)}
+#placeBar.on{display:flex}
+#placeBar .pb{border:none;border-radius:11px;background:var(--coral-soft);color:var(--ink);
+  font-family:inherit;font-size:13px;font-weight:900;padding:7px 12px;cursor:pointer;white-space:nowrap}
+#placeBar .pb.key{background:var(--coral);color:#fff}
+#placeBar .pb.on{background:#4c8bf5;color:#fff}
+#placeBar .pb:active{opacity:.75}
+#placeBar .ptxt{font-size:12px;font-weight:700;color:#a9b2bd;padding:0 4px}
+@media (max-width:900px), (max-height:560px){
+  #placeBar{bottom:4px;padding:4px 6px;gap:4px;border-radius:12px}
+  #placeBar .pb{font-size:11px;padding:5px 8px;border-radius:9px}
+  #placeBar .ptxt{display:none}
+}
 </style>
 </head>
 <body>
@@ -576,6 +603,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
     <div id="scoreArea"></div>
     <div class="pill" id="targetPill"><small>목표</small><span id="targetVal">10</span>점</div>
     <div class="pill" id="undoBtn" title="직전 배치로 (Ctrl+Z)">↶ 무르기</div>
+  <div class="pill" id="placeBtn" title="공을 직접 놓는다 — 특정 포지션 반복 연습 (P)">공 배치</div>
   <div class="pill" id="fsBtn" title="전체화면 켜고 끄기 (F)">전체화면</div>
   <!-- 전체화면을 벗어났을 때만 뜨는 닫기 버튼. exe 창은 테두리가 없어 자체 X 가 없다. -->
   <div id="closeBtn" title="닫기">✕</div>
@@ -646,6 +674,14 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
     <button id="shootBtn">샷</button>
   </div>
 <div id="quitCorner"></div>
+<div id="placeBar">
+  <span class="ptxt">공을 끌어 놓으세요</span>
+  <button class="pb" id="pbSave">이 배치 저장</button>
+  <button class="pb" id="pbLoad">저장한 배치</button>
+  <button class="pb" id="pbRepeat" title="샷이 끝나면 저장한 배치로 자동 복귀">반복 연습</button>
+  <button class="pb" id="pbRack">처음 배치</button>
+  <button class="pb key" id="pbDone">완료</button>
+</div>
 <div id="kifuBar"><span id="kifuBarTxt">복기</span>
   <button id="kbPrev">◀</button><button id="kbReplay">↻</button><button id="kbNext">▶</button>
   <button id="kbExit">복기 끝</button></div>
@@ -659,7 +695,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0820-0204</div>
+    <div class="buildStamp" id="buildStamp">build 0821-2146</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -1152,6 +1188,67 @@ function aimAtRed() {
   var c = st.balls[cueId()], r = st.balls[2];
   setAngle(Math.atan2(r.y - c.y, r.x - c.x));   // 각도 표시까지 함께 갱신
 }
+
+/* ================= 공 배치 모드 (연습 전용) =================
+   특정 포지션을 만들어 두고 반복해 치는 연습용.
+   · [공 배치] → 공을 끌어서 원하는 자리에 놓는다
+   · [이 배치 저장] → 저장(브라우저에 남는다)
+   · [반복 연습] → 샷이 끝날 때마다 저장한 배치로 자동 복귀 */
+var placeMode = false, placeDrag = -1, repeatDrill = false;
+var PLACE_KEY = 'billiards39_place';
+
+function ballsSnapshot() {
+  return st.balls.map(function (b) { return { x: b.x, y: b.y }; });
+}
+function ballsRestore(pos) {
+  if (!pos || pos.length < 3) return false;
+  for (var i = 0; i < 3 && i < st.balls.length; i++) {
+    var b = st.balls[i];
+    b.x = pos[i].x; b.y = pos[i].y;
+    b.vx = b.vy = 0; b.wx = b.wy = b.wz = 0;
+  }
+  S.trails = [[], [], []];
+  S.guideDirty = true;
+  return true;
+}
+function savedPlacement() {
+  try { return JSON.parse(localStorage.getItem(PLACE_KEY) || 'null'); } catch (e) { return null; }
+}
+/* 쿠션 안, 그리고 다른 공과 겹치지 않는 자리로 밀어 넣는다 */
+function clampBallPos(i, x, y) {
+  var R = P.R, m = R + 0.002;
+  x = Math.max(m, Math.min(st.W - m, x));
+  y = Math.max(m, Math.min(st.H - m, y));
+  for (var k = 0; k < 3; k++) {
+    if (k === i) continue;
+    var o = st.balls[k], dx = x - o.x, dy = y - o.y;
+    var d = Math.hypot(dx, dy), need = 2 * R + 0.001;
+    if (d < need) {
+      if (d < 1e-6) { dx = 1; dy = 0; d = 1; }      // 완전히 겹쳤으면 아무 방향으로
+      x = o.x + dx / d * need;
+      y = o.y + dy / d * need;
+      x = Math.max(m, Math.min(st.W - m, x));
+      y = Math.max(m, Math.min(st.H - m, y));
+    }
+  }
+  return { x: x, y: y };
+}
+function setPlaceMode(on) {
+  placeMode = !!on && S.mode === 'practice';
+  placeDrag = -1;
+  $('placeBtn').classList.toggle('on', placeMode);
+  $('placeBar').classList.toggle('on', placeMode);
+  if (placeMode) { S.phase = 'aim'; setPhase('aim'); }
+  S.guideDirty = true;
+}
+function pickBallAt(wx, wy) {
+  var best = -1, bestD = P.R * 2.4;              // 손가락도 잡히게 넉넉히
+  for (var i = 0; i < 3; i++) {
+    var d = Math.hypot(wx - st.balls[i].x, wy - st.balls[i].y);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
 function newGame() {
   S.players = [];
   if (S.mode === 'practice') {
@@ -1175,7 +1272,10 @@ function buildScore() {
       '에버리지 <b id="prAvg">0.00</b> · 연속 <b id="prStk">0</b> · 최고 <b id="prBest">0</b></span></div>';
     $('targetPill').style.display = 'none';
     document.querySelector('header').classList.add('noTarget');
+    $('placeBtn').style.display = '';            // 공 배치는 연습 전용
   } else {
+    $('placeBtn').style.display = 'none';
+    if (placeMode) setPlaceMode(false);
     for (var i = 0; i < 2; i++) {
       var p = S.players[i];
       area.innerHTML +=
@@ -1236,10 +1336,27 @@ function setAngle(a) {
 }
 cv.addEventListener('pointerdown', aimPointer);
 cv.addEventListener('pointermove', function (e) { if (e.buttons) aimPointer(e); });
+['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+  cv.addEventListener(ev, function () {
+    if (placeDrag >= 0) { placeDrag = -1; aimAtRed(); }   // 놓으면 조준선을 다시 잡아 준다
+  });
+});
 function aimPointer(e) {
   if (S.phase !== 'aim') return;
+  var lp0 = localXY(e, cv);
+  if (placeMode) {                       // 배치 모드: 조준 대신 공을 끌어 옮긴다
+    var px = S2WX(lp0.x), py = S2WY(lp0.y);
+    if (e.type === 'pointerdown') placeDrag = pickBallAt(px, py);
+    if (placeDrag < 0) return;
+    var p = clampBallPos(placeDrag, px, py);
+    var b = st.balls[placeDrag];
+    b.x = p.x; b.y = p.y; b.vx = b.vy = 0; b.wx = b.wy = b.wz = 0;
+    S.trails = [[], [], []];
+    S.guideDirty = true;
+    return;
+  }
   touchForNextShot();
-  var lp = localXY(e, cv);
+  var lp = lp0;
   var wx = S2WX(lp.x), wy = S2WY(lp.y);
   var c = st.balls[cueId()];
   var dx = wx - c.x, dy = wy - c.y;
@@ -1515,6 +1632,13 @@ function resolveShot() {
       S.practice.streak = 0;         // 실패 문구는 띄우지 않는다 (2026-08-16 지시)
     }
     updateScoreUI();
+    /* 반복 연습: 같은 포지션을 계속 치도록 저장한 배치로 되돌린다 */
+    if (repeatDrill && !kifuMode) {
+      var saved = savedPlacement();
+      if (saved) setTimeout(function () {
+        if (ballsRestore(saved)) { aimAtRed(); setPhase('aim'); }
+      }, 700);
+    }
     S.guideDirty = true;
     setPhase('aim');
     return;
@@ -2948,6 +3072,7 @@ function closeTopmost() {
   if (vis('fineOvl')) { closeFine(); return true; }
   if (vis('settings')) { $('settings').style.display = 'none'; return true; }
   if ($('strokeDrawer') && $('strokeDrawer').classList.contains('open')) { openDrawer(false); return true; }
+  if (placeMode) { setPlaceMode(false); return true; }
   if (typeof kifuMode !== 'undefined' && kifuMode) { kifuExit(); return true; }
   return false;
 }
@@ -2978,6 +3103,27 @@ function toggleFullscreen() {
   }
   setTimeout(function () { updateFsBtn(); updateCloseBtn(); }, 250);
 }
+/* ── 공 배치 버튼들 ────────────────────────────── */
+$('placeBtn').addEventListener('click', function () { setPlaceMode(!placeMode); });
+$('pbDone').addEventListener('click', function () { setPlaceMode(false); });
+$('pbSave').addEventListener('click', function () {
+  try { localStorage.setItem(PLACE_KEY, JSON.stringify(ballsSnapshot())); } catch (e) {}
+  toast('배치 저장됨', '[반복 연습] 을 켜면 매 샷 뒤 이 자리로 돌아온다', true, 1600);
+});
+$('pbLoad').addEventListener('click', function () {
+  if (ballsRestore(savedPlacement())) { aimAtRed(); toast('저장한 배치', '', true, 1000); }
+  else toast('저장된 배치가 없다', '먼저 [이 배치 저장]', false, 1400);
+});
+$('pbRepeat').addEventListener('click', function () {
+  repeatDrill = !repeatDrill;
+  if (repeatDrill && !savedPlacement()) {        // 켜면서 저장본이 없으면 지금 자리를 기준으로
+    try { localStorage.setItem(PLACE_KEY, JSON.stringify(ballsSnapshot())); } catch (e) {}
+  }
+  $('pbRepeat').classList.toggle('on', repeatDrill);
+  toast(repeatDrill ? '반복 연습 켜짐' : '반복 연습 꺼짐',
+    repeatDrill ? '샷이 끝나면 저장한 배치로 돌아온다' : '', repeatDrill, 1400);
+});
+$('pbRack').addEventListener('click', function () { rack(); toast('처음 배치', '', true, 900); });
 $('fsBtn').addEventListener('click', toggleFullscreen);
 /* ── 닫기 [✕] ──────────────────────────────────────────────
    화면 전체를 덮고 있을 때는 숨기고, 벗어났을 때만 띄운다.
@@ -3075,6 +3221,10 @@ document.addEventListener('keydown', function (e) {
   }
   if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') { toggleFullscreen(); return; }
   if (e.key === 'k' || e.key === 'K' || e.key === 'ㅏ') { $('kifuBtn').click(); return; }
+  if (e.key === 'p' || e.key === 'P' || e.key === 'ㅔ') {   // 공 배치 (연습 전용)
+    if (S.mode === 'practice') setPlaceMode(!placeMode);
+    return;
+  }
   if (e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') { toggleSettings(); return; }
   if (S.phase !== 'aim') return;
   if (e.key >= '1' && e.key <= '9') {
@@ -3345,6 +3495,47 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
       pr2.style.paddingBottom = (+fs2[2] || 0) + 'px';
       pr2.style.paddingLeft = (+fs2[3] || 0) + 'px';
       fitOrientation();
+    }
+    if (qs.has('place')) setPlaceMode(true);  // 화면 확인용: 배치 모드로 켜 둔다
+    if (qs.has('placetest')) {                // 공 배치: 끌어 옮기기·저장·복귀가 되는지
+      setTimeout(function () {
+        setPlaceMode(true);
+        var R = P.R, log = [];
+        // 실제 포인터로 흰 공을 끌어다 놓는다(손가락·마우스와 같은 경로)
+        var tx = st.W * 0.62, ty = st.H * 0.33;
+        var rect = cv.getBoundingClientRect();
+        var kx = rect.width / (cv.offsetWidth || rect.width);
+        var ky = rect.height / (cv.offsetHeight || rect.height);
+        var toS = function (wx, wy) {
+          return { x: rect.left + (view.ox + wx * view.ppm) * kx,
+                   y: rect.top + (view.oy + wy * view.ppm) * ky };
+        };
+        var a = toS(st.balls[0].x, st.balls[0].y), b2 = toS(tx, ty);
+        var fire = function (type, pt, btn) {
+          cv.dispatchEvent(new PointerEvent(type,
+            { clientX: pt.x, clientY: pt.y, buttons: btn, bubbles: true }));
+        };
+        fire('pointerdown', a, 1);
+        fire('pointermove', { x: (a.x + b2.x) / 2, y: (a.y + b2.y) / 2 }, 1);
+        fire('pointermove', b2, 1);
+        fire('pointerup', b2, 0);
+        log.push('moved=' + (Math.hypot(st.balls[0].x - tx, st.balls[0].y - ty) < 0.02));
+        // 빨간 공 위에 겹쳐 놓으려 하면 밀려나야 한다
+        var q = clampBallPos(1, st.balls[2].x, st.balls[2].y);
+        log.push('nooverlap=' + (Math.hypot(q.x - st.balls[2].x, q.y - st.balls[2].y) >= 2 * R - 1e-4));
+        // 쿠션 밖으로 나가지 않아야
+        var o = clampBallPos(1, -5, -5);
+        log.push('inside=' + (o.x >= R && o.y >= R));
+        // 저장 → 흐트러뜨림 → 복귀
+        var snap = ballsSnapshot();
+        try { localStorage.setItem(PLACE_KEY, JSON.stringify(snap)); } catch (e) {}
+        st.balls[0].x = st.W * 0.1; st.balls[0].y = st.H * 0.9;
+        var back = ballsRestore(savedPlacement());
+        log.push('restored=' + (back && Math.abs(st.balls[0].x - snap[0].x) < 1e-6));
+        setPlaceMode(false);
+        var ok = log.join(',') === 'moved=true,nooverlap=true,inside=true,restored=true';
+        document.title = ok ? 'PLACE-OK' : ('PLACE-FAIL ' + log.join(' '));
+      }, 700);
     }
     if (qs.has('popesctest')) {               // Esc 가 열린 팝업을 위에서부터 닫는지
       setTimeout(function () {
