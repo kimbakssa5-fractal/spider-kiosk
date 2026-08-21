@@ -589,8 +589,12 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
 #placeBar .pb.on{background:#4c8bf5;color:#fff}
 #placeBar .pb:active{opacity:.75}
 #placeBar .ptxt{font-size:12px;font-weight:700;color:#a9b2bd;padding:0 4px}
+@supports (padding:env(safe-area-inset-bottom)){
+  #placeBar{bottom:max(10px, env(safe-area-inset-bottom))}   /* 홈 인디케이터에 안 깔리게 */
+}
 @media (max-width:900px), (max-height:560px){
-  #placeBar{bottom:4px;padding:4px 6px;gap:4px;border-radius:12px}
+  /* 폰: 하단 조작부(힘·조준)를 가리지 않게 당구대 위쪽으로 띄운다 */
+  #placeBar{bottom:auto;top:4px;padding:4px 6px;gap:4px;border-radius:12px}
   #placeBar .pb{font-size:11px;padding:5px 8px;border-radius:9px}
   #placeBar .ptxt{display:none}
 }
@@ -695,7 +699,7 @@ body.rails #rightRail #shootBtn{margin-right:-20px;padding-right:28px;
   <div class="panel">
     <h1>쓰리쿠션 <em>3구 당구</em></h1>
     <div class="edition">kim joonho edition</div>
-    <div class="buildStamp" id="buildStamp">build 0821-2146</div>
+    <div class="buildStamp" id="buildStamp">build 0821-2235</div>
     <div class="sub">실제 물리 연산 — 회전·쿠션·스로우까지 계산합니다</div>
     <div class="modeRow" id="modeRow">
       <div class="mcard on" data-mode="practice"><div class="ic">🎯</div><div class="t">혼자 연습</div><div class="d">무제한 연습</div></div>
@@ -933,7 +937,7 @@ function applyRails(on) {
   if (!L || !R) return;
   if (!railHome) {
     railHome = [];
-    ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'fineBtn', 'eyeCol', 'strokeCard', 'shootBtn'].forEach(function (id) {
+    ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'placeBtn', 'fineBtn', 'eyeCol', 'strokeCard', 'shootBtn'].forEach(function (id) {
       var el = $(id);
       if (el) railHome.push({ el: el, parent: el.parentNode, next: el.nextSibling });
     });
@@ -941,7 +945,7 @@ function applyRails(on) {
   if (on === document.body.classList.contains('rails')) return false;   // 이미 그 상태면 건너뜀
   document.body.classList.toggle('rails', on);
   if (on) {
-    ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'fineBtn'].forEach(function (id) {
+    ['undoBtn', 'fsBtn', 'kifuBtn', 'gearBtn', 'placeBtn', 'fineBtn'].forEach(function (id) {
       var el = $(id); if (el) L.appendChild(el);
     });
     /* 눈높이 뷰도 오른쪽 열에 넣는다 — 떠 있으면 당구대를 가려서 */
@@ -1336,9 +1340,14 @@ function setAngle(a) {
 }
 cv.addEventListener('pointerdown', aimPointer);
 cv.addEventListener('pointermove', function (e) { if (e.buttons) aimPointer(e); });
-['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
-  cv.addEventListener(ev, function () {
-    if (placeDrag >= 0) { placeDrag = -1; aimAtRed(); }   // 놓으면 조준선을 다시 잡아 준다
+/* 손가락이 캔버스 밖으로 나가도 끊기지 않게 포인터를 붙잡아 둔다(폰에서 필수).
+   pointerleave 로는 끝내지 않는다 — 터치는 조금만 벗어나도 그게 뜬다. */
+['pointerup', 'pointercancel'].forEach(function (ev) {
+  cv.addEventListener(ev, function (e) {
+    if (placeDrag >= 0) {
+      placeDrag = -1; aimAtRed();            // 놓으면 조준선을 다시 잡아 준다
+      try { cv.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
   });
 });
 function aimPointer(e) {
@@ -1346,7 +1355,13 @@ function aimPointer(e) {
   var lp0 = localXY(e, cv);
   if (placeMode) {                       // 배치 모드: 조준 대신 공을 끌어 옮긴다
     var px = S2WX(lp0.x), py = S2WY(lp0.y);
-    if (e.type === 'pointerdown') placeDrag = pickBallAt(px, py);
+    if (e.type === 'pointerdown') {
+      placeDrag = pickBallAt(px, py);
+      if (placeDrag >= 0) {
+        e.preventDefault();
+        try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+      }
+    }
     if (placeDrag < 0) return;
     var p = clampBallPos(placeDrag, px, py);
     var b = st.balls[placeDrag];
@@ -3611,7 +3626,10 @@ requestAnimationFrame(function (t) { lastT = t; requestAnimationFrame(frame); })
             if (!e) return null; var r = e.getBoundingClientRect();
             return [Math.round(r.left), Math.round(r.top), Math.round(r.height)]; })(),
           eye: (function () { var r = $('eyeCard').getBoundingClientRect();
-            return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; })() });
+            return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; })(),
+          place: (function () { var e = $('placeBtn'), r = e.getBoundingClientRect();
+            return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height),
+                    getComputedStyle(e).display, e.parentNode.id || e.parentNode.tagName]; })() });
       }, 700);
     }
     if (qs.has('undobtntest')) {              // 폰용 [무르기] 버튼이 실제로 되돌리는지
