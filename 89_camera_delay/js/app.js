@@ -410,7 +410,8 @@ function applyOrientation(){
     if(!screen.orientation) return;
     if(m === 'auto'){ screen.orientation.unlock(); }
     else{
-      var p = screen.orientation.lock(m);
+      /* 'portrait'/'landscape'는 180° 뒤집힌 방향도 허용한다 — 정방향(-primary)만 잠근다 */
+      var p = screen.orientation.lock(m + '-primary');
       if(p && p.catch) p.catch(function(){});   // 풀스크린이 아니면 거부 — 아래에서 재시도
     }
   }catch(e){}
@@ -422,6 +423,24 @@ $('btnOrient').addEventListener('click', function(){
   S.orient = (S.orient === 'auto') ? 'portrait' : (S.orient === 'portrait') ? 'landscape' : 'auto';
   persist(); applyOrientation();
 });
+
+/* ---- 회전 재동기화 (교통정리 2026-08-27) ----
+   getUserMedia 트랙의 회전값은 캡처 시작 시점 기준이라, 화면이 돌면(특히 웹뷰는
+   액티비티 재생성 없이 도니까) 영상이 눕거나 뒤집힌 채 남는다.
+   → 화면 방향이 바뀌면 엔진을 재시작해 카메라를 새 방향으로 다시 연다.
+   잠금 상태에선 방향이 안 바뀌므로 이 재시작도 일어나지 않는다(안정). */
+var rotT = null;
+function onRotate(){
+  clearTimeout(rotT);
+  rotT = setTimeout(function(){
+    if(S.running){
+      flashStatus('화면 회전 — 카메라를 새 방향으로 다시 엽니다');
+      startEngine();
+    }
+  }, 700);   // 회전 애니메이션이 끝난 뒤 1회만
+}
+try{ screen.orientation.addEventListener('change', onRotate); }
+catch(e){ window.addEventListener('orientationchange', onRotate); }
 
 $('errRetry').addEventListener('click', function(){ startEngine(); });
 
@@ -549,9 +568,11 @@ function startSegment(){
   rec.onstop = function(){
     var type = (rec && rec.mimeType) || 'video/webm';
     var ext = /mp4/.test(type) ? '.mp4' : '.webm';
+    var elapsed = Date.now() - recT0;
     var b = new Blob(recChunks, { type: type });
     rec = null; recChunks = [];
     updateRecUI();
+    if(elapsed < 2000) return;   // 회전·카메라 전환 재시작이 만드는 부스러기 구간은 버린다
     if(b.size > 0){
       saveBlob(b, 'delay_replay_' + stamp() + ext);
       flashStatus('🎬 저장 (' + (b.size / 1048576).toFixed(1) + 'MB)' +
