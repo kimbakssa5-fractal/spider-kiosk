@@ -17,6 +17,16 @@ body{
 }
 .hide{ display:none !important; }
 
+/* ===== 회전 컨테이너 =====
+   OS 방향 잠금은 기기/전체화면 여부에 따라 안 먹는 경우가 있어(실폰 확인),
+   각도(0/90/180/270)는 앱이 UI 전체를 CSS 로 직접 돌린다. 90/270 의
+   가로세로 치수는 JS(layoutRot)가 px 로 넣어 준다. */
+#rot{ position:fixed; inset:0; }
+body.rot90 #rot, body.rot270 #rot{ inset:auto; top:50%; left:50%; }
+body.rot90 #rot{ transform:translate(-50%,-50%) rotate(90deg); }
+body.rot270 #rot{ transform:translate(-50%,-50%) rotate(-90deg); }
+body.rot180 #rot{ transform:rotate(180deg); }
+
 /* ===== 무대 ===== */
 #stage{ position:fixed; inset:0; background:#000; }
 #delayed, #delayCanvas{

@@ -18,10 +18,10 @@
 /* ================= 상태 ================= */
 var S = {
   delay: 10,               // 초 (1~120)
-  facing: 'environment',   // environment | user
+  facing: 'user',          // 기본 셀피(전면) — 당구대 앞 삼각대 거치 기준 (2026-08-27 지시)
   mirror: true,            // 기본 ON — 거울처럼 보여야 오른손 자세가 오른손으로 보인다 (2026-08-27 지시)
   fit: 'contain',
-  orient: 'auto',          // auto | 0 | 90 | 180 | 270 (도 단위 화면 각도)
+  orient: '90',            // auto | 0 | 90 | 180 | 270 — 기본 가로(90°) (2026-08-27 지시)
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
   frozen: false,
   mode: null,              // 'mse' | 'frames'
@@ -30,20 +30,20 @@ var S = {
 try{
   var saved = JSON.parse(localStorage.getItem('cd_settings') || '{}');
   if(saved.delay >= 1 && saved.delay <= 120) S.delay = saved.delay;
-  if(saved.facing) S.facing = saved.facing;
+  /* v3 미만 저장값의 facing/orient 는 무시 — "셀피 + 가로 90° 기본" 1회 마이그레이션 */
+  if(saved.v >= 3 && saved.facing) S.facing = saved.facing;
+  if(saved.v >= 3 && ['auto','0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
   /* v2 미만 저장값의 mirror 는 무시 — "미러 기본 ON" 1회 마이그레이션 */
   if(saved.v >= 2 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
-  if(saved.orient === 'portrait') S.orient = '0';          // 구버전 값 이행
-  else if(saved.orient === 'landscape') S.orient = '90';
-  else if(['0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:2, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    v:3, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
     orient:S.orient, autoRec:S.autoRec })); }catch(e){}
 }
+function orientAngle(){ return (S.orient === 'auto') ? 0 : +S.orient; }
 
 /* ================= DOM ================= */
 var $ = function(id){ return document.getElementById(id); };
@@ -399,27 +399,44 @@ $('btnFit').addEventListener('click', function(){
 /* ---- 화면 방향: 자동 → 세로 → 가로 3단 토글 ----
    APK 는 네이티브 브리지(AndroidOrient)로 확실히 잠그고,
    웹은 screen.orientation.lock (풀스크린에서만 먹으므로 fullscreenchange 마다 재적용). */
-/* 각도 → 화면 방향. 0°=세로, 90°=가로, 180°=세로 뒤집힘, 270°=가로 반대편.
-   폰을 어떤 방향으로 거치했든 각도를 돌려 화면을 맞춘다. */
-var ORIENT_LOCK = { '0': 'portrait-primary', '90': 'landscape-primary',
-                    '180': 'portrait-secondary', '270': 'landscape-secondary' };
+/* 각도 → UI 직접 회전. 0°=세로, 90°=가로, 180°=세로 뒤집힘, 270°=가로 반대편.
+   OS 방향 잠금(setRequestedOrientation·orientation.lock)은 기기/전체화면 여부에 따라
+   안 먹는 경우가 있어(실폰에서 "안 돈다" 확인) — 앱이 #rot 를 CSS 로 직접 돌린다.
+   각도 모드에선 OS 회전을 세로로 못박아(이중 회전 방지) 항상 앱 회전만 유효하게 한다. */
+function layoutRot(){
+  var a = orientAngle();
+  document.body.classList.toggle('rot90',  a === 90);
+  document.body.classList.toggle('rot180', a === 180);
+  document.body.classList.toggle('rot270', a === 270);
+  var r = $('rot');
+  if(a === 90 || a === 270){
+    r.style.width  = window.innerHeight + 'px';   // vh/vw 는 주소창 유무에 흔들려 px 로 박는다
+    r.style.height = window.innerWidth + 'px';
+  }else{
+    r.style.width = ''; r.style.height = '';
+  }
+}
+window.addEventListener('resize', layoutRot);
+
 function applyOrientation(){
   var m = S.orient;
   var btn = $('btnOrient');
   btn.textContent = (m === 'auto') ? '📱 자동' : '📱 ' + m + '°';
   btn.classList.toggle('on', m !== 'auto');
+  layoutRot();
   if(window.AndroidOrient && AndroidOrient.set){
-    try{ AndroidOrient.set(m); }catch(e){}
-    return;
+    try{ AndroidOrient.set(m === 'auto' ? 'auto' : 'pin'); }catch(e){}
+  }else{
+    try{
+      if(screen.orientation){
+        if(m === 'auto'){ screen.orientation.unlock(); }
+        else{
+          var p = screen.orientation.lock('portrait-primary');   // 이중 회전 방지용 고정
+          if(p && p.catch) p.catch(function(){});
+        }
+      }
+    }catch(e){}
   }
-  try{
-    if(!screen.orientation) return;
-    if(m === 'auto'){ screen.orientation.unlock(); }
-    else{
-      var p = screen.orientation.lock(ORIENT_LOCK[m]);
-      if(p && p.catch) p.catch(function(){});   // 풀스크린이 아니면 거부 — 아래에서 재시도
-    }
-  }catch(e){}
 }
 document.addEventListener('fullscreenchange', function(){
   if(S.orient !== 'auto') applyOrientation();
@@ -427,6 +444,7 @@ document.addEventListener('fullscreenchange', function(){
 $('btnOrient').addEventListener('click', function(){
   var cyc = ['auto', '0', '90', '180', '270'];
   S.orient = cyc[(cyc.indexOf(S.orient) + 1) % cyc.length];
+  if(rec) stopRec();      // 각도가 바뀌면 녹화 캔버스 치수도 바뀐다 — 트리밍 저장 후 재개
   persist(); applyOrientation();
 });
 
@@ -510,11 +528,16 @@ $('btnShot').addEventListener('click', function(){
   if(S.mode === 'frames'){ src = elCanvas; w = elCanvas.width; h = elCanvas.height; }
   else { src = elDelayed; w = elDelayed.videoWidth; h = elDelayed.videoHeight; }
   if(!w || !h){ flashStatus('아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요'); return; }
+  var a = orientAngle();
+  var cw = (a === 90 || a === 270) ? h : w, ch = (a === 90 || a === 270) ? w : h;
   var c = document.createElement('canvas');
-  c.width = w; c.height = h;
+  c.width = cw; c.height = ch;
   var cx = c.getContext('2d');
-  if(S.mirror){ cx.translate(w, 0); cx.scale(-1, 1); }   // 화면에 보이는 그대로
-  cx.drawImage(src, 0, 0, w, h);
+  /* 화면에 보이는 그대로: 회전(#rot) → 미러 순서를 캔버스에서 재현 */
+  cx.translate(cw / 2, ch / 2);
+  cx.rotate(a * Math.PI / 180);
+  if(S.mirror) cx.scale(-1, 1);
+  cx.drawImage(src, -w / 2, -h / 2, w, h);
   c.toBlob(function(b){
     if(!b){ flashStatus('스냅샷 실패'); return; }
     saveBlob(b, 'delay_shot_' + stamp() + '.jpg');
@@ -657,13 +680,18 @@ function startSegment(){
   var w = (S.mode === 'frames') ? elCanvas.width : elDelayed.videoWidth;
   var h = (S.mode === 'frames') ? elCanvas.height : elDelayed.videoHeight;
   if(!mime || !w || !h || !recCanvas.captureStream) return;
-  recCanvas.width = w; recCanvas.height = h;
+  var a = orientAngle();
+  var cw = (a === 90 || a === 270) ? h : w, ch = (a === 90 || a === 270) ? w : h;
+  recCanvas.width = cw; recCanvas.height = ch;
 
   recDraw = setInterval(function(){
     var src = (S.mode === 'frames') ? elCanvas : elDelayed;
     recCtx.save();
-    if(S.mirror){ recCtx.translate(recCanvas.width, 0); recCtx.scale(-1, 1); }
-    try{ recCtx.drawImage(src, 0, 0, recCanvas.width, recCanvas.height); }catch(e){}
+    /* 화면과 동일: 회전 → 미러 순서 */
+    recCtx.translate(cw / 2, ch / 2);
+    recCtx.rotate(a * Math.PI / 180);
+    if(S.mirror) recCtx.scale(-1, 1);
+    try{ recCtx.drawImage(src, -w / 2, -h / 2, w, h); }catch(e){}
     recCtx.restore();
   }, 1000 / 30);
 
