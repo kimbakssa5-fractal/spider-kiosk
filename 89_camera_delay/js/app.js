@@ -80,6 +80,7 @@ var I18N = {
     autoOnMsg: '자동녹화 켬 — 5분 단위로 저장',
     autoOffMsg: '자동녹화 끔 — ⏺ 버튼으로 수동 녹화는 가능',
     rotMsg: '화면 회전 — 카메라를 새 방향으로 다시 엽니다',
+    reconn: '카메라 신호 끊김 — 다시 연결합니다',
     eHttpsT: 'HTTPS가 필요합니다',
     eHttpsM: '카메라는 https 주소(배포 페이지)나 localhost에서만 열립니다.',
     eNoCamT: '이 브라우저는 카메라를 지원하지 않습니다',
@@ -108,6 +109,7 @@ var I18N = {
     autoOnMsg: 'Auto-recording ON — saves every 5 minutes',
     autoOffMsg: 'Auto-recording OFF — manual ⏺ still works',
     rotMsg: 'Screen rotated — reopening camera',
+    reconn: 'Camera signal lost — reconnecting',
     eHttpsT: 'HTTPS required',
     eHttpsM: 'Camera opens only on an https page (deployed URL) or localhost.',
     eNoCamT: 'This browser does not support camera capture',
@@ -137,6 +139,7 @@ var retryTimer = null;
 var frames = [];            // 프레임 모드 링버퍼 [{t, blob}]
 var viewBack = 0;           // "5초 전 보기" 추가 되감기(초) — 탭마다 +5, 최대 15, 그다음 0
 var MAX_BACK = 15;
+var mseLastEnd = 0, mseLastGrow = 0;   // 버퍼 성장 감시(멀티윈도우 캡처 정지 감지)
 var lastDrawnT = 0, decoding = false;
 var engineGen = 0;          // 재시작 세대 — 늦게 도착한 콜백 무시용
 
@@ -214,6 +217,12 @@ function startEngine(){
   Promise.race([wantMs, timeout]).then(function(ms){
     if(gen !== engineGen){ ms.getTracks().forEach(function(t){ t.stop(); }); return; }
     stream = ms;
+    /* 멀티윈도우 등으로 OS 가 카메라를 회수하면 트랙이 ended 로 끝난다 — 보이는 상태면 즉시 재연결 */
+    try{
+      ms.getVideoTracks()[0].addEventListener('ended', function(){
+        if(gen === engineGen && document.visibilityState === 'visible') startEngine();
+      });
+    }catch(e){}
     elLive.srcObject = ms;
     var p = elLive.play(); if(p && p.catch) p.catch(function(){});
 
@@ -269,6 +278,7 @@ function startMSE(mime, gen){
       startEngine();   // 스트림 깨짐 — 엔진 통째로 재시작
     });
 
+    mseLastEnd = 0; mseLastGrow = Date.now();
     recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 });
     recorder.ondataavailable = function(e){
       if(gen !== engineGen || !e.data || !e.data.size) return;
@@ -337,15 +347,31 @@ function mseTick(){
   /* 되감기 분량의 히스토리가 아직 부족하면 가장 오래된 지점까지만 */
   if(target < b.start + 0.05) target = b.start + 0.05;
 
+  /* 버퍼 성장 감시 — 멀티윈도우/포커스 이동으로 캡처가 멎으면 end 가 안 자란다.
+     그 상태에서 지연 유지 스냅백을 계속하면 같은 구간이 무한반복된다(실폰 신고). */
+  if(Math.abs(b.end - mseLastEnd) > 0.001){ mseLastEnd = b.end; mseLastGrow = Date.now(); }
+  var stalled = Date.now() - mseLastGrow > 1500;
+
   if(S.frozen){
     if(!elDelayed.paused) elDelayed.pause();
+  }else if(stalled){
+    /* 캡처 정지 — 라이브 엣지에서 멈춰 기다린다(반복 금지).
+       10초 넘게 안 살아나면 카메라를 다시 연다. */
+    if(!elDelayed.paused && elDelayed.currentTime >= b.end - 0.3) elDelayed.pause();
+    if(Date.now() - mseLastGrow > 10000 && document.visibilityState === 'visible'){
+      flashStatus(T('reconn'));
+      startEngine();
+      return;
+    }
   }else{
     if(elDelayed.paused){
       elDelayed.currentTime = target;
       var p = elDelayed.play(); if(p && p.catch) p.catch(function(){});
     }else{
       var drift = target - elDelayed.currentTime;
-      if(Math.abs(drift) > 1.0) elDelayed.currentTime = target;   // 밀리면 스냅
+      /* 앞으로 스냅은 1초, 뒤로 스냅은 2초 — 캡처 정체(1.5초 감지)가 뒤로 스냅보다
+         먼저 잡혀야 정체 초입의 구간 반복이 안 생긴다. ⏪ 되감기는 -5초라 즉시 스냅. */
+      if(drift > 1.0 || drift < -2.0) elDelayed.currentTime = target;
     }
   }
   evict(false);
