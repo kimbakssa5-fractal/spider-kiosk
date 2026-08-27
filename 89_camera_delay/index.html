@@ -30,20 +30,20 @@ return oc.apply(self,arguments);};})();</script>
   <canvas id="delayCanvas" class="hide"></canvas>
 
   <!-- 좌상단: 몇 초 전 화면인지 -->
-  <div id="delayBadge"><b id="delayBadgeNum">10</b>초 전</div>
+  <div id="delayBadge"><b id="delayBadgeNum">10</b><span data-i="ago">초 전</span></div>
 
   <!-- 우상단: 실시간 작은 화면 -->
   <div id="pip" class="rot270">
     <video id="live" muted playsinline autoplay></video>
-    <span>지금</span>
+    <span data-i="now">지금</span>
   </div>
 
   <!-- 버퍼 채우는 중 -->
   <div id="fill" class="hide">
     <div class="card">
-      <div class="t">지연 버퍼 채우는 중</div>
+      <div class="t" data-i="fillT">지연 버퍼 채우는 중</div>
       <div class="bar"><i id="fillBar"></i></div>
-      <div class="s"><span id="fillNow">0</span> / <span id="fillMax">10</span>초</div>
+      <div class="s"><span id="fillNow">0</span> / <span id="fillMax">10</span><span data-i="sU">초</span></div>
     </div>
   </div>
 
@@ -52,11 +52,11 @@ return oc.apply(self,arguments);};})();</script>
     <div class="card">
       <div class="t" id="errTitle">카메라를 열 수 없습니다</div>
       <div class="s" id="errMsg"></div>
-      <button id="errRetry" class="pill">다시 시도</button>
+      <button id="errRetry" class="pill" data-i="retry">다시 시도</button>
     </div>
   </div>
 
-  <div id="frozenBadge" class="hide">일시정지</div>
+  <div id="frozenBadge" class="hide" data-i="frozen">일시정지</div>
 </div>
 
 <!-- 하단 컨트롤 -->
@@ -76,17 +76,18 @@ return oc.apply(self,arguments);};})();</script>
   </div>
   <div class="row">
     <input type="range" id="delayRange" min="1" max="120" step="1" value="10">
-    <div id="delayNum"><b>10</b>초</div>
+    <div id="delayNum"><b>10</b><span data-i="sU">초</span></div>
   </div>
   <div class="row btns">
     <button id="btnFreeze" class="pill">⏸ 정지</button>
-    <button id="btnFlip"  class="pill">🔄 카메라</button>
-    <button id="btnMirror" class="pill">↔ 미러</button>
+    <button id="btnFlip"  class="pill" data-i="camera">🔄 카메라</button>
+    <button id="btnMirror" class="pill" data-i="mirrorB">↔ 미러</button>
     <button id="btnFit"   class="pill">⛶ 채우기</button>
-    <button id="btnOrient" class="pill">📱 자동</button>
-    <button id="btnShot"  class="pill">📸 스냅샷</button>
-    <button id="btnRec"   class="pill">⏺ 녹화</button>
+    <button id="btnOrient" class="pill">📱 180°</button>
+    <button id="btnShot"  class="pill" data-i="shot">📸 스냅샷</button>
+    <button id="btnRec"   class="pill">⏺ 대기</button>
     <button id="btnAuto"  class="pill">🔴 자동녹화 ON</button>
+    <button id="btnLang"  class="pill">🌐 English</button>
   </div>
   <div id="statusLine"></div>
 </div>
@@ -95,7 +96,7 @@ return oc.apply(self,arguments);};})();</script>
 <!-- 첫 진입 비밀번호 게이트 (1회 통과 = 기기 영구 개방) -->
 <div id="gate">
   <div class="gate-card">
-    <div class="gate-title">비밀번호 4자리</div>
+    <div class="gate-title" data-i="gateT">비밀번호 4자리</div>
     <div class="gate-dots"><span></span><span></span><span></span><span></span></div>
     <div class="gate-keys">
       <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>

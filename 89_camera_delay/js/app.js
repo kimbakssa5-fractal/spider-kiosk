@@ -24,6 +24,7 @@ var S = {
   orient: '180',           // 0 | 90 | 180 | 270 — 0°=OS 자연 회전(원래 카메라처럼 가로로 들면
                            // 가로 화각), 90/180/270°는 강제 회전. 기본 180° (2026-08-27 지시)
   pip: null,               // 실시간 미니 창 위치 {l,t} (0~1 비율) — 드래그로 조정
+  lang: 'ko',              // ko | en — 🌐 버튼 토글
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
   frozen: false,
   mode: null,              // 'mse' | 'frames'
@@ -41,12 +42,70 @@ try{
   if(saved.fit) S.fit = saved.fit;
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
   if(saved.pip && typeof saved.pip.l === 'number' && typeof saved.pip.t === 'number') S.pip = saved.pip;
+  if(saved.lang === 'en' || saved.lang === 'ko') S.lang = saved.lang;
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
     v:5, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
-    orient:S.orient, autoRec:S.autoRec, pip:S.pip })); }catch(e){}
+    orient:S.orient, autoRec:S.autoRec, pip:S.pip, lang:S.lang })); }catch(e){}
 }
+
+/* ================= 한/영 문자열 ================= */
+var I18N = {
+  ko: {
+    sU: '초', ago: '초 전', now: '지금', retry: '다시 시도',
+    fillT: '지연 버퍼 채우는 중', frozen: '일시정지',
+    pause: '⏸ 정지', resume: '▶ 재개',
+    camera: '🔄 카메라', mirrorB: '↔ 미러',
+    fitCover: '⛶ 채우기', fitContain: '⛶ 맞추기',
+    shot: '📸 스냅샷', recStandby: '⏺ 대기', recSave: '⏹ 저장',
+    autoOn: '🔴 자동녹화 ON', autoOff: '⚪ 자동녹화 OFF',
+    gateT: '비밀번호 4자리', wrongPw: '비밀번호가 틀렸습니다',
+    buf: '버퍼', frameMode: '프레임 모드',
+    noDelayYet: '아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요',
+    shotFail: '스냅샷 실패', shotSaved: '📸 스냅샷 저장',
+    saved: '🎬 저장', nextAuto: ' — 다음 구간 자동 녹화',
+    savedGallery: '갤러리에 저장됨', saveFail: '저장 실패',
+    autoOnMsg: '자동녹화 켬 — 5분 단위로 저장',
+    autoOffMsg: '자동녹화 끔 — ⏺ 버튼으로 수동 녹화는 가능',
+    rotMsg: '화면 회전 — 카메라를 새 방향으로 다시 엽니다',
+    eHttpsT: 'HTTPS가 필요합니다',
+    eHttpsM: '카메라는 https 주소(배포 페이지)나 localhost에서만 열립니다.',
+    eNoCamT: '이 브라우저는 카메라를 지원하지 않습니다',
+    ePermT: '카메라 권한이 거부되었습니다',
+    ePermM: '브라우저 설정에서 이 페이지의 카메라 권한을 허용해 주세요.',
+    eNFT: '카메라를 찾을 수 없습니다', eNFM: '연결된 카메라가 없습니다.',
+    eBusyT: '카메라를 열 수 없습니다',
+    eBusyM: '다른 앱이 카메라를 사용 중일 수 있습니다. 8초 후 자동 재시도합니다.'
+  },
+  en: {
+    sU: 's', ago: 's ago', now: 'Now', retry: 'Retry',
+    fillT: 'Filling delay buffer', frozen: 'Paused',
+    pause: '⏸ Pause', resume: '▶ Resume',
+    camera: '🔄 Camera', mirrorB: '↔ Mirror',
+    fitCover: '⛶ Fill', fitContain: '⛶ Fit',
+    shot: '📸 Snapshot', recStandby: '⏺ Standby', recSave: '⏹ Save',
+    autoOn: '🔴 Auto-rec ON', autoOff: '⚪ Auto-rec OFF',
+    gateT: '4-digit password', wrongPw: 'Wrong password',
+    buf: 'buffer', frameMode: 'Frame mode',
+    noDelayYet: 'No delayed frame yet — wait for the buffer to fill',
+    shotFail: 'Snapshot failed', shotSaved: '📸 Snapshot saved',
+    saved: '🎬 Saved', nextAuto: ' — next segment auto-recording',
+    savedGallery: 'Saved to gallery', saveFail: 'Save failed',
+    autoOnMsg: 'Auto-recording ON — saves every 5 minutes',
+    autoOffMsg: 'Auto-recording OFF — manual ⏺ still works',
+    rotMsg: 'Screen rotated — reopening camera',
+    eHttpsT: 'HTTPS required',
+    eHttpsM: 'Camera opens only on an https page (deployed URL) or localhost.',
+    eNoCamT: 'This browser does not support camera capture',
+    ePermT: 'Camera permission denied',
+    ePermM: 'Please allow camera access for this page in your browser settings.',
+    eNFT: 'No camera found', eNFM: 'No camera is connected.',
+    eBusyT: 'Cannot open camera',
+    eBusyM: 'Another app may be using the camera. Retrying in 8 seconds.'
+  }
+};
+function T(k){ return (I18N[S.lang] && I18N[S.lang][k]) || I18N.ko[k] || k; }
 function orientAngle(){ return +S.orient || 0; }
 
 /* ================= DOM ================= */
@@ -117,9 +176,9 @@ function startEngine(){
 
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     if(location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
-      showErr('HTTPS가 필요합니다', '카메라는 https 주소(배포 페이지)나 localhost에서만 열립니다.', false);
+      showErr(T('eHttpsT'), T('eHttpsM'), false);
     }else{
-      showErr('이 브라우저는 카메라를 지원하지 않습니다', '', false);
+      showErr(T('eNoCamT'), '', false);
     }
     return;
   }
@@ -154,8 +213,7 @@ function startEngine(){
     if(gen !== engineGen) return;
     var name = (err && err.name) || '';
     if(name === 'NotAllowedError' || name === 'SecurityError'){
-      showErr('카메라 권한이 거부되었습니다',
-              '브라우저 설정에서 이 페이지의 카메라 권한을 허용해 주세요.', false);
+      showErr(T('ePermT'), T('ePermM'), false);
     }else if(name === 'NotFoundError' || name === 'OverconstrainedError'){
       /* 요청한 방향 카메라가 없다 — 반대편으로 한 번 더 */
       if(!startEngine._flippedOnce){
@@ -164,10 +222,9 @@ function startEngine(){
         startEngine();
         return;
       }
-      showErr('카메라를 찾을 수 없습니다', '연결된 카메라가 없습니다.', true);
+      showErr(T('eNFT'), T('eNFM'), true);
     }else{
-      showErr('카메라를 열 수 없습니다',
-              '다른 앱이 카메라를 사용 중일 수 있습니다. 8초 후 자동 재시도합니다. (' + name + ')', true);
+      showErr(T('eBusyT'), T('eBusyM') + ' (' + name + ')', true);
     }
   });
 }
@@ -276,7 +333,7 @@ function mseTick(){
     }
   }
   evict(false);
-  setStatus('MSE · 버퍼 ' + have.toFixed(0) + '초 · ' +
+  setStatus('MSE · ' + T('buf') + ' ' + have.toFixed(0) + T('sU') + ' · ' +
     (stream && stream.getVideoTracks()[0] ? trackLabel() : ''));
 }
 
@@ -344,7 +401,7 @@ function startFrames(gen){
       bmp.close();
       lastDrawnT = pick.t;
     }).catch(function(){ decoding = false; });
-    setStatus('프레임 모드 · 버퍼 ' + have.toFixed(0) + '초 · ' + CAP_FPS + 'fps');
+    setStatus(T('frameMode') + ' · ' + T('buf') + ' ' + have.toFixed(0) + T('sU') + ' · ' + CAP_FPS + 'fps');
   }, 1000 / 15);
 }
 
@@ -363,7 +420,7 @@ function applyView(){
   document.body.classList.toggle('fit-cover', S.fit === 'cover');
   $('btnMirror').classList.toggle('on', S.mirror);
   $('btnFit').classList.toggle('on', S.fit === 'cover');
-  $('btnFit').textContent = S.fit === 'cover' ? '⛶ 맞추기' : '⛶ 채우기';
+  $('btnFit').textContent = S.fit === 'cover' ? T('fitContain') : T('fitCover');
   var chips = document.querySelectorAll('#presets .chip');
   for(var i = 0; i < chips.length; i++)
     chips[i].classList.toggle('on', +chips[i].getAttribute('data-d') === S.delay);
@@ -382,8 +439,26 @@ document.querySelectorAll('#presets .chip').forEach(function(c){
 $('btnFreeze').addEventListener('click', function(){
   S.frozen = !S.frozen;
   this.classList.toggle('on', S.frozen);
-  this.textContent = S.frozen ? '▶ 재개' : '⏸ 정지';
+  this.textContent = S.frozen ? T('resume') : T('pause');
   $('frozenBadge').classList.toggle('hide', !S.frozen);
+});
+
+/* ---- 🌐 한/영 토글 ---- */
+function applyLang(){
+  document.documentElement.lang = S.lang;
+  var els = document.querySelectorAll('[data-i]');
+  for(var i = 0; i < els.length; i++)
+    els[i].textContent = T(els[i].getAttribute('data-i'));
+  var chips = document.querySelectorAll('#presets .chip');
+  for(var j = 0; j < chips.length; j++)
+    chips[j].textContent = chips[j].getAttribute('data-d') + T('sU');
+  $('btnFreeze').textContent = S.frozen ? T('resume') : T('pause');
+  $('btnLang').textContent = (S.lang === 'ko') ? '🌐 English' : '🌐 한국어';
+  applyView(); updateRecUI(); updateAutoUI();
+}
+$('btnLang').addEventListener('click', function(){
+  S.lang = (S.lang === 'ko') ? 'en' : 'ko';
+  persist(); applyLang();
 });
 
 $('btnFlip').addEventListener('click', function(){
@@ -465,7 +540,7 @@ function onRotate(){
   clearTimeout(rotT);
   rotT = setTimeout(function(){
     if(S.running){
-      flashStatus('화면 회전 — 카메라를 새 방향으로 다시 엽니다');
+      flashStatus(T('rotMsg'));
       startEngine();
     }
   }, 700);   // 회전 애니메이션이 끝난 뒤 1회만
@@ -575,7 +650,7 @@ $('btnShot').addEventListener('click', function(){
   var src, w, h;
   if(S.mode === 'frames'){ src = elCanvas; w = elCanvas.width; h = elCanvas.height; }
   else { src = elDelayed; w = elDelayed.videoWidth; h = elDelayed.videoHeight; }
-  if(!w || !h){ flashStatus('아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요'); return; }
+  if(!w || !h){ flashStatus(T('noDelayYet')); return; }
   var a = orientAngle();
   var cw = (a === 90 || a === 270) ? h : w, ch = (a === 90 || a === 270) ? w : h;
   var c = document.createElement('canvas');
@@ -587,9 +662,9 @@ $('btnShot').addEventListener('click', function(){
   if(S.mirror) cx.scale(-1, 1);
   cx.drawImage(src, -w / 2, -h / 2, w, h);
   c.toBlob(function(b){
-    if(!b){ flashStatus('스냅샷 실패'); return; }
+    if(!b){ flashStatus(T('shotFail')); return; }
     saveBlob(b, 'delay_shot_' + stamp() + '.jpg');
-    flashStatus('📸 스냅샷 저장');
+    flashStatus(T('shotSaved'));
   }, 'image/jpeg', 0.92);
 });
 
@@ -763,8 +838,8 @@ function startSegment(){
       var name = 'delay_replay_' + stamp() + ext;
       var done = function(fixed){
         saveBlob(fixed, name);
-        flashStatus('🎬 저장 (' + (fixed.size / 1048576).toFixed(1) + 'MB)' +
-                    (S.autoRec ? ' — 다음 구간 자동 녹화' : ''));
+        flashStatus(T('saved') + ' (' + (fixed.size / 1048576).toFixed(1) + 'MB)' +
+                    (S.autoRec ? T('nextAuto') : ''));
       };
       if(ext === '.webm') fixWebmDuration(b, elapsed, done);   // 타임바 고정 문제 방지
       else done(b);
@@ -794,10 +869,10 @@ function updateRecUI(){
   if(rec){
     var s = Math.floor((Date.now() - recT0) / 1000);
     b.classList.add('on');
-    b.textContent = '⏹ 저장 ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    b.textContent = T('recSave') + ' ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }else{
     b.classList.remove('on');
-    b.textContent = '⏺ 대기';
+    b.textContent = T('recStandby');
   }
 }
 
@@ -810,16 +885,16 @@ $('btnRec').addEventListener('click', function(){
 function updateAutoUI(){
   var b = $('btnAuto');
   b.classList.toggle('on', S.autoRec);
-  b.textContent = S.autoRec ? '🔴 자동녹화 ON' : '⚪ 자동녹화 OFF';
+  b.textContent = S.autoRec ? T('autoOn') : T('autoOff');
 }
 $('btnAuto').addEventListener('click', function(){
   S.autoRec = !S.autoRec;
   persist(); updateAutoUI();
   if(!S.autoRec){
     if(rec) stopRec();                     // 진행 중 구간은 여기까지 저장하고 멈춘다
-    flashStatus('자동녹화 끔 — ⏺ 버튼으로 수동 녹화는 가능');
+    flashStatus(T('autoOffMsg'));
   }else{
-    flashStatus('자동녹화 켬 — 5분 단위로 저장');
+    flashStatus(T('autoOnMsg'));
   }
 });
 updateAutoUI();
@@ -843,6 +918,7 @@ document.addEventListener('visibilitychange', function(){
   var KEY = "kiosk_daily";
   var gate = document.getElementById("gate");
   var isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:');
+  applyLang();   // 게이트 화면도 저장된 언어로
   function enter(){
     applyView(); applyOrientation(); placePip(); showControls(); grabLock(); startEngine();
   }
@@ -864,7 +940,7 @@ document.addEventListener('visibilitychange', function(){
       setTimeout(function(){ if(gate.parentNode) gate.remove(); }, 350);
       enter();
     }else{
-      gate.classList.add("err"); msg.textContent = "비밀번호가 틀렸습니다";
+      gate.classList.add("err"); msg.textContent = T('wrongPw');
       setTimeout(function(){ gate.classList.remove("err"); msg.textContent = ""; entry = ""; render(); }, 550);
     }
   }
