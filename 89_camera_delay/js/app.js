@@ -21,8 +21,8 @@ var S = {
   facing: 'user',          // 기본 셀피(전면) — 당구대 앞 삼각대 거치 기준 (2026-08-27 지시)
   mirror: false,           // 기본 OFF (2026-08-27 실기기 확인 후 뒤집음)
   fit: 'contain',
-  orient: '180',           // 0 | 90 | 180 | 270 — 0°=OS 자연 회전(원래 카메라처럼 가로로 들면
-                           // 가로 화각), 90/180/270°는 강제 회전. 기본 180° (2026-08-27 지시)
+  orient: 'gyro',          // gyro | 0 | 90 | 180 | 270 — 기본 자이로(중력 센서로 폰의 물리
+                           // 방향을 감지해 자동 보정, 2026-08-27 지시). 숫자는 수동 고정.
   pip: null,               // 실시간 미니 창 위치 {l,t} (0~1 비율) — 드래그로 조정
   lang: 'ko',              // ko | en — 🌐 버튼 토글
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
@@ -36,8 +36,8 @@ try{
   /* v3 미만 저장값의 facing 은 무시(셀피 기본), v4 미만의 orient/mirror 는 무시
      — "0° + 미러 OFF 기본" 1회 마이그레이션 (2026-08-27) */
   if(saved.v >= 3 && saved.facing) S.facing = saved.facing;
-  /* v5 미만의 orient 는 무시 — "기본 180°" 1회 마이그레이션 (2026-08-27) */
-  if(saved.v >= 5 && ['0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
+  /* v6 미만의 orient 는 무시 — "자이로 자동" 1회 마이그레이션 (2026-08-27) */
+  if(saved.v >= 6 && ['gyro','0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
   if(saved.v >= 4 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
@@ -46,7 +46,7 @@ try{
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:5, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    v:6, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
     orient:S.orient, autoRec:S.autoRec, pip:S.pip, lang:S.lang })); }catch(e){}
 }
 
@@ -62,7 +62,7 @@ var I18N = {
     autoOn: '🔴 자동녹화 ON', autoOff: '⚪ 자동녹화 OFF',
     gateT: '비밀번호 4자리', wrongPw: '비밀번호가 틀렸습니다',
     buf: '버퍼', frameMode: '프레임 모드',
-    back5: '⏪ 5초 전',
+    back5: '⏪ 5초 전', gyroB: '📱 자이로',
     noDelayYet: '아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요',
     shotFail: '스냅샷 실패', shotSaved: '📸 스냅샷 저장',
     saved: '🎬 저장', nextAuto: ' — 다음 구간 자동 녹화',
@@ -89,7 +89,7 @@ var I18N = {
     autoOn: '🔴 Auto-rec ON', autoOff: '⚪ Auto-rec OFF',
     gateT: '4-digit password', wrongPw: 'Wrong password',
     buf: 'buffer', frameMode: 'Frame mode',
-    back5: '⏪ 5s back',
+    back5: '⏪ 5s back', gyroB: '📱 Gyro',
     noDelayYet: 'No delayed frame yet — wait for the buffer to fill',
     shotFail: 'Snapshot failed', shotSaved: '📸 Snapshot saved',
     saved: '🎬 Saved', nextAuto: ' — next segment auto-recording',
@@ -108,7 +108,9 @@ var I18N = {
   }
 };
 function T(k){ return (I18N[S.lang] && I18N[S.lang][k]) || I18N.ko[k] || k; }
-function orientAngle(){ return +S.orient || 0; }
+/* 지금 화면에 실제 적용 중인 회전각(자이로 or 수동) — 스냅샷/녹화/드래그도 이 값을 쓴다 */
+var rotNow = 0;
+function orientAngle(){ return rotNow; }
 
 /* ================= DOM ================= */
 var $ = function(id){ return document.getElementById(id); };
@@ -502,15 +504,13 @@ $('btnFit').addEventListener('click', function(){
   S.fit = (S.fit === 'cover') ? 'contain' : 'cover'; persist(); applyView();
 });
 
-/* ---- 화면 방향: 자동 → 세로 → 가로 3단 토글 ----
-   APK 는 네이티브 브리지(AndroidOrient)로 확실히 잠그고,
-   웹은 screen.orientation.lock (풀스크린에서만 먹으므로 fullscreenchange 마다 재적용). */
-/* 각도 → UI 직접 회전. 0°=세로, 90°=가로, 180°=세로 뒤집힘, 270°=가로 반대편.
-   OS 방향 잠금(setRequestedOrientation·orientation.lock)은 기기/전체화면 여부에 따라
-   안 먹는 경우가 있어(실폰에서 "안 돈다" 확인) — 앱이 #rot 를 CSS 로 직접 돌린다.
-   각도 모드에선 OS 회전을 세로로 못박아(이중 회전 방지) 항상 앱 회전만 유효하게 한다. */
+/* ---- 화면 방향 (2026-08-27 최종: 자이로 자동) ----
+   OS 는 항상 세로로 못박는다 → 카메라 프레임 방향이 고정돼 결정적이다.
+   중력 센서(devicemotion)로 폰의 물리 회전을 읽어 #rot(메인+PiP 전부)를 CSS 로
+   반대 방향으로 돌린다 — 두 화면이 구조적으로 같은 각도가 된다.
+   📱 버튼: 자이로(기본) → 0° → 90° → 180° → 270° 수동 고정 순환. */
 function layoutRot(){
-  var a = orientAngle();
+  var a = rotNow;
   document.body.classList.toggle('rot90',  a === 90);
   document.body.classList.toggle('rot180', a === 180);
   document.body.classList.toggle('rot270', a === 270);
@@ -524,37 +524,58 @@ function layoutRot(){
 }
 window.addEventListener('resize', layoutRot);
 
+function setRot(a){
+  if(a === rotNow) return;
+  rotNow = a;
+  if(rec) stopRec();      // 회전하면 녹화 캔버스 치수가 바뀐다 — 트리밍 저장 후 재개
+  layoutRot();
+  if(window.placePip) placePip();
+  applyView();            // 배지 등 갱신
+}
+
+/* 중력 벡터 → 물리 회전각. 폰을 시계방향으로 φ 만큼 돌렸다면 UI 는 (360-φ) 로 되돌린다.
+   OS 가 이미 돌려놓은 만큼(screen.orientation.angle, 핀 성공 시 0)은 빼 준다.
+   버킷이 600ms 유지될 때만 적용(손떨림 방지), 눕혀 놓으면(중력이 화면과 수직) 유지. */
+var gyroPend = -1, gyroPendT = 0;
+window.addEventListener('devicemotion', function(e){
+  if(S.orient !== 'gyro') return;
+  var g = e.accelerationIncludingGravity;
+  if(!g || g.x == null) return;
+  if(Math.sqrt(g.x * g.x + g.y * g.y) < 4) return;      // 거의 수평 — 마지막 각도 유지
+  var phi = Math.atan2(-g.x, g.y) * 180 / Math.PI;      // 시계방향 물리 회전
+  var bucket = (Math.round(((phi % 360) + 360) % 360 / 90) % 4) * 90;
+  var css = (360 - bucket) % 360;
+  try{ css = (css - (screen.orientation ? screen.orientation.angle : 0) + 720) % 360; }catch(_){}
+  if(css === rotNow){ gyroPend = -1; return; }
+  if(gyroPend !== css){ gyroPend = css; gyroPendT = Date.now(); return; }
+  if(Date.now() - gyroPendT > 600) setRot(css);
+});
+
 function applyOrientation(){
   var m = S.orient;
   var btn = $('btnOrient');
-  btn.textContent = '📱 ' + m + '°';
-  btn.classList.toggle('on', m !== '0');
+  btn.textContent = (m === 'gyro') ? T('gyroB') : '📱 ' + m + '°';
+  btn.classList.toggle('on', m !== 'gyro');
+  if(m !== 'gyro') setRot(+m || 0);
   layoutRot();
-  /* 0° = OS 자연 회전(가로로 들면 가로 화각 — 원래 카메라와 동일).
-     90/180/270° = OS 를 세로로 못박고(이중 회전 방지) 앱이 CSS 로 돌린다. */
+  /* OS 는 언제나 세로 고정 — 이중 회전 방지 + 카메라 프레임 방향 고정 */
   if(window.AndroidOrient && AndroidOrient.set){
-    try{ AndroidOrient.set(m === '0' ? 'auto' : 'pin'); }catch(e){}
+    try{ AndroidOrient.set('pin'); }catch(e){}
   }else{
     try{
-      if(screen.orientation){
-        if(m === '0'){ screen.orientation.unlock(); }
-        else{
-          var p = screen.orientation.lock('portrait-primary');
-          if(p && p.catch) p.catch(function(){});
-        }
+      if(screen.orientation && screen.orientation.lock){
+        var p = screen.orientation.lock('portrait-primary');
+        if(p && p.catch) p.catch(function(){});
       }
     }catch(e){}
   }
 }
-document.addEventListener('fullscreenchange', function(){
-  if(S.orient !== 'auto') applyOrientation();
-});
+document.addEventListener('fullscreenchange', function(){ applyOrientation(); });
 $('btnOrient').addEventListener('click', function(){
-  var cyc = ['0', '90', '180', '270'];
+  var cyc = ['gyro', '0', '90', '180', '270'];
   S.orient = cyc[(cyc.indexOf(S.orient) + 1) % cyc.length];
-  if(rec) stopRec();      // 각도가 바뀌면 녹화 캔버스 치수도 바뀐다 — 트리밍 저장 후 재개
   persist(); applyOrientation();
-  if(window.placePip) placePip();   // 무대 치수가 바뀌었으니 PiP 재배치
+  if(window.placePip) placePip();
 });
 
 /* ---- 회전 재동기화 (교통정리 2026-08-27) ----
