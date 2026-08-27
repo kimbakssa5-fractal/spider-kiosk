@@ -44,6 +44,10 @@ body.rot180 #rot{ transform:rotate(180deg); }
   font-size:17px; font-weight:700; letter-spacing:.02em;
   box-shadow:0 6px 18px rgba(0,0,0,.35);
   pointer-events:none;
+  /* 반시계 90° 세로 알약 + 최상단 (2026-08-28 지시).
+     좌상단 원점 회전 후 translateX(-100%) 로 top/left 지점에 정확히 붙는다(폭 무관) */
+  transform-origin:left top;
+  transform:rotate(-90deg) translateX(-100%);
 }
 #delayBadge b{ color:var(--accent); font-weight:900; font-size:21px; }
 
