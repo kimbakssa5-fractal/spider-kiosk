@@ -58,8 +58,9 @@ return oc.apply(self,arguments);};})();</script>
 
   <div id="frozenBadge" class="hide" data-i="frozen">일시정지</div>
 </div>
+</div><!-- /rot -->
 
-<!-- 하단 컨트롤 -->
+<!-- 하단 컨트롤 — #rot 밖: 화면 회전과 무관하게 항상 초기 각도(180°) 고정 -->
 <div id="controls">
   <div class="row chips" id="presets">
     <button class="chip" data-d="3">3초</button>
@@ -92,10 +93,10 @@ return oc.apply(self,arguments);};})();</script>
     <button id="btnRec"   class="pill">⏺ 대기</button>
     <button id="btnAuto"  class="pill">🔴 자동녹화 ON</button>
     <button id="btnLang"  class="pill">🌐 English</button>
+    <button id="btnHide"  class="pill" data-i="hideB">⬇ 숨기기</button>
   </div>
   <div id="statusLine"></div>
 </div>
-</div><!-- /rot -->
 
 <!-- 첫 진입 비밀번호 게이트 (1회 통과 = 기기 영구 개방) -->
 <div id="gate">

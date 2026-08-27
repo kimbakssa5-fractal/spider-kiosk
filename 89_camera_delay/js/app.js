@@ -21,7 +21,7 @@ var S = {
   facing: 'user',          // 기본 셀피(전면) — 당구대 앞 삼각대 거치 기준 (2026-08-27 지시)
   mirror: false,           // 기본 OFF (2026-08-27 실기기 확인 후 뒤집음)
   fit: 'contain',
-  rotUI: 0,                // 메인 프레임(#rot 전체) 회전 0/90/180/270
+  rotUI: 180,              // 메인 프레임(#rot=카메라 화면) 회전 0/90/180/270 — 기본 180 (2026-08-27)
   rotMain: 0,              // 메인 영상 내용 회전
   rotPipF: 0,              // PiP 프레임(상자) 회전
   rotPipC: 0,              // PiP 영상 내용 회전
@@ -38,9 +38,9 @@ try{
   /* v3 미만 저장값의 facing 은 무시(셀피 기본), v4 미만의 orient/mirror 는 무시
      — "0° + 미러 OFF 기본" 1회 마이그레이션 (2026-08-27) */
   if(saved.v >= 3 && saved.facing) S.facing = saved.facing;
-  /* v7: 회전 4값(자이로 개념 폐기, 2026-08-27). v7 미만의 회전 저장값은 무시 */
+  /* v8: 화면 회전 기본 180 (v8 미만의 rotUI 는 무시 이행). 나머지 회전은 v7부터 존중 */
+  if(saved.v >= 8 && [0,90,180,270].indexOf(saved.rotUI) >= 0) S.rotUI = saved.rotUI;
   if(saved.v >= 7){
-    if([0,90,180,270].indexOf(saved.rotUI)   >= 0) S.rotUI   = saved.rotUI;
     if([0,90,180,270].indexOf(saved.rotMain) >= 0) S.rotMain = saved.rotMain;
     if([0,90,180,270].indexOf(saved.rotPipF) >= 0) S.rotPipF = saved.rotPipF;
     if([0,90,180,270].indexOf(saved.rotPipC) >= 0) S.rotPipC = saved.rotPipC;
@@ -53,7 +53,7 @@ try{
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:7, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    v:8, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
     rotUI:S.rotUI, rotMain:S.rotMain, rotPipF:S.rotPipF, rotPipC:S.rotPipC,
     autoRec:S.autoRec, pip:S.pip, lang:S.lang })); }catch(e){}
 }
@@ -71,7 +71,7 @@ var I18N = {
     gateT: '비밀번호 4자리', wrongPw: '비밀번호가 틀렸습니다',
     buf: '버퍼', frameMode: '프레임 모드',
     back5: '⏪ 5초 전',
-    mainF: '🖼 화면', mainC: '🎞 영상', pipF: '🔲 PIP창', pipC: '📺 PIP영상',
+    mainF: '🖼 화면', mainC: '🎞 영상', pipF: '🔲 PIP창', pipC: '📺 PIP영상', hideB: '⬇ 숨기기',
     noDelayYet: '아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요',
     shotFail: '스냅샷 실패', shotSaved: '📸 스냅샷 저장',
     saved: '🎬 저장', nextAuto: ' — 다음 구간 자동 녹화',
@@ -99,7 +99,7 @@ var I18N = {
     gateT: '4-digit password', wrongPw: 'Wrong password',
     buf: 'buffer', frameMode: 'Frame mode',
     back5: '⏪ 5s back',
-    mainF: '🖼 Screen', mainC: '🎞 Image', pipF: '🔲 PiP box', pipC: '📺 PiP img',
+    mainF: '🖼 Screen', mainC: '🎞 Image', pipF: '🔲 PiP box', pipC: '📺 PiP img', hideB: '⬇ Hide',
     noDelayYet: 'No delayed frame yet — wait for the buffer to fill',
     shotFail: 'Snapshot failed', shotSaved: '📸 Snapshot saved',
     saved: '🎬 Saved', nextAuto: ' — next segment auto-recording',
@@ -618,20 +618,13 @@ catch(e){ window.addEventListener('orientationchange', onRotate); }
 
 $('errRetry').addEventListener('click', function(){ startEngine(); });
 
-/* 화면 탭 → 컨트롤 토글 (6초 뒤 자동 숨김) */
-var hideT = null;
+/* 메뉴 표시/숨김 — 자동 숨김 없음(2026-08-27 지시). ⬇ 버튼으로만 숨기고, 화면 탭으로 다시 연다 */
 function showControls(){
   $('controls').classList.remove('hidden');
-  clearTimeout(hideT);
-  hideT = setTimeout(function(){ $('controls').classList.add('hidden'); }, 6000);
 }
-$('stage').addEventListener('pointerdown', function(){
-  if($('controls').classList.contains('hidden')) showControls();
-  else { clearTimeout(hideT); $('controls').classList.add('hidden'); }
-});
-$('controls').addEventListener('pointerdown', function(){
-  clearTimeout(hideT);
-  hideT = setTimeout(function(){ $('controls').classList.add('hidden'); }, 6000);
+$('stage').addEventListener('pointerdown', function(){ showControls(); });
+$('btnHide').addEventListener('click', function(){
+  $('controls').classList.add('hidden');
 });
 
 /* PiP 드래그 → 위치 이동 (탭해서 없어지던 동작은 제거, 2026-08-27 지시).
