@@ -62,6 +62,7 @@ var I18N = {
     autoOn: '🔴 자동녹화 ON', autoOff: '⚪ 자동녹화 OFF',
     gateT: '비밀번호 4자리', wrongPw: '비밀번호가 틀렸습니다',
     buf: '버퍼', frameMode: '프레임 모드',
+    back5: '⏪ 5초 전',
     noDelayYet: '아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요',
     shotFail: '스냅샷 실패', shotSaved: '📸 스냅샷 저장',
     saved: '🎬 저장', nextAuto: ' — 다음 구간 자동 녹화',
@@ -88,6 +89,7 @@ var I18N = {
     autoOn: '🔴 Auto-rec ON', autoOff: '⚪ Auto-rec OFF',
     gateT: '4-digit password', wrongPw: 'Wrong password',
     buf: 'buffer', frameMode: 'Frame mode',
+    back5: '⏪ 5s back',
     noDelayYet: 'No delayed frame yet — wait for the buffer to fill',
     shotFail: 'Snapshot failed', shotSaved: '📸 Snapshot saved',
     saved: '🎬 Saved', nextAuto: ' — next segment auto-recording',
@@ -123,6 +125,8 @@ var msrc = null, sbuf = null, sbQueue = [], sbPumping = false, msURL = null;
 var tickTimer = null, capTimer = null, drawTimer = null;
 var retryTimer = null;
 var frames = [];            // 프레임 모드 링버퍼 [{t, blob}]
+var viewBack = 0;           // "5초 전 보기" 추가 되감기(초) — 탭마다 +5, 최대 15, 그다음 0
+var MAX_BACK = 15;
 var lastDrawnT = 0, decoding = false;
 var engineGen = 0;          // 재시작 세대 — 늦게 도착한 콜백 무시용
 
@@ -298,7 +302,7 @@ function evict(force){
   if(!sbuf || sbuf.updating) return;
   var b = buffered();
   if(!b) return;
-  var keep = S.delay + 15;                       // 지연 + 여유
+  var keep = S.delay + viewBack + 15;            // 지연 + 되감기 + 여유
   var cut = b.end - keep;
   if(force) cut = Math.max(cut, b.start + 10);   // 공간 초과면 최소 10초라도 잘라낸다
   if(cut > b.start + 5){
@@ -310,9 +314,9 @@ function mseTick(){
   var b = buffered();
   if(!b){ setFillUI(0); return; }
   var have = b.end - b.start;
-  var target = b.end - S.delay;
+  var target = b.end - S.delay - viewBack;
 
-  if(target < b.start + 0.1){
+  if(b.end - S.delay < b.start + 0.1){
     /* 아직 delay 초만큼 안 쌓였다 */
     elFill.classList.remove('hide');
     setFillUI(have);
@@ -320,6 +324,8 @@ function mseTick(){
     return;
   }
   elFill.classList.add('hide');
+  /* 되감기 분량의 히스토리가 아직 부족하면 가장 오래된 지점까지만 */
+  if(target < b.start + 0.05) target = b.start + 0.05;
 
   if(S.frozen){
     if(!elDelayed.paused) elDelayed.pause();
@@ -369,7 +375,7 @@ function startFrames(gen){
       if(gen !== engineGen || !blob) return;
       var now = performance.now();
       frames.push({ t: now, blob: blob });
-      var minT = now - (S.delay + 6) * 1000;
+      var minT = now - (S.delay + viewBack + 6) * 1000;
       while(frames.length && frames[0].t < minT) frames.shift();
     }, 'image/jpeg', 0.75);
   }, 1000 / CAP_FPS);
@@ -377,13 +383,17 @@ function startFrames(gen){
   drawTimer = setInterval(function(){
     if(gen !== engineGen) return;
     var now = performance.now();
-    var cut = now - S.delay * 1000;
+    var cut = now - (S.delay + viewBack) * 1000;
     var have = frames.length ? (now - frames[0].t) / 1000 : 0;
 
     /* cut 이전의 가장 최신 프레임 */
     var pick = null;
     for(var i = frames.length - 1; i >= 0; i--){
       if(frames[i].t <= cut){ pick = frames[i]; break; }
+    }
+    if(!pick && viewBack > 0 && frames.length &&
+       frames[frames.length - 1].t - frames[0].t > S.delay * 1000){
+      pick = frames[0];              // 되감기 분량이 아직 부족하면 가장 오래된 프레임
     }
     if(!pick){
       elFill.classList.remove('hide');
@@ -413,7 +423,7 @@ function setFillUI(have){
 
 /* ================= UI ================= */
 function applyView(){
-  elBadgeNum.textContent = S.delay;
+  elBadgeNum.textContent = S.delay + viewBack;
   $('delayNum').firstElementChild.textContent = S.delay;
   $('delayRange').value = S.delay;
   document.body.classList.toggle('mirror', S.mirror);
@@ -443,6 +453,23 @@ $('btnFreeze').addEventListener('click', function(){
   $('frozenBadge').classList.toggle('hide', !S.frozen);
 });
 
+/* ---- ⏪ 5초 전 보기 — 탭마다 되감기 +5초(최대 15), 그다음 탭은 원위치 ---- */
+function updateBackUI(){
+  var btn = $('btnBack');
+  btn.classList.toggle('on', viewBack > 0);
+  btn.textContent = viewBack > 0 ? '⏪ +' + viewBack + T('sU') : T('back5');
+  elBadgeNum.textContent = S.delay + viewBack;
+}
+$('btnBack').addEventListener('click', function(){
+  viewBack = (viewBack >= MAX_BACK) ? 0 : viewBack + 5;
+  updateBackUI();
+  /* 일시정지 중에도 그 시점 프레임을 바로 보여준다 (재생 중엔 mseTick 스냅이 처리) */
+  if(S.mode === 'mse' && S.frozen){
+    var b = buffered();
+    if(b) elDelayed.currentTime = Math.max(b.start + 0.05, b.end - S.delay - viewBack);
+  }
+});
+
 /* ---- 🌐 한/영 토글 ---- */
 function applyLang(){
   document.documentElement.lang = S.lang;
@@ -454,7 +481,7 @@ function applyLang(){
     chips[j].textContent = chips[j].getAttribute('data-d') + T('sU');
   $('btnFreeze').textContent = S.frozen ? T('resume') : T('pause');
   $('btnLang').textContent = (S.lang === 'ko') ? '🌐 English' : '🌐 한국어';
-  applyView(); updateRecUI(); updateAutoUI();
+  applyView(); updateRecUI(); updateAutoUI(); updateBackUI();
 }
 $('btnLang').addEventListener('click', function(){
   S.lang = (S.lang === 'ko') ? 'en' : 'ko';
