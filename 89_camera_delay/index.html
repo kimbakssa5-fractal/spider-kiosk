@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; media-src 'self' blob:; img-src 'self' data: blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'">
 <meta name="google" content="notranslate">
+<script>/*__saveToDesktopShim*/(function(){if(window.__saveShimOn)return;window.__saveShimOn=1;
+var oc=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){
+var self=this;if(self.download&&window.showSaveFilePicker&&/^(blob|data):/.test(self.href)){
+var href=self.href,name=self.download;(async function(){try{
+var h=await window.showSaveFilePicker({suggestedName:name,startIn:'desktop'});
+var b=await(await fetch(href)).blob();var w=await h.createWritable();await w.write(b);await w.close();
+}catch(e){if(e&&e.name==='AbortError')return;try{oc.call(self)}catch(_){}}
+finally{try{window.__enterFullscreen&&window.__enterFullscreen()}catch(_){}}})();return;}
+return oc.apply(self,arguments);};})();</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#111418">
 <title>딜레이 카메라 — 89_camera_delay</title>
@@ -68,6 +77,8 @@
     <button id="btnFlip"  class="pill">🔄 카메라</button>
     <button id="btnMirror" class="pill">↔ 미러</button>
     <button id="btnFit"   class="pill">⛶ 채우기</button>
+    <button id="btnShot"  class="pill">📸 스냅샷</button>
+    <button id="btnRec"   class="pill">⏺ 녹화</button>
   </div>
   <div id="statusLine"></div>
 </div>

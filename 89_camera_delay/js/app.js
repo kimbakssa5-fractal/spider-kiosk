@@ -96,6 +96,7 @@ function showErr(title, msg, canRetry){
 function hideErr(){ elErr.classList.add('hide'); }
 
 function startEngine(){
+  if(rec) stopRec();          // 카메라 교체/재시작 중엔 녹화를 끊고 지금까지 분량을 저장
   stopEngine();
   var gen = engineGen;
   hideErr();
@@ -263,8 +264,8 @@ function mseTick(){
     }
   }
   evict(false);
-  elStatus.textContent = 'MSE · 버퍼 ' + have.toFixed(0) + '초 · ' +
-    (stream && stream.getVideoTracks()[0] ? trackLabel() : '');
+  setStatus('MSE · 버퍼 ' + have.toFixed(0) + '초 · ' +
+    (stream && stream.getVideoTracks()[0] ? trackLabel() : ''));
 }
 
 function trackLabel(){
@@ -331,7 +332,7 @@ function startFrames(gen){
       bmp.close();
       lastDrawnT = pick.t;
     }).catch(function(){ decoding = false; });
-    elStatus.textContent = '프레임 모드 · 버퍼 ' + have.toFixed(0) + '초 · ' + CAP_FPS + 'fps';
+    setStatus('프레임 모드 · 버퍼 ' + have.toFixed(0) + '초 · ' + CAP_FPS + 'fps');
   }, 1000 / 15);
 }
 
@@ -410,6 +411,130 @@ $('controls').addEventListener('pointerdown', function(){
 $('pip').addEventListener('pointerdown', function(e){
   e.stopPropagation();
   this.classList.toggle('off');
+});
+
+/* ================= 저장 — 스냅샷(JPG) / 리플레이 녹화(webm) ================= */
+/* 상태줄을 잠깐 빌려 안내를 띄운다. mseTick 이 300ms 마다 덮어쓰므로 홀드 시각을 둔다. */
+var statusHoldUntil = 0;
+function setStatus(msg){
+  if(Date.now() < statusHoldUntil) return;
+  elStatus.textContent = msg;
+}
+function flashStatus(msg){
+  statusHoldUntil = Date.now() + 2500;
+  elStatus.textContent = msg;
+  showControls();
+}
+
+function stamp(){
+  var d = new Date();
+  function z(n){ return String(n).padStart(2, '0'); }
+  return '' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) +
+         '_' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds());
+}
+
+function saveBlob(blob, name){
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  /* 바탕화면 shim(showSaveFilePicker)은 대화상자가 닫힌 **뒤에야** blob 을 fetch 한다 —
+     그 전에 revoke 하면 0바이트 파일이 된다. 피커가 없는 환경(폰)에서만 지연 revoke. */
+  if(!window.showSaveFilePicker){
+    setTimeout(function(){ try{ URL.revokeObjectURL(url); }catch(e){} }, 60000);
+  }
+}
+
+/* --- 스냅샷: 지금 보이는 지연 화면 1장을 JPG 로 --- */
+$('btnShot').addEventListener('click', function(){
+  var src, w, h;
+  if(S.mode === 'frames'){ src = elCanvas; w = elCanvas.width; h = elCanvas.height; }
+  else { src = elDelayed; w = elDelayed.videoWidth; h = elDelayed.videoHeight; }
+  if(!w || !h){ flashStatus('아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요'); return; }
+  var c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  var cx = c.getContext('2d');
+  if(S.mirror){ cx.translate(w, 0); cx.scale(-1, 1); }   // 화면에 보이는 그대로
+  cx.drawImage(src, 0, 0, w, h);
+  c.toBlob(function(b){
+    if(!b){ flashStatus('스냅샷 실패'); return; }
+    saveBlob(b, 'delay_shot_' + stamp() + '.jpg');
+    flashStatus('📸 스냅샷 저장');
+  }, 'image/jpeg', 0.92);
+});
+
+/* --- 녹화: 지연 화면을 그대로 실시간 녹화 → webm ---
+   (지연 재생 화면을 캡처하므로, 저장물도 "N초 전" 영상이 된다) */
+var rec = null, recChunks = [], recT0 = 0, recTimer = null;
+
+function recMime(){
+  if(!window.MediaRecorder) return null;
+  var cands = ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm', 'video/mp4'];
+  for(var i = 0; i < cands.length; i++){
+    try{ if(MediaRecorder.isTypeSupported(cands[i])) return cands[i]; }catch(e){}
+  }
+  return null;
+}
+
+function stopRec(){
+  clearInterval(recTimer); recTimer = null;
+  try{
+    if(rec && rec.state !== 'inactive') rec.stop();   // onstop 에서 저장
+    else { rec = null; updateRecUI(); }
+  }catch(e){ rec = null; updateRecUI(); }
+}
+
+function updateRecUI(){
+  var b = $('btnRec');
+  if(rec){
+    b.classList.add('on');
+    b.textContent = '⏹ 저장 ' + Math.floor((Date.now() - recT0) / 1000) + '초';
+  }else{
+    b.classList.remove('on');
+    b.textContent = '⏺ 녹화';
+  }
+}
+
+$('btnRec').addEventListener('click', function(){
+  if(rec){ stopRec(); return; }
+
+  var el = (S.mode === 'frames') ? elCanvas : elDelayed;
+  var cap = el.captureStream || el.mozCaptureStream;
+  var mime = recMime();
+  if(!cap || !mime){ flashStatus('이 브라우저는 녹화를 지원하지 않습니다'); return; }
+  if(S.mode === 'mse' && (!elDelayed.videoWidth || elDelayed.paused)){
+    flashStatus('지연 화면이 재생 중일 때 녹화할 수 있어요'); return;
+  }
+
+  var ms;
+  try{ ms = cap.call(el, 30); }
+  catch(e){ flashStatus('녹화 시작 실패 (' + (e.name || '') + ')'); return; }
+
+  recChunks = [];
+  try{ rec = new MediaRecorder(ms, { mimeType: mime, videoBitsPerSecond: 4000000 }); }
+  catch(e){
+    try{ rec = new MediaRecorder(ms); }
+    catch(e2){ flashStatus('녹화 시작 실패'); return; }
+  }
+  rec.ondataavailable = function(e){ if(e.data && e.data.size) recChunks.push(e.data); };
+  rec.onstop = function(){
+    var type = (rec && rec.mimeType) || 'video/webm';
+    var ext = /mp4/.test(type) ? '.mp4' : '.webm';
+    var b = new Blob(recChunks, { type: type });
+    rec = null; recChunks = [];
+    updateRecUI();
+    if(b.size > 0){
+      saveBlob(b, 'delay_replay_' + stamp() + ext);
+      flashStatus('🎬 리플레이 저장 (' + (b.size / 1048576).toFixed(1) + 'MB)');
+    }else{
+      flashStatus('녹화된 내용이 없습니다');
+    }
+  };
+  rec.onerror = function(){ stopRec(); };
+  rec.start(1000);
+  recT0 = Date.now();
+  updateRecUI();
+  recTimer = setInterval(updateRecUI, 500);
 });
 
 /* ================= Wake Lock (화면 꺼짐 방지) ================= */

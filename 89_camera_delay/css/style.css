@@ -92,7 +92,9 @@ body{
 }
 #controls.hidden{ transform:translateY(110%); opacity:0; pointer-events:none; }
 .row{ display:flex; align-items:center; gap:10px; justify-content:center; }
-.chips{ flex-wrap:wrap; }
+.chips, .btns{ flex-wrap:wrap; }
+.pill.on#btnRec{ animation:recblink 1.2s ease-in-out infinite; }
+@keyframes recblink{ 0%,100%{ box-shadow:0 4px 14px rgba(0,0,0,.3); } 50%{ box-shadow:0 0 0 5px rgba(232,96,76,.45); } }
 .chip{
   border:none; cursor:pointer; font-family:inherit;
   background:rgba(255,248,243,.92); color:var(--ink);
