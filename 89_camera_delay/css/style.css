@@ -57,6 +57,15 @@ body.rot180 #rot{ transform:rotate(180deg); }
 }
 #pip{ touch-action:none; cursor:grab; }
 #pip video{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+/* PiP 내용 반시계 90° 회전이 기본 (2026-08-27 지시) — 상자는 세로(9:16)로 세우고
+   영상을 -90° 돌려 꼭 맞춘다 (가로변 177.78% = 상자 세로변) */
+#pip.rot270{ aspect-ratio:9/16; width:min(20vw, 150px); }
+#pip.rot270 video{
+  position:absolute; left:50%; top:50%;
+  width:177.78%; height:auto; aspect-ratio:16/9;
+  transform:translate(-50%,-50%) rotate(-90deg);
+}
+.mirror #pip.rot270 video{ transform:translate(-50%,-50%) rotate(-90deg) scaleX(-1); }
 #pip span{
   position:absolute; left:8px; bottom:6px;
   background:rgba(255,248,243,.92); color:var(--ink);
