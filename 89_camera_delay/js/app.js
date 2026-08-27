@@ -22,6 +22,7 @@ var S = {
   mirror: true,            // 기본 ON — 거울처럼 보여야 오른손 자세가 오른손으로 보인다 (2026-08-27 지시)
   fit: 'contain',
   orient: 'auto',          // auto | portrait | landscape
+  autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
   frozen: false,
   mode: null,              // 'mse' | 'frames'
   running: false
@@ -34,10 +35,12 @@ try{
   if(saved.v >= 2 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
   if(saved.orient === 'portrait' || saved.orient === 'landscape') S.orient = saved.orient;
+  if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:2, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit, orient:S.orient })); }catch(e){}
+    v:2, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    orient:S.orient, autoRec:S.autoRec })); }catch(e){}
 }
 
 /* ================= DOM ================= */
@@ -551,7 +554,8 @@ function startSegment(){
     updateRecUI();
     if(b.size > 0){
       saveBlob(b, 'delay_replay_' + stamp() + ext);
-      flashStatus('🎬 저장 (' + (b.size / 1048576).toFixed(1) + 'MB) — 다음 구간 자동 녹화');
+      flashStatus('🎬 저장 (' + (b.size / 1048576).toFixed(1) + 'MB)' +
+                  (S.autoRec ? ' — 다음 구간 자동 녹화' : ''));
     }
   };
   rec.onerror = function(){ stopRec(); };
@@ -587,11 +591,29 @@ function updateRecUI(){
 
 $('btnRec').addEventListener('click', function(){
   if(rec) stopRec();                       // 여기까지 저장(트리밍) — 새 구간은 워치독이 연다
-  else if(recReady()) startSegment();
+  else if(recReady()) startSegment();      // 자동녹화를 꺼 둔 상태의 수동 녹화
 });
 
+/* ---- 자동녹화 ON/OFF — 폰 용량이 없을 때 끌 수 있다 (기본 ON) ---- */
+function updateAutoUI(){
+  var b = $('btnAuto');
+  b.classList.toggle('on', S.autoRec);
+  b.textContent = S.autoRec ? '🔴 자동녹화 ON' : '⚪ 자동녹화 OFF';
+}
+$('btnAuto').addEventListener('click', function(){
+  S.autoRec = !S.autoRec;
+  persist(); updateAutoUI();
+  if(!S.autoRec){
+    if(rec) stopRec();                     // 진행 중 구간은 여기까지 저장하고 멈춘다
+    flashStatus('자동녹화 끔 — ⏺ 버튼으로 수동 녹화는 가능');
+  }else{
+    flashStatus('자동녹화 켬 — 5분 단위로 저장');
+  }
+});
+updateAutoUI();
+
 /* 워치독 — 재생이 살아 있으면 녹화도 살아 있게 (최초 시작·카메라 전환·구간 마감 뒤 재개) */
-setInterval(function(){ if(!rec && recReady()) startSegment(); }, 1000);
+setInterval(function(){ if(S.autoRec && !rec && recReady()) startSegment(); }, 1000);
 
 /* ================= Wake Lock (화면 꺼짐 방지) ================= */
 var wlock = null;
