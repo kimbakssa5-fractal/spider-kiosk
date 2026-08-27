@@ -21,8 +21,10 @@ var S = {
   facing: 'user',          // 기본 셀피(전면) — 당구대 앞 삼각대 거치 기준 (2026-08-27 지시)
   mirror: false,           // 기본 OFF (2026-08-27 실기기 확인 후 뒤집음)
   fit: 'contain',
-  orient: 'gyro',          // gyro | 0 | 90 | 180 | 270 — 기본 자이로(중력 센서로 폰의 물리
-                           // 방향을 감지해 자동 보정, 2026-08-27 지시). 숫자는 수동 고정.
+  rotUI: 0,                // 메인 프레임(#rot 전체) 회전 0/90/180/270
+  rotMain: 0,              // 메인 영상 내용 회전
+  rotPipF: 0,              // PiP 프레임(상자) 회전
+  rotPipC: 0,              // PiP 영상 내용 회전
   pip: null,               // 실시간 미니 창 위치 {l,t} (0~1 비율) — 드래그로 조정
   lang: 'ko',              // ko | en — 🌐 버튼 토글
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
@@ -36,8 +38,13 @@ try{
   /* v3 미만 저장값의 facing 은 무시(셀피 기본), v4 미만의 orient/mirror 는 무시
      — "0° + 미러 OFF 기본" 1회 마이그레이션 (2026-08-27) */
   if(saved.v >= 3 && saved.facing) S.facing = saved.facing;
-  /* v6 미만의 orient 는 무시 — "자이로 자동" 1회 마이그레이션 (2026-08-27) */
-  if(saved.v >= 6 && ['gyro','0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
+  /* v7: 회전 4값(자이로 개념 폐기, 2026-08-27). v7 미만의 회전 저장값은 무시 */
+  if(saved.v >= 7){
+    if([0,90,180,270].indexOf(saved.rotUI)   >= 0) S.rotUI   = saved.rotUI;
+    if([0,90,180,270].indexOf(saved.rotMain) >= 0) S.rotMain = saved.rotMain;
+    if([0,90,180,270].indexOf(saved.rotPipF) >= 0) S.rotPipF = saved.rotPipF;
+    if([0,90,180,270].indexOf(saved.rotPipC) >= 0) S.rotPipC = saved.rotPipC;
+  }
   if(saved.v >= 4 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
@@ -46,8 +53,9 @@ try{
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:6, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
-    orient:S.orient, autoRec:S.autoRec, pip:S.pip, lang:S.lang })); }catch(e){}
+    v:7, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    rotUI:S.rotUI, rotMain:S.rotMain, rotPipF:S.rotPipF, rotPipC:S.rotPipC,
+    autoRec:S.autoRec, pip:S.pip, lang:S.lang })); }catch(e){}
 }
 
 /* ================= 한/영 문자열 ================= */
@@ -62,7 +70,8 @@ var I18N = {
     autoOn: '🔴 자동녹화 ON', autoOff: '⚪ 자동녹화 OFF',
     gateT: '비밀번호 4자리', wrongPw: '비밀번호가 틀렸습니다',
     buf: '버퍼', frameMode: '프레임 모드',
-    back5: '⏪ 5초 전', gyroB: '📱 자이로',
+    back5: '⏪ 5초 전',
+    mainF: '🖼 화면', mainC: '🎞 영상', pipF: '🔲 PIP창', pipC: '📺 PIP영상',
     noDelayYet: '아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요',
     shotFail: '스냅샷 실패', shotSaved: '📸 스냅샷 저장',
     saved: '🎬 저장', nextAuto: ' — 다음 구간 자동 녹화',
@@ -89,7 +98,8 @@ var I18N = {
     autoOn: '🔴 Auto-rec ON', autoOff: '⚪ Auto-rec OFF',
     gateT: '4-digit password', wrongPw: 'Wrong password',
     buf: 'buffer', frameMode: 'Frame mode',
-    back5: '⏪ 5s back', gyroB: '📱 Gyro',
+    back5: '⏪ 5s back',
+    mainF: '🖼 Screen', mainC: '🎞 Image', pipF: '🔲 PiP box', pipC: '📺 PiP img',
     noDelayYet: 'No delayed frame yet — wait for the buffer to fill',
     shotFail: 'Snapshot failed', shotSaved: '📸 Snapshot saved',
     saved: '🎬 Saved', nextAuto: ' — next segment auto-recording',
@@ -108,9 +118,6 @@ var I18N = {
   }
 };
 function T(k){ return (I18N[S.lang] && I18N[S.lang][k]) || I18N.ko[k] || k; }
-/* 지금 화면에 실제 적용 중인 회전각(자이로 or 수동) — 스냅샷/녹화/드래그도 이 값을 쓴다 */
-var rotNow = 0;
-function orientAngle(){ return rotNow; }
 
 /* ================= DOM ================= */
 var $ = function(id){ return document.getElementById(id); };
@@ -436,6 +443,7 @@ function applyView(){
   var chips = document.querySelectorAll('#presets .chip');
   for(var i = 0; i < chips.length; i++)
     chips[i].classList.toggle('on', +chips[i].getAttribute('data-d') === S.delay);
+  layoutMainContent();   // 미러 상태가 인라인 transform 에 합성돼 있다
 }
 
 function setDelay(d){
@@ -483,7 +491,7 @@ function applyLang(){
     chips[j].textContent = chips[j].getAttribute('data-d') + T('sU');
   $('btnFreeze').textContent = S.frozen ? T('resume') : T('pause');
   $('btnLang').textContent = (S.lang === 'ko') ? '🌐 English' : '🌐 한국어';
-  applyView(); updateRecUI(); updateAutoUI(); updateBackUI();
+  applyView(); updateRecUI(); updateAutoUI(); updateBackUI(); applyRots();
 }
 $('btnLang').addEventListener('click', function(){
   S.lang = (S.lang === 'ko') ? 'en' : 'ko';
@@ -504,13 +512,13 @@ $('btnFit').addEventListener('click', function(){
   S.fit = (S.fit === 'cover') ? 'contain' : 'cover'; persist(); applyView();
 });
 
-/* ---- 화면 방향 (2026-08-27 최종: 자이로 자동) ----
-   OS 는 항상 세로로 못박는다 → 카메라 프레임 방향이 고정돼 결정적이다.
-   중력 센서(devicemotion)로 폰의 물리 회전을 읽어 #rot(메인+PiP 전부)를 CSS 로
-   반대 방향으로 돌린다 — 두 화면이 구조적으로 같은 각도가 된다.
-   📱 버튼: 자이로(기본) → 0° → 90° → 180° → 270° 수동 고정 순환. */
+/* ---- 화면 회전 (2026-08-27 최종: 수동 4값 — 자이로/자동 개념 폐기) ----
+   네 가지 회전을 각각 0→90→180→270° 로 직접 맞춘다:
+     ①메인 프레임(#rot 전체)  ②메인 영상 내용(지연 화면)
+     ③PiP 프레임(작은 창 상자)  ④PiP 영상 내용
+   OS 는 항상 세로 고정 — 카메라 프레임 방향이 절대 흔들리지 않게. */
 function layoutRot(){
-  var a = rotNow;
+  var a = S.rotUI;
   document.body.classList.toggle('rot90',  a === 90);
   document.body.classList.toggle('rot180', a === 180);
   document.body.classList.toggle('rot270', a === 270);
@@ -522,43 +530,61 @@ function layoutRot(){
     r.style.width = ''; r.style.height = '';
   }
 }
-window.addEventListener('resize', layoutRot);
 
-function setRot(a){
-  if(a === rotNow) return;
-  rotNow = a;
-  if(rec) stopRec();      // 회전하면 녹화 캔버스 치수가 바뀐다 — 트리밍 저장 후 재개
-  layoutRot();
-  if(window.placePip) placePip();
-  applyView();            // 배지 등 갱신
+/* 메인 영상 내용 회전 — 90/270 은 무대 치수를 전치한 크기로 박고 가운데서 돌린다.
+   미러는 인라인 transform 에 합성(인라인이 .mirror CSS 규칙을 이긴다). */
+function layoutMainContent(){
+  var a = S.rotMain;
+  var vert = (S.rotUI === 90 || S.rotUI === 270);
+  var sw = vert ? window.innerHeight : window.innerWidth;
+  var sh = vert ? window.innerWidth  : window.innerHeight;
+  var mir = S.mirror ? ' scaleX(-1)' : '';
+  [elDelayed, elCanvas].forEach(function(el){
+    if(a === 90 || a === 270){
+      el.style.width = sh + 'px'; el.style.height = sw + 'px';
+      el.style.left = '50%'; el.style.top = '50%';
+      el.style.right = 'auto'; el.style.bottom = 'auto';
+      el.style.transform = 'translate(-50%,-50%) rotate(' + a + 'deg)' + mir;
+    }else{
+      el.style.width = ''; el.style.height = '';
+      el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.bottom = '';
+      el.style.transform = (a === 180 ? 'rotate(180deg)' : '') + mir;
+    }
+  });
 }
+window.addEventListener('resize', function(){ layoutRot(); layoutMainContent(); });
 
-/* 중력 벡터 → 물리 회전각. 폰을 시계방향으로 φ 만큼 돌렸다면 UI 는 (360-φ) 로 되돌린다.
-   OS 가 이미 돌려놓은 만큼(screen.orientation.angle, 핀 성공 시 0)은 빼 준다.
-   버킷이 600ms 유지될 때만 적용(손떨림 방지), 눕혀 놓으면(중력이 화면과 수직) 유지. */
-var gyroPend = -1, gyroPendT = 0;
-window.addEventListener('devicemotion', function(e){
-  if(S.orient !== 'gyro') return;
-  var g = e.accelerationIncludingGravity;
-  if(!g || g.x == null) return;
-  if(Math.sqrt(g.x * g.x + g.y * g.y) < 4) return;      // 거의 수평 — 마지막 각도 유지
-  var phi = Math.atan2(-g.x, g.y) * 180 / Math.PI;      // 시계방향 물리 회전
-  var bucket = (Math.round(((phi % 360) + 360) % 360 / 90) % 4) * 90;
-  var css = (360 - bucket) % 360;
-  try{ css = (css - (screen.orientation ? screen.orientation.angle : 0) + 720) % 360; }catch(_){}
-  if(css === rotNow){ gyroPend = -1; return; }
-  if(gyroPend !== css){ gyroPend = css; gyroPendT = Date.now(); return; }
-  if(Date.now() - gyroPendT > 600) setRot(css);
-});
-
-function applyOrientation(){
-  var m = S.orient;
-  var btn = $('btnOrient');
-  btn.textContent = (m === 'gyro') ? T('gyroB') : '📱 ' + m + '°';
-  btn.classList.toggle('on', m !== 'gyro');
-  if(m !== 'gyro') setRot(+m || 0);
+function applyRots(){
   layoutRot();
-  /* OS 는 언제나 세로 고정 — 이중 회전 방지 + 카메라 프레임 방향 고정 */
+  layoutMainContent();
+  var pip = $('pip'), lv = $('live');
+  pip.classList.remove('pf90', 'pf180', 'pf270');
+  if(S.rotPipF) pip.classList.add('pf' + S.rotPipF);
+  lv.classList.remove('pc90', 'pc180', 'pc270');
+  if(S.rotPipC) lv.classList.add('pc' + S.rotPipC);
+  var defs = [['btnMainF', 'mainF', S.rotUI], ['btnMainC', 'mainC', S.rotMain],
+              ['btnPipF', 'pipF', S.rotPipF], ['btnPipC', 'pipC', S.rotPipC]];
+  for(var i = 0; i < defs.length; i++){
+    var b = $(defs[i][0]);
+    b.textContent = T(defs[i][1]) + ' ' + defs[i][2] + '°';
+    b.classList.toggle('on', defs[i][2] !== 0);
+  }
+  if(window.placePip) placePip();
+}
+function bindRot(btnId, key, restartsRec){
+  $(btnId).addEventListener('click', function(){
+    S[key] = (S[key] + 90) % 360;
+    if(restartsRec && rec) stopRec();   // 저장물 치수가 바뀐다 — 트리밍 저장 후 재개
+    persist(); applyRots();
+  });
+}
+bindRot('btnMainF', 'rotUI', true);
+bindRot('btnMainC', 'rotMain', true);
+bindRot('btnPipF', 'rotPipF', false);
+bindRot('btnPipC', 'rotPipC', false);
+
+/* OS 세로 고정 (웹은 풀스크린일 때만 먹으므로 fullscreenchange 마다 재시도) */
+function pinOS(){
   if(window.AndroidOrient && AndroidOrient.set){
     try{ AndroidOrient.set('pin'); }catch(e){}
   }else{
@@ -570,13 +596,7 @@ function applyOrientation(){
     }catch(e){}
   }
 }
-document.addEventListener('fullscreenchange', function(){ applyOrientation(); });
-$('btnOrient').addEventListener('click', function(){
-  var cyc = ['gyro', '0', '90', '180', '270'];
-  S.orient = cyc[(cyc.indexOf(S.orient) + 1) % cyc.length];
-  persist(); applyOrientation();
-  if(window.placePip) placePip();
-});
+document.addEventListener('fullscreenchange', pinOS);
 
 /* ---- 회전 재동기화 (교통정리 2026-08-27) ----
    getUserMedia 트랙의 회전값은 캡처 시작 시점 기준이라, 화면이 돌면(특히 웹뷰는
@@ -639,7 +659,7 @@ $('controls').addEventListener('pointerdown', function(){
   pip.addEventListener('pointermove', function(e){
     if(!drag) return;
     var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    var a = orientAngle(), sx, sy;
+    var a = S.rotUI, sx, sy;
     if(a === 90){ sx = dy; sy = -dx; }
     else if(a === 180){ sx = -dx; sy = -dy; }
     else if(a === 270){ sx = -dy; sy = dx; }
@@ -699,12 +719,12 @@ $('btnShot').addEventListener('click', function(){
   if(S.mode === 'frames'){ src = elCanvas; w = elCanvas.width; h = elCanvas.height; }
   else { src = elDelayed; w = elDelayed.videoWidth; h = elDelayed.videoHeight; }
   if(!w || !h){ flashStatus(T('noDelayYet')); return; }
-  var a = orientAngle();
+  var a = (S.rotUI + S.rotMain) % 360;   // 화면에 보이는 순 회전(프레임+내용)
   var cw = (a === 90 || a === 270) ? h : w, ch = (a === 90 || a === 270) ? w : h;
   var c = document.createElement('canvas');
   c.width = cw; c.height = ch;
   var cx = c.getContext('2d');
-  /* 화면에 보이는 그대로: 회전(#rot) → 미러 순서를 캔버스에서 재현 */
+  /* 화면에 보이는 그대로: 회전 → 미러 순서를 캔버스에서 재현 */
   cx.translate(cw / 2, ch / 2);
   cx.rotate(a * Math.PI / 180);
   if(S.mirror) cx.scale(-1, 1);
@@ -851,7 +871,7 @@ function startSegment(){
   var w = (S.mode === 'frames') ? elCanvas.width : elDelayed.videoWidth;
   var h = (S.mode === 'frames') ? elCanvas.height : elDelayed.videoHeight;
   if(!mime || !w || !h || !recCanvas.captureStream) return;
-  var a = orientAngle();
+  var a = (S.rotUI + S.rotMain) % 360;   // 화면에 보이는 순 회전(프레임+내용)
   var cw = (a === 90 || a === 270) ? h : w, ch = (a === 90 || a === 270) ? w : h;
   recCanvas.width = cw; recCanvas.height = ch;
 
@@ -968,7 +988,7 @@ document.addEventListener('visibilitychange', function(){
   var isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:');
   applyLang();   // 게이트 화면도 저장된 언어로
   function enter(){
-    applyView(); applyOrientation(); placePip(); showControls(); grabLock(); startEngine();
+    applyView(); applyRots(); pinOS(); placePip(); showControls(); grabLock(); startEngine();
   }
   if(localStorage.getItem(KEY) || _instantOK() || isLocal){ gate.remove(); enter(); return; }
   var entry = "";

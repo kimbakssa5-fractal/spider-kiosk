@@ -50,14 +50,29 @@ body.rot180 #rot{ transform:rotate(180deg); }
 /* 우상단 실시간 PiP */
 #pip{
   position:absolute; top:calc(14px + env(safe-area-inset-top)); right:14px; z-index:6;
-  width:min(24vw, 190px);            /* 높이는 영상 비율을 그대로 따른다 — 메인과 같은 방향 */
+  width:min(24vw, 190px); aspect-ratio:16/9;
   border-radius:14px; overflow:hidden;
   box-shadow:0 6px 18px rgba(0,0,0,.45), inset 0 0 0 3px rgba(255,255,255,.9);
   background:#000;
 }
 #pip{ touch-action:none; cursor:grab; }
-#pip video{ width:100%; height:auto; display:block; pointer-events:none; }
-/* PiP 개별 회전은 폐기 — 자이로가 #rot(메인+PiP 공통)를 돌리므로 항상 메인과 같은 방향 */
+#pip video{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+/* ---- PiP 프레임/영상 회전 (수동 4값, 2026-08-27) ----
+   pf* = 상자 자체 회전(라벨 포함). pc* = 상자 안 영상만 회전 —
+   90/270 은 상자 전치 크기(56.25% × 177.78%)로 세워 cover 로 꼭 채운다. */
+#pip.pf90{ transform:rotate(90deg); }
+#pip.pf180{ transform:rotate(180deg); }
+#pip.pf270{ transform:rotate(270deg); }
+#pip video.pc180{ transform:rotate(180deg); }
+.mirror #pip video.pc180{ transform:rotate(180deg) scaleX(-1); }
+#pip video.pc90, #pip video.pc270{
+  position:absolute; left:50%; top:50%;
+  width:56.25%; height:177.78%; object-fit:cover;
+}
+#pip video.pc90{ transform:translate(-50%,-50%) rotate(90deg); }
+#pip video.pc270{ transform:translate(-50%,-50%) rotate(270deg); }
+.mirror #pip video.pc90{ transform:translate(-50%,-50%) rotate(90deg) scaleX(-1); }
+.mirror #pip video.pc270{ transform:translate(-50%,-50%) rotate(270deg) scaleX(-1); }
 #pip span{
   position:absolute; left:8px; bottom:6px;
   background:rgba(255,248,243,.92); color:var(--ink);
