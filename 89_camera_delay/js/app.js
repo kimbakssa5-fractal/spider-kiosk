@@ -552,11 +552,16 @@ function layoutMainContent(){
     }
   });
 }
-window.addEventListener('resize', function(){ layoutRot(); layoutMainContent(); });
+/* 메뉴는 왼쪽 세로 바(반시계 90°) — 회전 전 가로폭 = 화면 세로 길이 */
+function layoutControls(){
+  $('controls').style.width = window.innerHeight + 'px';
+}
+window.addEventListener('resize', function(){ layoutRot(); layoutMainContent(); layoutControls(); });
 
 function applyRots(){
   layoutRot();
   layoutMainContent();
+  layoutControls();
   var pip = $('pip'), lv = $('live');
   pip.classList.remove('pf90', 'pf180', 'pf270');
   if(S.rotPipF) pip.classList.add('pf' + S.rotPipF);

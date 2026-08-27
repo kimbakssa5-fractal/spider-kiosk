@@ -110,15 +110,20 @@ body.rot180 #rot{ transform:rotate(180deg); }
 }
 
 /* ===== 하단 컨트롤 ===== */
+/* 메뉴: 반시계 90°(=CSS rotate 90) 고정 — 화면 왼쪽 세로 바 (2026-08-28 지시).
+   원점 좌상단 기준 rotate(90) 후 translateY(-100%) 로 왼쪽 모서리에 딱 붙인다.
+   width 는 JS(layoutControls)가 innerHeight px 로 갱신. */
 #controls{
-  position:fixed; left:0; right:0; bottom:0; z-index:8;
-  padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+  position:fixed; top:0; left:0; z-index:8;
+  width:100vh;
+  padding:14px 16px;
   background:linear-gradient(180deg, rgba(17,20,24,0) 0%, rgba(17,20,24,.72) 30%);
   display:flex; flex-direction:column; gap:10px;
   transition:transform .25s ease, opacity .25s ease;
-  transform:rotate(180deg);          /* 메뉴는 항상 초기 각도(180°) 고정 — 화면 회전과 무관 */
+  transform-origin:left top;
+  transform:rotate(90deg) translateY(-100%);
 }
-#controls.hidden{ transform:rotate(180deg) translateY(-110%); opacity:0; pointer-events:none; }
+#controls.hidden{ transform:rotate(90deg) translateY(10%); opacity:0; pointer-events:none; }
 .row{ display:flex; align-items:center; gap:10px; justify-content:center; }
 .chips, .btns{ flex-wrap:wrap; }
 .pill.on#btnRec{ animation:recblink 1.2s ease-in-out infinite; }
