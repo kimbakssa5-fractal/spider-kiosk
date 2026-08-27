@@ -21,6 +21,7 @@ var S = {
   facing: 'environment',   // environment | user
   mirror: false,
   fit: 'contain',
+  orient: 'auto',          // auto | portrait | landscape
   frozen: false,
   mode: null,              // 'mse' | 'frames'
   running: false
@@ -31,10 +32,11 @@ try{
   if(saved.facing) S.facing = saved.facing;
   if(typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
+  if(saved.orient === 'portrait' || saved.orient === 'landscape') S.orient = saved.orient;
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit })); }catch(e){}
+    delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit, orient:S.orient })); }catch(e){}
 }
 
 /* ================= DOM ================= */
@@ -389,6 +391,35 @@ $('btnFit').addEventListener('click', function(){
   S.fit = (S.fit === 'cover') ? 'contain' : 'cover'; persist(); applyView();
 });
 
+/* ---- 화면 방향: 자동 → 세로 → 가로 3단 토글 ----
+   APK 는 네이티브 브리지(AndroidOrient)로 확실히 잠그고,
+   웹은 screen.orientation.lock (풀스크린에서만 먹으므로 fullscreenchange 마다 재적용). */
+function applyOrientation(){
+  var m = S.orient;
+  var btn = $('btnOrient');
+  btn.textContent = (m === 'portrait') ? '📱 세로' : (m === 'landscape') ? '📱 가로' : '📱 자동';
+  btn.classList.toggle('on', m !== 'auto');
+  if(window.AndroidOrient && AndroidOrient.set){
+    try{ AndroidOrient.set(m); }catch(e){}
+    return;
+  }
+  try{
+    if(!screen.orientation) return;
+    if(m === 'auto'){ screen.orientation.unlock(); }
+    else{
+      var p = screen.orientation.lock(m);
+      if(p && p.catch) p.catch(function(){});   // 풀스크린이 아니면 거부 — 아래에서 재시도
+    }
+  }catch(e){}
+}
+document.addEventListener('fullscreenchange', function(){
+  if(S.orient !== 'auto') applyOrientation();
+});
+$('btnOrient').addEventListener('click', function(){
+  S.orient = (S.orient === 'auto') ? 'portrait' : (S.orient === 'portrait') ? 'landscape' : 'auto';
+  persist(); applyOrientation();
+});
+
 $('errRetry').addEventListener('click', function(){ startEngine(); });
 
 /* 화면 탭 → 컨트롤 토글 (6초 뒤 자동 숨김) */
@@ -554,7 +585,7 @@ document.addEventListener('visibilitychange', function(){
   var gate = document.getElementById("gate");
   var isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:');
   function enter(){
-    applyView(); showControls(); grabLock(); startEngine();
+    applyView(); applyOrientation(); showControls(); grabLock(); startEngine();
   }
   if(localStorage.getItem(KEY) || _instantOK() || isLocal){ gate.remove(); enter(); return; }
   var entry = "";
