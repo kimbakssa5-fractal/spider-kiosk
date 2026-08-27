@@ -49,7 +49,9 @@ body.rot180 #rot{ transform:rotate(180deg); }
 
 /* 우상단 실시간 PiP */
 #pip{
-  position:absolute; top:calc(14px + env(safe-area-inset-top)); right:14px; z-index:6;
+  /* 기본 위치: 위쪽(2026-08-28 지시). pf90 회전이 상자 중심 기준이라 세로로 ±41px
+     튀어나온다 — top 51px 이면 회전된 상자의 실제 윗변이 화면 위 10px 에 온전히 붙는다 */
+  position:absolute; top:51px; left:56px; right:auto; z-index:6;   /* 메뉴 바(반대편)와 안 겹치는 쪽 */
   width:min(24vw, 190px); aspect-ratio:16/9;
   border-radius:14px; overflow:hidden;
   box-shadow:0 6px 18px rgba(0,0,0,.45), inset 0 0 0 3px rgba(255,255,255,.9);
@@ -77,6 +79,7 @@ body.rot180 #rot{ transform:rotate(180deg); }
   position:absolute; left:8px; bottom:6px;
   background:rgba(255,248,243,.92); color:var(--ink);
   font-size:12px; font-weight:900; border-radius:999px; padding:2px 10px;
+  transform:rotate(180deg);          /* "지금" 라벨 180° (2026-08-28 지시) */
 }
 #pip.off{ display:none; }
 

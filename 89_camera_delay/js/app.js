@@ -23,7 +23,7 @@ var S = {
   fit: 'contain',
   rotUI: 180,              // 메인 프레임(#rot=카메라 화면) 회전 0/90/180/270 — 기본 180 (2026-08-27)
   rotMain: 0,              // 메인 영상 내용 회전
-  rotPipF: 0,              // PiP 프레임(상자) 회전
+  rotPipF: 90,             // PiP 프레임(상자) 회전 — 기본 시계 90° (2026-08-28)
   rotPipC: 270,            // PiP(지금 카메라) 영상 내용 회전 — 기본 반시계 90°(=270) (2026-08-28)
   pip: null,               // 실시간 미니 창 위치 {l,t} (0~1 비율) — 드래그로 조정
   lang: 'ko',              // ko | en — 🌐 버튼 토글
@@ -40,10 +40,9 @@ try{
   if(saved.v >= 3 && saved.facing) S.facing = saved.facing;
   /* v8: 화면 회전 기본 180 (v8 미만의 rotUI 는 무시 이행). 나머지 회전은 v7부터 존중 */
   if(saved.v >= 8 && [0,90,180,270].indexOf(saved.rotUI) >= 0) S.rotUI = saved.rotUI;
-  if(saved.v >= 7){
-    if([0,90,180,270].indexOf(saved.rotMain) >= 0) S.rotMain = saved.rotMain;
-    if([0,90,180,270].indexOf(saved.rotPipF) >= 0) S.rotPipF = saved.rotPipF;
-  }
+  if(saved.v >= 7 && [0,90,180,270].indexOf(saved.rotMain) >= 0) S.rotMain = saved.rotMain;
+  /* v10: PiP 창 기본 90 — v10 미만의 rotPipF 는 무시 이행 */
+  if(saved.v >= 10 && [0,90,180,270].indexOf(saved.rotPipF) >= 0) S.rotPipF = saved.rotPipF;
   /* v9: PiP 영상 기본 270 — v9 미만의 rotPipC 는 무시 이행 */
   if(saved.v >= 9 && [0,90,180,270].indexOf(saved.rotPipC) >= 0) S.rotPipC = saved.rotPipC;
   if(saved.v >= 4 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
@@ -54,7 +53,7 @@ try{
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:9, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    v:10, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
     rotUI:S.rotUI, rotMain:S.rotMain, rotPipF:S.rotPipF, rotPipC:S.rotPipC,
     autoRec:S.autoRec, pip:S.pip, lang:S.lang })); }catch(e){}
 }
@@ -673,7 +672,7 @@ $('btnHide').addEventListener('click', function(){
     if(m.L <= 0 || m.T <= 0) return;
     pip.style.left = (S.pip.l * m.L) + 'px';
     pip.style.top  = (S.pip.t * m.T) + 'px';
-    pip.style.right = 'auto';
+    pip.style.right = 'auto'; pip.style.bottom = 'auto';
   };
 
   pip.addEventListener('pointerdown', function(e){
@@ -692,7 +691,7 @@ $('btnHide').addEventListener('click', function(){
     var m = maxLT();
     pip.style.left = Math.max(0, Math.min(m.L, drag.left + sx)) + 'px';
     pip.style.top  = Math.max(0, Math.min(m.T, drag.top + sy)) + 'px';
-    pip.style.right = 'auto';
+    pip.style.right = 'auto'; pip.style.bottom = 'auto';
   });
   function endDrag(){
     if(!drag) return;
