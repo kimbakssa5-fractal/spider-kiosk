@@ -21,8 +21,9 @@ var S = {
   facing: 'user',          // 기본 셀피(전면) — 당구대 앞 삼각대 거치 기준 (2026-08-27 지시)
   mirror: false,           // 기본 OFF (2026-08-27 실기기 확인 후 뒤집음)
   fit: 'contain',
-  orient: '0',             // 0 | 90 | 180 | 270 — 0°=OS 자연 회전(원래 카메라처럼 가로로 들면
-                           // 가로 화각), 90/180/270°만 강제 회전. 기본 0° (2026-08-27 지시)
+  orient: '180',           // 0 | 90 | 180 | 270 — 0°=OS 자연 회전(원래 카메라처럼 가로로 들면
+                           // 가로 화각), 90/180/270°는 강제 회전. 기본 180° (2026-08-27 지시)
+  pip: null,               // 실시간 미니 창 위치 {l,t} (0~1 비율) — 드래그로 조정
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
   frozen: false,
   mode: null,              // 'mse' | 'frames'
@@ -34,15 +35,17 @@ try{
   /* v3 미만 저장값의 facing 은 무시(셀피 기본), v4 미만의 orient/mirror 는 무시
      — "0° + 미러 OFF 기본" 1회 마이그레이션 (2026-08-27) */
   if(saved.v >= 3 && saved.facing) S.facing = saved.facing;
-  if(saved.v >= 4 && ['0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
+  /* v5 미만의 orient 는 무시 — "기본 180°" 1회 마이그레이션 (2026-08-27) */
+  if(saved.v >= 5 && ['0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
   if(saved.v >= 4 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
+  if(saved.pip && typeof saved.pip.l === 'number' && typeof saved.pip.t === 'number') S.pip = saved.pip;
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:4, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
-    orient:S.orient, autoRec:S.autoRec })); }catch(e){}
+    v:5, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    orient:S.orient, autoRec:S.autoRec, pip:S.pip })); }catch(e){}
 }
 function orientAngle(){ return +S.orient || 0; }
 
@@ -449,6 +452,7 @@ $('btnOrient').addEventListener('click', function(){
   S.orient = cyc[(cyc.indexOf(S.orient) + 1) % cyc.length];
   if(rec) stopRec();      // 각도가 바뀌면 녹화 캔버스 치수도 바뀐다 — 트리밍 저장 후 재개
   persist(); applyOrientation();
+  if(window.placePip) placePip();   // 무대 치수가 바뀌었으니 PiP 재배치
 });
 
 /* ---- 회전 재동기화 (교통정리 2026-08-27) ----
@@ -487,11 +491,52 @@ $('controls').addEventListener('pointerdown', function(){
   hideT = setTimeout(function(){ $('controls').classList.add('hidden'); }, 6000);
 });
 
-/* PiP 탭 → 실시간 미니 화면 접기/펴기 */
-$('pip').addEventListener('pointerdown', function(e){
-  e.stopPropagation();
-  this.classList.toggle('off');
-});
+/* PiP 드래그 → 위치 이동 (탭해서 없어지던 동작은 제거, 2026-08-27 지시).
+   화면이 CSS 로 회전된 상태에선 포인터 이동(화면 좌표)을 무대 좌표로 되돌려 매핑한다. */
+(function(){
+  var pip = $('pip'), st = $('stage'), drag = null;
+
+  function maxLT(){
+    return { L: st.clientWidth - pip.offsetWidth, T: st.clientHeight - pip.offsetHeight };
+  }
+  window.placePip = function(){
+    if(!S.pip) return;
+    var m = maxLT();
+    if(m.L <= 0 || m.T <= 0) return;
+    pip.style.left = (S.pip.l * m.L) + 'px';
+    pip.style.top  = (S.pip.t * m.T) + 'px';
+    pip.style.right = 'auto';
+  };
+
+  pip.addEventListener('pointerdown', function(e){
+    e.stopPropagation(); e.preventDefault();
+    try{ pip.setPointerCapture(e.pointerId); }catch(_){}
+    drag = { x: e.clientX, y: e.clientY, left: pip.offsetLeft, top: pip.offsetTop };
+  });
+  pip.addEventListener('pointermove', function(e){
+    if(!drag) return;
+    var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    var a = orientAngle(), sx, sy;
+    if(a === 90){ sx = dy; sy = -dx; }
+    else if(a === 180){ sx = -dx; sy = -dy; }
+    else if(a === 270){ sx = -dy; sy = dx; }
+    else { sx = dx; sy = dy; }
+    var m = maxLT();
+    pip.style.left = Math.max(0, Math.min(m.L, drag.left + sx)) + 'px';
+    pip.style.top  = Math.max(0, Math.min(m.T, drag.top + sy)) + 'px';
+    pip.style.right = 'auto';
+  });
+  function endDrag(){
+    if(!drag) return;
+    drag = null;
+    var m = maxLT();
+    S.pip = { l: m.L > 0 ? pip.offsetLeft / m.L : 0, t: m.T > 0 ? pip.offsetTop / m.T : 0 };
+    persist();
+  }
+  pip.addEventListener('pointerup', endDrag);
+  pip.addEventListener('pointercancel', endDrag);
+  window.addEventListener('resize', function(){ placePip(); });
+})();
 
 /* ================= 저장 — 스냅샷(JPG) / 리플레이 녹화(webm) ================= */
 /* 상태줄을 잠깐 빌려 안내를 띄운다. mseTick 이 300ms 마다 덮어쓰므로 홀드 시각을 둔다. */
@@ -799,7 +844,7 @@ document.addEventListener('visibilitychange', function(){
   var gate = document.getElementById("gate");
   var isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:');
   function enter(){
-    applyView(); applyOrientation(); showControls(); grabLock(); startEngine();
+    applyView(); applyOrientation(); placePip(); showControls(); grabLock(); startEngine();
   }
   if(localStorage.getItem(KEY) || _instantOK() || isLocal){ gate.remove(); enter(); return; }
   var entry = "";
