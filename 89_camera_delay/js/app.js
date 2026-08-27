@@ -19,7 +19,7 @@
 var S = {
   delay: 10,               // 초 (1~120)
   facing: 'environment',   // environment | user
-  mirror: false,
+  mirror: true,            // 기본 ON — 거울처럼 보여야 오른손 자세가 오른손으로 보인다 (2026-08-27 지시)
   fit: 'contain',
   orient: 'auto',          // auto | portrait | landscape
   frozen: false,
@@ -30,13 +30,14 @@ try{
   var saved = JSON.parse(localStorage.getItem('cd_settings') || '{}');
   if(saved.delay >= 1 && saved.delay <= 120) S.delay = saved.delay;
   if(saved.facing) S.facing = saved.facing;
-  if(typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
+  /* v2 미만 저장값의 mirror 는 무시 — "미러 기본 ON" 1회 마이그레이션 */
+  if(saved.v >= 2 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
   if(saved.orient === 'portrait' || saved.orient === 'landscape') S.orient = saved.orient;
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit, orient:S.orient })); }catch(e){}
+    v:2, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit, orient:S.orient })); }catch(e){}
 }
 
 /* ================= DOM ================= */
@@ -378,8 +379,7 @@ $('btnFreeze').addEventListener('click', function(){
 
 $('btnFlip').addEventListener('click', function(){
   S.facing = (S.facing === 'user') ? 'environment' : 'user';
-  S.mirror = (S.facing === 'user');   // 전면이면 미러 기본 ON
-  persist(); applyView();
+  persist(); applyView();     // 미러 설정은 사용자가 정한 대로 유지
   startEngine();
 });
 
@@ -494,9 +494,15 @@ $('btnShot').addEventListener('click', function(){
   }, 'image/jpeg', 0.92);
 });
 
-/* --- 녹화: 지연 화면을 그대로 실시간 녹화 → webm ---
-   (지연 재생 화면을 캡처하므로, 저장물도 "N초 전" 영상이 된다) */
-var rec = null, recChunks = [], recT0 = 0, recTimer = null;
+/* --- 자동 녹화: 지연 화면을 **항상** 5분 단위로 끊어 저장 (2026-08-27 지시) ---
+   · 버튼을 안 눌러도 재생이 시작되면 알아서 녹화 — 5분마다 파일 마감 후 곧장 다음 구간.
+   · ⏹(버튼)을 누르면 그 구간을 지금까지로 저장(트리밍)하고, 워치독이 새 구간을 연다.
+   · CSS 미러는 captureStream 에 안 찍히므로, 미러까지 화면에 보이는 그대로 담기 위해
+     오프스크린 캔버스에 30fps 로 옮겨 그리고 그 캔버스를 녹화한다. */
+var rec = null, recChunks = [], recT0 = 0, recTimer = null, recDraw = null;
+var SEG_MS = 5 * 60 * 1000;
+var recCanvas = document.createElement('canvas');
+var recCtx = recCanvas.getContext('2d');
 
 function recMime(){
   if(!window.MediaRecorder) return null;
@@ -507,45 +513,34 @@ function recMime(){
   return null;
 }
 
-function stopRec(){
-  clearInterval(recTimer); recTimer = null;
-  try{
-    if(rec && rec.state !== 'inactive') rec.stop();   // onstop 에서 저장
-    else { rec = null; updateRecUI(); }
-  }catch(e){ rec = null; updateRecUI(); }
+function recReady(){
+  if(!S.running) return false;
+  if(S.mode === 'mse') return !!elDelayed.videoWidth && !elDelayed.paused;
+  if(S.mode === 'frames') return lastDrawnT > 0;
+  return false;
 }
 
-function updateRecUI(){
-  var b = $('btnRec');
-  if(rec){
-    b.classList.add('on');
-    b.textContent = '⏹ 저장 ' + Math.floor((Date.now() - recT0) / 1000) + '초';
-  }else{
-    b.classList.remove('on');
-    b.textContent = '⏺ 녹화';
-  }
-}
-
-$('btnRec').addEventListener('click', function(){
-  if(rec){ stopRec(); return; }
-
-  var el = (S.mode === 'frames') ? elCanvas : elDelayed;
-  var cap = el.captureStream || el.mozCaptureStream;
+function startSegment(){
   var mime = recMime();
-  if(!cap || !mime){ flashStatus('이 브라우저는 녹화를 지원하지 않습니다'); return; }
-  if(S.mode === 'mse' && (!elDelayed.videoWidth || elDelayed.paused)){
-    flashStatus('지연 화면이 재생 중일 때 녹화할 수 있어요'); return;
-  }
+  var w = (S.mode === 'frames') ? elCanvas.width : elDelayed.videoWidth;
+  var h = (S.mode === 'frames') ? elCanvas.height : elDelayed.videoHeight;
+  if(!mime || !w || !h || !recCanvas.captureStream) return;
+  recCanvas.width = w; recCanvas.height = h;
 
-  var ms;
-  try{ ms = cap.call(el, 30); }
-  catch(e){ flashStatus('녹화 시작 실패 (' + (e.name || '') + ')'); return; }
+  recDraw = setInterval(function(){
+    var src = (S.mode === 'frames') ? elCanvas : elDelayed;
+    recCtx.save();
+    if(S.mirror){ recCtx.translate(recCanvas.width, 0); recCtx.scale(-1, 1); }
+    try{ recCtx.drawImage(src, 0, 0, recCanvas.width, recCanvas.height); }catch(e){}
+    recCtx.restore();
+  }, 1000 / 30);
 
   recChunks = [];
-  try{ rec = new MediaRecorder(ms, { mimeType: mime, videoBitsPerSecond: 4000000 }); }
+  try{ rec = new MediaRecorder(recCanvas.captureStream(30),
+                               { mimeType: mime, videoBitsPerSecond: 2500000 }); }
   catch(e){
-    try{ rec = new MediaRecorder(ms); }
-    catch(e2){ flashStatus('녹화 시작 실패'); return; }
+    try{ rec = new MediaRecorder(recCanvas.captureStream(30)); }
+    catch(e2){ clearInterval(recDraw); recDraw = null; return; }
   }
   rec.ondataavailable = function(e){ if(e.data && e.data.size) recChunks.push(e.data); };
   rec.onstop = function(){
@@ -556,17 +551,47 @@ $('btnRec').addEventListener('click', function(){
     updateRecUI();
     if(b.size > 0){
       saveBlob(b, 'delay_replay_' + stamp() + ext);
-      flashStatus('🎬 리플레이 저장 (' + (b.size / 1048576).toFixed(1) + 'MB)');
-    }else{
-      flashStatus('녹화된 내용이 없습니다');
+      flashStatus('🎬 저장 (' + (b.size / 1048576).toFixed(1) + 'MB) — 다음 구간 자동 녹화');
     }
   };
   rec.onerror = function(){ stopRec(); };
   rec.start(1000);
   recT0 = Date.now();
   updateRecUI();
-  recTimer = setInterval(updateRecUI, 500);
+  recTimer = setInterval(function(){
+    updateRecUI();
+    if(Date.now() - recT0 >= SEG_MS) stopRec();   // 5분 마감 — 워치독이 다음 구간을 연다
+  }, 500);
+}
+
+function stopRec(){
+  clearInterval(recTimer); recTimer = null;
+  clearInterval(recDraw); recDraw = null;
+  try{
+    if(rec && rec.state !== 'inactive') rec.stop();   // onstop 에서 저장
+    else { rec = null; updateRecUI(); }
+  }catch(e){ rec = null; updateRecUI(); }
+}
+
+function updateRecUI(){
+  var b = $('btnRec');
+  if(rec){
+    var s = Math.floor((Date.now() - recT0) / 1000);
+    b.classList.add('on');
+    b.textContent = '⏹ 저장 ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }else{
+    b.classList.remove('on');
+    b.textContent = '⏺ 대기';
+  }
+}
+
+$('btnRec').addEventListener('click', function(){
+  if(rec) stopRec();                       // 여기까지 저장(트리밍) — 새 구간은 워치독이 연다
+  else if(recReady()) startSegment();
 });
+
+/* 워치독 — 재생이 살아 있으면 녹화도 살아 있게 (최초 시작·카메라 전환·구간 마감 뒤 재개) */
+setInterval(function(){ if(!rec && recReady()) startSegment(); }, 1000);
 
 /* ================= Wake Lock (화면 꺼짐 방지) ================= */
 var wlock = null;
