@@ -21,7 +21,7 @@ var S = {
   facing: 'environment',   // environment | user
   mirror: true,            // 기본 ON — 거울처럼 보여야 오른손 자세가 오른손으로 보인다 (2026-08-27 지시)
   fit: 'contain',
-  orient: 'auto',          // auto | portrait | landscape
+  orient: 'auto',          // auto | 0 | 90 | 180 | 270 (도 단위 화면 각도)
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
   frozen: false,
   mode: null,              // 'mse' | 'frames'
@@ -34,7 +34,9 @@ try{
   /* v2 미만 저장값의 mirror 는 무시 — "미러 기본 ON" 1회 마이그레이션 */
   if(saved.v >= 2 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
-  if(saved.orient === 'portrait' || saved.orient === 'landscape') S.orient = saved.orient;
+  if(saved.orient === 'portrait') S.orient = '0';          // 구버전 값 이행
+  else if(saved.orient === 'landscape') S.orient = '90';
+  else if(['0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
 }catch(e){}
 function persist(){
@@ -397,10 +399,14 @@ $('btnFit').addEventListener('click', function(){
 /* ---- 화면 방향: 자동 → 세로 → 가로 3단 토글 ----
    APK 는 네이티브 브리지(AndroidOrient)로 확실히 잠그고,
    웹은 screen.orientation.lock (풀스크린에서만 먹으므로 fullscreenchange 마다 재적용). */
+/* 각도 → 화면 방향. 0°=세로, 90°=가로, 180°=세로 뒤집힘, 270°=가로 반대편.
+   폰을 어떤 방향으로 거치했든 각도를 돌려 화면을 맞춘다. */
+var ORIENT_LOCK = { '0': 'portrait-primary', '90': 'landscape-primary',
+                    '180': 'portrait-secondary', '270': 'landscape-secondary' };
 function applyOrientation(){
   var m = S.orient;
   var btn = $('btnOrient');
-  btn.textContent = (m === 'portrait') ? '📱 세로' : (m === 'landscape') ? '📱 가로' : '📱 자동';
+  btn.textContent = (m === 'auto') ? '📱 자동' : '📱 ' + m + '°';
   btn.classList.toggle('on', m !== 'auto');
   if(window.AndroidOrient && AndroidOrient.set){
     try{ AndroidOrient.set(m); }catch(e){}
@@ -410,8 +416,7 @@ function applyOrientation(){
     if(!screen.orientation) return;
     if(m === 'auto'){ screen.orientation.unlock(); }
     else{
-      /* 'portrait'/'landscape'는 180° 뒤집힌 방향도 허용한다 — 정방향(-primary)만 잠근다 */
-      var p = screen.orientation.lock(m + '-primary');
+      var p = screen.orientation.lock(ORIENT_LOCK[m]);
       if(p && p.catch) p.catch(function(){});   // 풀스크린이 아니면 거부 — 아래에서 재시도
     }
   }catch(e){}
@@ -420,7 +425,8 @@ document.addEventListener('fullscreenchange', function(){
   if(S.orient !== 'auto') applyOrientation();
 });
 $('btnOrient').addEventListener('click', function(){
-  S.orient = (S.orient === 'auto') ? 'portrait' : (S.orient === 'portrait') ? 'landscape' : 'auto';
+  var cyc = ['auto', '0', '90', '180', '270'];
+  S.orient = cyc[(cyc.indexOf(S.orient) + 1) % cyc.length];
   persist(); applyOrientation();
 });
 
