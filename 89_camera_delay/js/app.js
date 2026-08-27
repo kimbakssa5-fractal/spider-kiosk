@@ -24,7 +24,7 @@ var S = {
   rotUI: 180,              // 메인 프레임(#rot=카메라 화면) 회전 0/90/180/270 — 기본 180 (2026-08-27)
   rotMain: 0,              // 메인 영상 내용 회전
   rotPipF: 0,              // PiP 프레임(상자) 회전
-  rotPipC: 0,              // PiP 영상 내용 회전
+  rotPipC: 270,            // PiP(지금 카메라) 영상 내용 회전 — 기본 반시계 90°(=270) (2026-08-28)
   pip: null,               // 실시간 미니 창 위치 {l,t} (0~1 비율) — 드래그로 조정
   lang: 'ko',              // ko | en — 🌐 버튼 토글
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
@@ -43,8 +43,9 @@ try{
   if(saved.v >= 7){
     if([0,90,180,270].indexOf(saved.rotMain) >= 0) S.rotMain = saved.rotMain;
     if([0,90,180,270].indexOf(saved.rotPipF) >= 0) S.rotPipF = saved.rotPipF;
-    if([0,90,180,270].indexOf(saved.rotPipC) >= 0) S.rotPipC = saved.rotPipC;
   }
+  /* v9: PiP 영상 기본 270 — v9 미만의 rotPipC 는 무시 이행 */
+  if(saved.v >= 9 && [0,90,180,270].indexOf(saved.rotPipC) >= 0) S.rotPipC = saved.rotPipC;
   if(saved.v >= 4 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
@@ -53,7 +54,7 @@ try{
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:8, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    v:9, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
     rotUI:S.rotUI, rotMain:S.rotMain, rotPipF:S.rotPipF, rotPipC:S.rotPipC,
     autoRec:S.autoRec, pip:S.pip, lang:S.lang })); }catch(e){}
 }
@@ -71,7 +72,7 @@ var I18N = {
     gateT: '비밀번호 4자리', wrongPw: '비밀번호가 틀렸습니다',
     buf: '버퍼', frameMode: '프레임 모드',
     back5: '⏪ 5초 전',
-    mainF: '🖼 화면', mainC: '🎞 영상', pipF: '🔲 PIP창', pipC: '📺 PIP영상', hideB: '⬇ 숨기기',
+    mainF: '🖼 화면', mainC: '🎞 영상', pipF: '🔲 PIP창', pipC: '📺 PIP영상', hideB: '⬇ 메뉴숨기기',
     noDelayYet: '아직 지연 화면이 없습니다 — 버퍼가 차면 저장할 수 있어요',
     shotFail: '스냅샷 실패', shotSaved: '📸 스냅샷 저장',
     saved: '🎬 저장', nextAuto: ' — 다음 구간 자동 녹화',
@@ -99,7 +100,7 @@ var I18N = {
     gateT: '4-digit password', wrongPw: 'Wrong password',
     buf: 'buffer', frameMode: 'Frame mode',
     back5: '⏪ 5s back',
-    mainF: '🖼 Screen', mainC: '🎞 Image', pipF: '🔲 PiP box', pipC: '📺 PiP img', hideB: '⬇ Hide',
+    mainF: '🖼 Screen', mainC: '🎞 Image', pipF: '🔲 PiP box', pipC: '📺 PiP img', hideB: '⬇ Hide menu',
     noDelayYet: 'No delayed frame yet — wait for the buffer to fill',
     shotFail: 'Snapshot failed', shotSaved: '📸 Snapshot saved',
     saved: '🎬 Saved', nextAuto: ' — next segment auto-recording',
