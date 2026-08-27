@@ -516,6 +516,110 @@ $('btnShot').addEventListener('click', function(){
   }, 'image/jpeg', 0.92);
 });
 
+/* --- webm 길이 패치 ---
+   MediaRecorder 는 스트리밍이라 Duration 을 파일에 안 쓴다 → 재생기가 총 길이를 몰라
+   타임바가 0 에 붙는다(시간은 흐르는데 바가 제자리). Segment→Info 에 Duration(0x4489)을
+   써 넣어 고친다. 실패하면 원본 그대로 저장(회귀 없음). */
+function fixWebmDuration(blob, durationMs, cb){
+  var HEAD = 4096;                       // Info 는 파일 맨 앞에 있다
+  var fr = new FileReader();
+  fr.onload = function(){
+    var out = null;
+    try{ out = _webmPatch(new Uint8Array(fr.result), durationMs); }catch(e){}
+    if(out) cb(new Blob([out, blob.slice(Math.min(HEAD, blob.size))], { type: blob.type }));
+    else cb(blob);
+  };
+  fr.onerror = function(){ cb(blob); };
+  fr.readAsArrayBuffer(blob.slice(0, HEAD));
+}
+
+function _webmVint(u8, p){               // EBML 가변 정수 (크기 필드)
+  var b = u8[p], len = 1, mask = 0x80;
+  while(len <= 8 && !(b & mask)){ mask >>= 1; len++; }
+  if(len > 8 || p + len > u8.length) return null;
+  var value = b & (mask - 1), allOnes = (b & (mask - 1)) === (mask - 1);
+  for(var i = 1; i < len; i++){
+    value = value * 256 + u8[p + i];
+    if(u8[p + i] !== 0xFF) allOnes = false;
+  }
+  return { len: len, value: value, unknown: allOnes };
+}
+function _webmId(u8, p){                 // 엘리먼트 ID (마커 비트 포함)
+  var b = u8[p], len = 1, mask = 0x80;
+  while(len <= 4 && !(b & mask)){ mask >>= 1; len++; }
+  if(len > 4 || p + len > u8.length) return null;
+  var id = 0;
+  for(var i = 0; i < len; i++) id = id * 256 + u8[p + i];
+  return { len: len, id: id };
+}
+function _webmPatch(u8, durationMs){
+  var p = 0, id = _webmId(u8, p);
+  if(!id || id.id !== 0x1A45DFA3) return null;             // EBML 헤더
+  p += id.len;
+  var sz = _webmVint(u8, p);
+  p += sz.len + sz.value;
+  id = _webmId(u8, p);
+  if(!id || id.id !== 0x18538067) return null;             // Segment
+  p += id.len;
+  sz = _webmVint(u8, p);
+  p += sz.len;                                             // 크기는 대개 미지(스트리밍) — 지나감
+  while(p < u8.length){
+    id = _webmId(u8, p);
+    if(!id) return null;
+    var idPos = p; p += id.len;
+    sz = _webmVint(u8, p);
+    if(!sz) return null;
+    var dataPos = p + sz.len;
+    if(id.id === 0x1549A966){                              // Info
+      if(sz.unknown || dataPos + sz.value > u8.length) return null;
+      return _webmPatchInfo(u8, idPos, id.len, sz, dataPos, durationMs);
+    }
+    if(sz.unknown || id.id === 0x1F43B675) return null;    // Cluster까지 왔으면 포기
+    p = dataPos + sz.value;
+  }
+  return null;
+}
+function _webmPatchInfo(u8, idPos, idLen, sz, dataPos, durationMs){
+  var scale = 1000000, durPos = -1, durLen = 0;
+  var q = dataPos, end = dataPos + sz.value;
+  while(q < end){
+    var cid = _webmId(u8, q); if(!cid) return null;
+    var csz = _webmVint(u8, q + cid.len); if(!csz) return null;
+    var cdata = q + cid.len + csz.len;
+    if(cid.id === 0x2AD7B1){                               // TimecodeScale(ns)
+      scale = 0;
+      for(var i = 0; i < csz.value; i++) scale = scale * 256 + u8[cdata + i];
+    }
+    if(cid.id === 0x4489){ durPos = cdata; durLen = csz.value; }
+    q = cdata + csz.value;
+  }
+  var ticks = durationMs * 1000000 / scale;                // scale 기본 1ms/틱
+  if(durPos >= 0){                                         // 이미 있으면 값만 교체
+    var dv = new DataView(u8.buffer, u8.byteOffset);
+    if(durLen === 8) dv.setFloat64(durPos, ticks);
+    else if(durLen === 4) dv.setFloat32(durPos, ticks);
+    else return null;
+    return u8;
+  }
+  /* 없으면 Info 끝에 11바이트(0x4489, 크기 8, float64) 삽입 — Info 크기 필드는
+     길이가 변하지 않게 8바이트 고정 vint 로 다시 쓴다 */
+  var ins = new Uint8Array(11);
+  ins[0] = 0x44; ins[1] = 0x89; ins[2] = 0x88;
+  new DataView(ins.buffer).setFloat64(3, ticks);
+  var newSize = sz.value + ins.length;
+  var szBytes = new Uint8Array(8);
+  szBytes[0] = 0x01;                                       // 8바이트 vint 마커
+  for(var k = 7; k >= 1; k--){ szBytes[k] = newSize & 0xFF; newSize = Math.floor(newSize / 256); }
+  var head = new Uint8Array(u8.length - sz.len + 8 + ins.length);
+  var o = 0;
+  head.set(u8.subarray(0, idPos + idLen), o); o += idPos + idLen;
+  head.set(szBytes, o); o += 8;
+  head.set(u8.subarray(dataPos, end), o); o += end - dataPos;
+  head.set(ins, o); o += ins.length;
+  head.set(u8.subarray(end), o);
+  return head;
+}
+
 /* --- 자동 녹화: 지연 화면을 **항상** 5분 단위로 끊어 저장 (2026-08-27 지시) ---
    · 버튼을 안 눌러도 재생이 시작되면 알아서 녹화 — 5분마다 파일 마감 후 곧장 다음 구간.
    · ⏹(버튼)을 누르면 그 구간을 지금까지로 저장(트리밍)하고, 워치독이 새 구간을 연다.
@@ -574,9 +678,14 @@ function startSegment(){
     updateRecUI();
     if(elapsed < 2000) return;   // 회전·카메라 전환 재시작이 만드는 부스러기 구간은 버린다
     if(b.size > 0){
-      saveBlob(b, 'delay_replay_' + stamp() + ext);
-      flashStatus('🎬 저장 (' + (b.size / 1048576).toFixed(1) + 'MB)' +
-                  (S.autoRec ? ' — 다음 구간 자동 녹화' : ''));
+      var name = 'delay_replay_' + stamp() + ext;
+      var done = function(fixed){
+        saveBlob(fixed, name);
+        flashStatus('🎬 저장 (' + (fixed.size / 1048576).toFixed(1) + 'MB)' +
+                    (S.autoRec ? ' — 다음 구간 자동 녹화' : ''));
+      };
+      if(ext === '.webm') fixWebmDuration(b, elapsed, done);   // 타임바 고정 문제 방지
+      else done(b);
     }
   };
   rec.onerror = function(){ stopRec(); };
