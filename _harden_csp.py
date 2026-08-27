@@ -35,6 +35,7 @@ D = csp(script="'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.n
         extra="worker-src 'self' blob:; child-src blob:;")
 E = csp(script="'self' 'unsafe-inline' 'wasm-unsafe-eval'",                            # MediaPipe 자체호스팅(vendor)
         extra="worker-src 'self' blob:; child-src blob:;")
+F = csp(extra="media-src 'self' blob:;")                                               # 카메라+MSE(blob 비디오)
 
 PROFILE = {
     "index.html": A, "index-cards.html": A, "doodle.html": A,
@@ -48,6 +49,7 @@ PROFILE = {
     "guestbook.html": C, "admin.html": C,
     "11_pose_skeleton/index.html": D, "12_face_off/index.html": D, "13_window/index.html": D,
     "34_game_run/index.html": E,
+    "89_camera_delay/index.html": F,
 }
 
 CHARSET = re.compile(r'(<meta\s+charset=["\']?[\w-]+["\']?\s*/?>)', re.I)

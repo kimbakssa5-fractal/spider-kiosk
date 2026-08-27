@@ -1,0 +1,32 @@
+/* 로컬 번들 폰트 (오프라인 exe 대비) — Noto Sans KR + Share Tech Mono
+   한글/라틴을 unicode-range로 분리해 두 subset을 모두 적용 */
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:400;font-display:swap;
+  src:url('latin-400-normal.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+2000-206F,U+2074,U+20A0-20BF,U+2122,U+2191,U+2193,U+2212,U+221E,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:400;font-display:swap;
+  src:url('korean-400-normal.woff2') format('woff2');
+  unicode-range:U+1100-11FF,U+3000-303F,U+3130-318F,U+A960-A97F,U+AC00-D7A3,U+D7B0-D7FF,U+FF00-FFEF;}
+
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:500;font-display:swap;
+  src:url('latin-500-normal.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+2000-206F,U+2074,U+20A0-20BF,U+2122,U+2191,U+2193,U+2212,U+221E,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:500;font-display:swap;
+  src:url('korean-500-normal.woff2') format('woff2');
+  unicode-range:U+1100-11FF,U+3000-303F,U+3130-318F,U+A960-A97F,U+AC00-D7A3,U+D7B0-D7FF,U+FF00-FFEF;}
+
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:700;font-display:swap;
+  src:url('latin-700-normal.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+2000-206F,U+2074,U+20A0-20BF,U+2122,U+2191,U+2193,U+2212,U+221E,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:700;font-display:swap;
+  src:url('korean-700-normal.woff2') format('woff2');
+  unicode-range:U+1100-11FF,U+3000-303F,U+3130-318F,U+A960-A97F,U+AC00-D7A3,U+D7B0-D7FF,U+FF00-FFEF;}
+
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:900;font-display:swap;
+  src:url('latin-900-normal.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+2000-206F,U+2074,U+20A0-20BF,U+2122,U+2191,U+2193,U+2212,U+221E,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Noto Sans KR';font-style:normal;font-weight:900;font-display:swap;
+  src:url('korean-900-normal.woff2') format('woff2');
+  unicode-range:U+1100-11FF,U+3000-303F,U+3130-318F,U+A960-A97F,U+AC00-D7A3,U+D7B0-D7FF,U+FF00-FFEF;}
+
+@font-face{font-family:'Share Tech Mono';font-style:normal;font-weight:400;font-display:swap;
+  src:url('share-tech-mono-400.woff2') format('woff2');}

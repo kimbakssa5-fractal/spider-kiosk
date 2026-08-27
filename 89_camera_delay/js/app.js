@@ -1,0 +1,471 @@
+/* ==========================================================================
+   89_camera_delay — 딜레이 카메라 (당구 자세 확인용 지연 리플레이)
+
+   원리
+     · MSE 모드(기본): MediaRecorder 가 0.5초 단위로 webm 조각을 뱉고,
+       MediaSource SourceBuffer 에 이어붙인다. 재생 헤드를 buffered 끝에서
+       delay 초 뒤에 두면 "N초 전 화면"이 된다. 압축이라 120초도 수십 MB 수준.
+     · 프레임 모드(폴백): MSE/webm 미지원(구형 iOS 등)이면 JPEG 링버퍼.
+       10fps × 축소 해상도라 메모리 안전, 대신 화질/부드러움 손해.
+
+   폰 사용 전제
+     · getUserMedia 는 HTTPS(또는 localhost)에서만 열린다 → 실사용은 배포 URL로.
+     · 화면 꺼짐 방지: Wake Lock. 탭 복귀 시 재획득.
+     · 카메라 점유/일시 오류: 8초 간격 자동 재시도(권한 거부만 중단).
+   ========================================================================== */
+'use strict';
+
+/* ================= 상태 ================= */
+var S = {
+  delay: 10,               // 초 (1~120)
+  facing: 'environment',   // environment | user
+  mirror: false,
+  fit: 'contain',
+  frozen: false,
+  mode: null,              // 'mse' | 'frames'
+  running: false
+};
+try{
+  var saved = JSON.parse(localStorage.getItem('cd_settings') || '{}');
+  if(saved.delay >= 1 && saved.delay <= 120) S.delay = saved.delay;
+  if(saved.facing) S.facing = saved.facing;
+  if(typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
+  if(saved.fit) S.fit = saved.fit;
+}catch(e){}
+function persist(){
+  try{ localStorage.setItem('cd_settings', JSON.stringify({
+    delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit })); }catch(e){}
+}
+
+/* ================= DOM ================= */
+var $ = function(id){ return document.getElementById(id); };
+var elDelayed = $('delayed'), elCanvas = $('delayCanvas'), elLive = $('live');
+var elFill = $('fill'), elFillBar = $('fillBar'), elFillNow = $('fillNow'), elFillMax = $('fillMax');
+var elErr = $('err'), elErrTitle = $('errTitle'), elErrMsg = $('errMsg');
+var elBadgeNum = $('delayBadgeNum'), elStatus = $('statusLine');
+var ctx2d = elCanvas.getContext('2d');
+
+/* ================= 미디어 엔진 ================= */
+var stream = null;
+var recorder = null;
+var msrc = null, sbuf = null, sbQueue = [], sbPumping = false, msURL = null;
+var tickTimer = null, capTimer = null, drawTimer = null;
+var retryTimer = null;
+var frames = [];            // 프레임 모드 링버퍼 [{t, blob}]
+var lastDrawnT = 0, decoding = false;
+var engineGen = 0;          // 재시작 세대 — 늦게 도착한 콜백 무시용
+
+function pickMime(){
+  if(!window.MediaSource || !window.MediaRecorder) return null;
+  var cands = ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'];
+  for(var i = 0; i < cands.length; i++){
+    try{
+      if(MediaRecorder.isTypeSupported(cands[i]) && MediaSource.isTypeSupported(cands[i]))
+        return cands[i];
+    }catch(e){}
+  }
+  return null;
+}
+
+function stopEngine(){
+  engineGen++;
+  S.running = false;
+  clearInterval(tickTimer); clearInterval(capTimer); clearInterval(drawTimer);
+  clearTimeout(retryTimer);
+  try{ if(recorder && recorder.state !== 'inactive') recorder.stop(); }catch(e){}
+  recorder = null;
+  try{ if(stream) stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){}
+  stream = null;
+  try{ if(msrc && msrc.readyState === 'open') msrc.endOfStream(); }catch(e){}
+  msrc = null; sbuf = null; sbQueue = []; sbPumping = false;
+  if(msURL){ try{ URL.revokeObjectURL(msURL); }catch(e){} msURL = null; }
+  elDelayed.removeAttribute('src'); try{ elDelayed.load(); }catch(e){}
+  frames = []; lastDrawnT = 0; decoding = false;
+}
+
+function showErr(title, msg, canRetry){
+  elErrTitle.textContent = title;
+  elErrMsg.textContent = msg || '';
+  elErr.classList.remove('hide');
+  elFill.classList.add('hide');
+  if(canRetry){
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(startEngine, 8000);   // 점유 해제 대기 무한 재시도
+  }
+}
+function hideErr(){ elErr.classList.add('hide'); }
+
+function startEngine(){
+  stopEngine();
+  var gen = engineGen;
+  hideErr();
+  elFill.classList.remove('hide');
+  setFillUI(0);
+
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    if(location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
+      showErr('HTTPS가 필요합니다', '카메라는 https 주소(배포 페이지)나 localhost에서만 열립니다.', false);
+    }else{
+      showErr('이 브라우저는 카메라를 지원하지 않습니다', '', false);
+    }
+    return;
+  }
+
+  var wantMs = navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: S.facing,
+      width:  { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30 }
+    },
+    audio: false
+  });
+  /* 웹캠 점유 시 getUserMedia 가 영원히 pending 인 케이스 대비 */
+  var timeout = new Promise(function(_, rej){
+    setTimeout(function(){ rej(new DOMException('timeout', 'TimeoutError')); }, 12000);
+  });
+
+  Promise.race([wantMs, timeout]).then(function(ms){
+    if(gen !== engineGen){ ms.getTracks().forEach(function(t){ t.stop(); }); return; }
+    stream = ms;
+    elLive.srcObject = ms;
+    var p = elLive.play(); if(p && p.catch) p.catch(function(){});
+
+    var forceFrames = false;
+    try{ forceFrames = new URLSearchParams(location.search).get('mode') === 'frames'; }catch(e){}
+    var mime = forceFrames ? null : pickMime();
+    if(mime) startMSE(mime, gen);
+    else startFrames(gen);
+    S.running = true;
+  }).catch(function(err){
+    if(gen !== engineGen) return;
+    var name = (err && err.name) || '';
+    if(name === 'NotAllowedError' || name === 'SecurityError'){
+      showErr('카메라 권한이 거부되었습니다',
+              '브라우저 설정에서 이 페이지의 카메라 권한을 허용해 주세요.', false);
+    }else if(name === 'NotFoundError' || name === 'OverconstrainedError'){
+      /* 요청한 방향 카메라가 없다 — 반대편으로 한 번 더 */
+      if(!startEngine._flippedOnce){
+        startEngine._flippedOnce = true;
+        S.facing = (S.facing === 'user') ? 'environment' : 'user';
+        startEngine();
+        return;
+      }
+      showErr('카메라를 찾을 수 없습니다', '연결된 카메라가 없습니다.', true);
+    }else{
+      showErr('카메라를 열 수 없습니다',
+              '다른 앱이 카메라를 사용 중일 수 있습니다. 8초 후 자동 재시도합니다. (' + name + ')', true);
+    }
+  });
+}
+
+/* ---------------- MSE 모드 ---------------- */
+function startMSE(mime, gen){
+  S.mode = 'mse';
+  elCanvas.classList.add('hide');
+  elDelayed.classList.remove('hide');
+
+  msrc = new MediaSource();
+  msURL = URL.createObjectURL(msrc);
+  elDelayed.src = msURL;
+
+  msrc.addEventListener('sourceopen', function(){
+    if(gen !== engineGen) return;
+    if(sbuf) return;
+    try{
+      sbuf = msrc.addSourceBuffer(mime);
+    }catch(e){
+      /* MSE가 말로만 지원 — 프레임 모드로 후퇴 */
+      startFrames(gen);
+      return;
+    }
+    sbuf.addEventListener('updateend', pump);
+    sbuf.addEventListener('error', function(){
+      if(gen !== engineGen) return;
+      startEngine();   // 스트림 깨짐 — 엔진 통째로 재시작
+    });
+
+    recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 });
+    recorder.ondataavailable = function(e){
+      if(gen !== engineGen || !e.data || !e.data.size) return;
+      e.data.arrayBuffer().then(function(ab){
+        if(gen !== engineGen) return;
+        sbQueue.push(ab);
+        pump();
+      });
+    };
+    recorder.onerror = function(){ if(gen === engineGen) startEngine(); };
+    recorder.start(500);   // 0.5초 조각
+
+    tickTimer = setInterval(mseTick, 300);
+  });
+}
+
+function pump(){
+  if(!sbuf || sbuf.updating || !sbQueue.length) return;
+  if(msrc.readyState !== 'open') return;
+  var ab = sbQueue.shift();
+  try{
+    sbuf.appendBuffer(ab);
+  }catch(e){
+    if(e.name === 'QuotaExceededError'){
+      /* 저장 공간 초과 — 오래된 구간을 잘라내고 되돌려 넣는다 */
+      sbQueue.unshift(ab);
+      evict(true);
+    }
+  }
+}
+
+function buffered(){
+  try{
+    var b = elDelayed.buffered;
+    if(b.length) return { start: b.start(0), end: b.end(b.length - 1) };
+  }catch(e){}
+  return null;
+}
+
+function evict(force){
+  if(!sbuf || sbuf.updating) return;
+  var b = buffered();
+  if(!b) return;
+  var keep = S.delay + 15;                       // 지연 + 여유
+  var cut = b.end - keep;
+  if(force) cut = Math.max(cut, b.start + 10);   // 공간 초과면 최소 10초라도 잘라낸다
+  if(cut > b.start + 5){
+    try{ sbuf.remove(0, cut); }catch(e){}
+  }
+}
+
+function mseTick(){
+  var b = buffered();
+  if(!b){ setFillUI(0); return; }
+  var have = b.end - b.start;
+  var target = b.end - S.delay;
+
+  if(target < b.start + 0.1){
+    /* 아직 delay 초만큼 안 쌓였다 */
+    elFill.classList.remove('hide');
+    setFillUI(have);
+    if(!elDelayed.paused) elDelayed.pause();
+    return;
+  }
+  elFill.classList.add('hide');
+
+  if(S.frozen){
+    if(!elDelayed.paused) elDelayed.pause();
+  }else{
+    if(elDelayed.paused){
+      elDelayed.currentTime = target;
+      var p = elDelayed.play(); if(p && p.catch) p.catch(function(){});
+    }else{
+      var drift = target - elDelayed.currentTime;
+      if(Math.abs(drift) > 1.0) elDelayed.currentTime = target;   // 밀리면 스냅
+    }
+  }
+  evict(false);
+  elStatus.textContent = 'MSE · 버퍼 ' + have.toFixed(0) + '초 · ' +
+    (stream && stream.getVideoTracks()[0] ? trackLabel() : '');
+}
+
+function trackLabel(){
+  try{
+    var st = stream.getVideoTracks()[0].getSettings();
+    return (st.width || '?') + '×' + (st.height || '?');
+  }catch(e){ return ''; }
+}
+
+/* ---------------- 프레임 모드 (폴백) ---------------- */
+var capCanvas = document.createElement('canvas');
+var capCtx = capCanvas.getContext('2d');
+var CAP_FPS = 10, CAP_LONG = 640;
+
+function startFrames(gen){
+  S.mode = 'frames';
+  elDelayed.classList.add('hide');
+  elCanvas.classList.remove('hide');
+  try{ if(recorder && recorder.state !== 'inactive') recorder.stop(); }catch(e){}
+  recorder = null;
+  clearInterval(tickTimer);
+
+  capTimer = setInterval(function(){
+    if(gen !== engineGen || !stream) return;
+    var vw = elLive.videoWidth, vh = elLive.videoHeight;
+    if(!vw || !vh) return;
+    var sc = Math.min(1, CAP_LONG / Math.max(vw, vh));
+    var w = Math.round(vw * sc), h = Math.round(vh * sc);
+    if(capCanvas.width !== w){ capCanvas.width = w; capCanvas.height = h; }
+    capCtx.drawImage(elLive, 0, 0, w, h);
+    capCanvas.toBlob(function(blob){
+      if(gen !== engineGen || !blob) return;
+      var now = performance.now();
+      frames.push({ t: now, blob: blob });
+      var minT = now - (S.delay + 6) * 1000;
+      while(frames.length && frames[0].t < minT) frames.shift();
+    }, 'image/jpeg', 0.75);
+  }, 1000 / CAP_FPS);
+
+  drawTimer = setInterval(function(){
+    if(gen !== engineGen) return;
+    var now = performance.now();
+    var cut = now - S.delay * 1000;
+    var have = frames.length ? (now - frames[0].t) / 1000 : 0;
+
+    /* cut 이전의 가장 최신 프레임 */
+    var pick = null;
+    for(var i = frames.length - 1; i >= 0; i--){
+      if(frames[i].t <= cut){ pick = frames[i]; break; }
+    }
+    if(!pick){
+      elFill.classList.remove('hide');
+      setFillUI(have);
+      return;
+    }
+    elFill.classList.add('hide');
+    if(S.frozen || decoding || pick.t === lastDrawnT) return;
+    decoding = true;
+    createImageBitmap(pick.blob).then(function(bmp){
+      decoding = false;
+      if(gen !== engineGen){ bmp.close(); return; }
+      if(elCanvas.width !== bmp.width){ elCanvas.width = bmp.width; elCanvas.height = bmp.height; }
+      ctx2d.drawImage(bmp, 0, 0);
+      bmp.close();
+      lastDrawnT = pick.t;
+    }).catch(function(){ decoding = false; });
+    elStatus.textContent = '프레임 모드 · 버퍼 ' + have.toFixed(0) + '초 · ' + CAP_FPS + 'fps';
+  }, 1000 / 15);
+}
+
+function setFillUI(have){
+  elFillMax.textContent = S.delay;
+  elFillNow.textContent = Math.min(S.delay, have).toFixed(0);
+  elFillBar.style.width = Math.min(100, have / S.delay * 100) + '%';
+}
+
+/* ================= UI ================= */
+function applyView(){
+  elBadgeNum.textContent = S.delay;
+  $('delayNum').firstElementChild.textContent = S.delay;
+  $('delayRange').value = S.delay;
+  document.body.classList.toggle('mirror', S.mirror);
+  document.body.classList.toggle('fit-cover', S.fit === 'cover');
+  $('btnMirror').classList.toggle('on', S.mirror);
+  $('btnFit').classList.toggle('on', S.fit === 'cover');
+  $('btnFit').textContent = S.fit === 'cover' ? '⛶ 맞추기' : '⛶ 채우기';
+  var chips = document.querySelectorAll('#presets .chip');
+  for(var i = 0; i < chips.length; i++)
+    chips[i].classList.toggle('on', +chips[i].getAttribute('data-d') === S.delay);
+}
+
+function setDelay(d){
+  S.delay = Math.max(1, Math.min(120, Math.round(d)));
+  persist(); applyView();
+}
+
+$('delayRange').addEventListener('input', function(){ setDelay(+this.value); });
+document.querySelectorAll('#presets .chip').forEach(function(c){
+  c.addEventListener('click', function(){ setDelay(+this.getAttribute('data-d')); });
+});
+
+$('btnFreeze').addEventListener('click', function(){
+  S.frozen = !S.frozen;
+  this.classList.toggle('on', S.frozen);
+  this.textContent = S.frozen ? '▶ 재개' : '⏸ 정지';
+  $('frozenBadge').classList.toggle('hide', !S.frozen);
+});
+
+$('btnFlip').addEventListener('click', function(){
+  S.facing = (S.facing === 'user') ? 'environment' : 'user';
+  S.mirror = (S.facing === 'user');   // 전면이면 미러 기본 ON
+  persist(); applyView();
+  startEngine();
+});
+
+$('btnMirror').addEventListener('click', function(){
+  S.mirror = !S.mirror; persist(); applyView();
+});
+
+$('btnFit').addEventListener('click', function(){
+  S.fit = (S.fit === 'cover') ? 'contain' : 'cover'; persist(); applyView();
+});
+
+$('errRetry').addEventListener('click', function(){ startEngine(); });
+
+/* 화면 탭 → 컨트롤 토글 (6초 뒤 자동 숨김) */
+var hideT = null;
+function showControls(){
+  $('controls').classList.remove('hidden');
+  clearTimeout(hideT);
+  hideT = setTimeout(function(){ $('controls').classList.add('hidden'); }, 6000);
+}
+$('stage').addEventListener('pointerdown', function(){
+  if($('controls').classList.contains('hidden')) showControls();
+  else { clearTimeout(hideT); $('controls').classList.add('hidden'); }
+});
+$('controls').addEventListener('pointerdown', function(){
+  clearTimeout(hideT);
+  hideT = setTimeout(function(){ $('controls').classList.add('hidden'); }, 6000);
+});
+
+/* PiP 탭 → 실시간 미니 화면 접기/펴기 */
+$('pip').addEventListener('pointerdown', function(e){
+  e.stopPropagation();
+  this.classList.toggle('off');
+});
+
+/* ================= Wake Lock (화면 꺼짐 방지) ================= */
+var wlock = null;
+function grabLock(){
+  if(!('wakeLock' in navigator)) return;
+  navigator.wakeLock.request('screen').then(function(l){ wlock = l; }).catch(function(){});
+}
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden){ grabLock(); }
+});
+
+/* ================= 게이트 ================= */
+(function(){
+  function _todayStr(){var d=new Date();return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');} function _dayCode(){var d=new Date();var m=String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return m.split('').map(function(c){return(+c+1)%10;}).join('');} function _instantOK(){try{return new URLSearchParams(location.search).get('g')==='ins';}catch(e){return false;}}
+  var KEY = "kiosk_daily";
+  var gate = document.getElementById("gate");
+  var isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:');
+  function enter(){
+    applyView(); showControls(); grabLock(); startEngine();
+  }
+  if(localStorage.getItem(KEY) || _instantOK() || isLocal){ gate.remove(); enter(); return; }
+  var entry = "";
+  var dots = gate.querySelectorAll(".gate-dots span");
+  var msg = gate.querySelector(".gate-msg");
+  function render(){ for(var i = 0; i < dots.length; i++) dots[i].classList.toggle("on", i < entry.length); }
+  function check(){
+    if(entry.length < 4) return;
+    if(entry === _dayCode()){
+      try{ localStorage.setItem(KEY, _todayStr()); }catch(e){}
+      gate.classList.add("ok");
+      try{
+        var el = document.documentElement;
+        var p = (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el);
+        if(p && p.catch) p.catch(function(){});
+      }catch(e){}
+      setTimeout(function(){ if(gate.parentNode) gate.remove(); }, 350);
+      enter();
+    }else{
+      gate.classList.add("err"); msg.textContent = "비밀번호가 틀렸습니다";
+      setTimeout(function(){ gate.classList.remove("err"); msg.textContent = ""; entry = ""; render(); }, 550);
+    }
+  }
+  function press(k){
+    if(k === "del") entry = entry.slice(0, -1);
+    else if(entry.length < 4) entry += k;
+    render(); check();
+  }
+  var keys = gate.querySelectorAll(".gate-keys button");
+  for(var i = 0; i < keys.length; i++){
+    keys[i].addEventListener("click", function(){ press(this.getAttribute("data-k")); });
+  }
+  window.addEventListener("keydown", function(e){
+    if(!gate.parentNode) return;
+    if(/^[0-9]$/.test(e.key)) press(e.key);
+    else if(e.key === "Backspace") press("del");
+  });
+  render();
+})();
