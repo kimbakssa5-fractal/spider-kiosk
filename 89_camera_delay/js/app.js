@@ -19,9 +19,10 @@
 var S = {
   delay: 10,               // 초 (1~120)
   facing: 'user',          // 기본 셀피(전면) — 당구대 앞 삼각대 거치 기준 (2026-08-27 지시)
-  mirror: true,            // 기본 ON — 거울처럼 보여야 오른손 자세가 오른손으로 보인다 (2026-08-27 지시)
+  mirror: false,           // 기본 OFF (2026-08-27 실기기 확인 후 뒤집음)
   fit: 'contain',
-  orient: '90',            // auto | 0 | 90 | 180 | 270 — 기본 가로(90°) (2026-08-27 지시)
+  orient: '0',             // 0 | 90 | 180 | 270 — 0°=OS 자연 회전(원래 카메라처럼 가로로 들면
+                           // 가로 화각), 90/180/270°만 강제 회전. 기본 0° (2026-08-27 지시)
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
   frozen: false,
   mode: null,              // 'mse' | 'frames'
@@ -30,20 +31,20 @@ var S = {
 try{
   var saved = JSON.parse(localStorage.getItem('cd_settings') || '{}');
   if(saved.delay >= 1 && saved.delay <= 120) S.delay = saved.delay;
-  /* v3 미만 저장값의 facing/orient 는 무시 — "셀피 + 가로 90° 기본" 1회 마이그레이션 */
+  /* v3 미만 저장값의 facing 은 무시(셀피 기본), v4 미만의 orient/mirror 는 무시
+     — "0° + 미러 OFF 기본" 1회 마이그레이션 (2026-08-27) */
   if(saved.v >= 3 && saved.facing) S.facing = saved.facing;
-  if(saved.v >= 3 && ['auto','0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
-  /* v2 미만 저장값의 mirror 는 무시 — "미러 기본 ON" 1회 마이그레이션 */
-  if(saved.v >= 2 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
+  if(saved.v >= 4 && ['0','90','180','270'].indexOf(saved.orient) >= 0) S.orient = saved.orient;
+  if(saved.v >= 4 && typeof saved.mirror === 'boolean') S.mirror = saved.mirror;
   if(saved.fit) S.fit = saved.fit;
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
-    v:3, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
+    v:4, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
     orient:S.orient, autoRec:S.autoRec })); }catch(e){}
 }
-function orientAngle(){ return (S.orient === 'auto') ? 0 : +S.orient; }
+function orientAngle(){ return +S.orient || 0; }
 
 /* ================= DOM ================= */
 var $ = function(id){ return document.getElementById(id); };
@@ -421,17 +422,19 @@ window.addEventListener('resize', layoutRot);
 function applyOrientation(){
   var m = S.orient;
   var btn = $('btnOrient');
-  btn.textContent = (m === 'auto') ? '📱 자동' : '📱 ' + m + '°';
-  btn.classList.toggle('on', m !== 'auto');
+  btn.textContent = '📱 ' + m + '°';
+  btn.classList.toggle('on', m !== '0');
   layoutRot();
+  /* 0° = OS 자연 회전(가로로 들면 가로 화각 — 원래 카메라와 동일).
+     90/180/270° = OS 를 세로로 못박고(이중 회전 방지) 앱이 CSS 로 돌린다. */
   if(window.AndroidOrient && AndroidOrient.set){
-    try{ AndroidOrient.set(m === 'auto' ? 'auto' : 'pin'); }catch(e){}
+    try{ AndroidOrient.set(m === '0' ? 'auto' : 'pin'); }catch(e){}
   }else{
     try{
       if(screen.orientation){
-        if(m === 'auto'){ screen.orientation.unlock(); }
+        if(m === '0'){ screen.orientation.unlock(); }
         else{
-          var p = screen.orientation.lock('portrait-primary');   // 이중 회전 방지용 고정
+          var p = screen.orientation.lock('portrait-primary');
           if(p && p.catch) p.catch(function(){});
         }
       }
@@ -442,7 +445,7 @@ document.addEventListener('fullscreenchange', function(){
   if(S.orient !== 'auto') applyOrientation();
 });
 $('btnOrient').addEventListener('click', function(){
-  var cyc = ['auto', '0', '90', '180', '270'];
+  var cyc = ['0', '90', '180', '270'];
   S.orient = cyc[(cyc.indexOf(S.orient) + 1) % cyc.length];
   if(rec) stopRec();      // 각도가 바뀌면 녹화 캔버스 치수도 바뀐다 — 트리밍 저장 후 재개
   persist(); applyOrientation();
