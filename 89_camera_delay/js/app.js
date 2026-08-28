@@ -27,6 +27,7 @@ var S = {
   rotPipC: 270,            // PiP(지금 카메라) 영상 내용 회전 — 기본 반시계 90°(=270) (2026-08-28)
   pip: null,               // 실시간 미니 창 위치 {l,t} (0~1 비율) — 드래그로 조정
   lang: 'ko',              // ko | en — 🌐 버튼 토글
+  menuHidden: false,       // ⬇ 메뉴숨기기 상태 — 재시작·재연결 후에도 유지
   autoRec: true,           // 상시 자동 녹화 — 폰 용량 아끼려면 버튼으로 끌 수 있다
   frozen: false,
   mode: null,              // 'mse' | 'frames'
@@ -50,12 +51,13 @@ try{
   if(typeof saved.autoRec === 'boolean') S.autoRec = saved.autoRec;
   if(saved.pip && typeof saved.pip.l === 'number' && typeof saved.pip.t === 'number') S.pip = saved.pip;
   if(saved.lang === 'en' || saved.lang === 'ko') S.lang = saved.lang;
+  if(typeof saved.menuHidden === 'boolean') S.menuHidden = saved.menuHidden;
 }catch(e){}
 function persist(){
   try{ localStorage.setItem('cd_settings', JSON.stringify({
     v:10, delay:S.delay, facing:S.facing, mirror:S.mirror, fit:S.fit,
     rotUI:S.rotUI, rotMain:S.rotMain, rotPipF:S.rotPipF, rotPipC:S.rotPipC,
-    autoRec:S.autoRec, pip:S.pip, lang:S.lang })); }catch(e){}
+    autoRec:S.autoRec, pip:S.pip, lang:S.lang, menuHidden:S.menuHidden })); }catch(e){}
 }
 
 /* ================= 한/영 문자열 ================= */
@@ -651,11 +653,15 @@ $('errRetry').addEventListener('click', function(){ startEngine(); });
 
 /* 메뉴 표시/숨김 — 자동 숨김 없음(2026-08-27 지시). ⬇ 버튼으로만 숨기고, 화면 탭으로 다시 연다 */
 function showControls(){
+  S.menuHidden = false; persist();
   $('controls').classList.remove('hidden');
+}
+function applyMenu(){
+  $('controls').classList.toggle('hidden', S.menuHidden);
 }
 $('stage').addEventListener('pointerdown', function(){ showControls(); });
 $('btnHide').addEventListener('click', function(){
-  $('controls').classList.add('hidden');
+  S.menuHidden = true; persist(); applyMenu();
 });
 
 /* PiP 드래그 → 위치 이동 (탭해서 없어지던 동작은 제거, 2026-08-27 지시).
@@ -712,10 +718,11 @@ function setStatus(msg){
   if(Date.now() < statusHoldUntil) return;
   elStatus.textContent = msg;
 }
+/* 상태 안내는 메뉴를 열지 않는다 — 자동녹화가 5분마다 저장 메시지를 띄우므로,
+   여기서 showControls() 를 부르면 숨겨 둔 메뉴가 주기적으로 혼자 올라온다(2026-08-28 신고). */
 function flashStatus(msg){
   statusHoldUntil = Date.now() + 2500;
   elStatus.textContent = msg;
-  showControls();
 }
 
 function stamp(){
@@ -1012,7 +1019,7 @@ document.addEventListener('visibilitychange', function(){
   var isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:');
   applyLang();   // 게이트 화면도 저장된 언어로
   function enter(){
-    applyView(); applyRots(); pinOS(); placePip(); showControls(); grabLock(); startEngine();
+    applyView(); applyRots(); pinOS(); placePip(); applyMenu(); grabLock(); startEngine();
   }
   if(localStorage.getItem(KEY) || _instantOK() || isLocal){ gate.remove(); enter(); return; }
   var entry = "";
