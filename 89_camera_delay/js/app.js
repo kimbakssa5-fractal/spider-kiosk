@@ -595,12 +595,14 @@ function applyRots(){
   if(S.rotPipF) pip.classList.add('pf' + S.rotPipF);
   lv.classList.remove('pc90', 'pc180', 'pc270');
   if(S.rotPipC) lv.classList.add('pc' + S.rotPipC);
-  var defs = [['btnMainF', 'mainF', S.rotUI], ['btnMainC', 'mainC', S.rotMain],
-              ['btnPipF', 'pipF', S.rotPipF], ['btnPipC', 'pipC', S.rotPipC]];
+  /* 강조(적색) 기준각 — 그 각도일 때 켜진 상태로 보인다.
+     🎞 영상은 0°가 정상 위치라 0°에서 적색(2026-08-28 지시), 나머지는 0°가 기본이라 그 반대. */
+  var defs = [['btnMainF', 'mainF', S.rotUI, false], ['btnMainC', 'mainC', S.rotMain, true],
+              ['btnPipF', 'pipF', S.rotPipF, false], ['btnPipC', 'pipC', S.rotPipC, false]];
   for(var i = 0; i < defs.length; i++){
     var b = $(defs[i][0]);
     b.textContent = T(defs[i][1]) + ' ' + defs[i][2] + '°';
-    b.classList.toggle('on', defs[i][2] !== 0);
+    b.classList.toggle('on', defs[i][3] ? defs[i][2] === 0 : defs[i][2] !== 0);
   }
   if(window.placePip) placePip();
 }
